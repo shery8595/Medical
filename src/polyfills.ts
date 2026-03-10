@@ -1,8 +1,14 @@
+// @ts-ignore
+if (window.LOG_DEBUG) window.LOG_DEBUG('polyfills.ts: Loading imports...');
+
 import { Buffer } from 'buffer';
 import process from 'process';
 import * as util from 'util';
 import { EventEmitter } from 'events';
 import { Readable, Writable, Stream, Transform } from 'stream';
+
+// @ts-ignore
+if (window.LOG_DEBUG) window.LOG_DEBUG('polyfills.ts: Assigning globals...');
 
 // @ts-ignore
 window.Buffer = Buffer;
@@ -22,5 +28,8 @@ window.Readable = Readable;
 window.Writable = Writable;
 // @ts-ignore
 window.Transform = Transform;
+
+// @ts-ignore
+if (window.LOG_DEBUG) window.LOG_DEBUG('polyfills.ts: Finished assignments.');
 
 export { };
