@@ -32,10 +32,16 @@ export default defineConfig(({ mode }) => {
         'tfhe/tfhe_bg.wasm': path.resolve(__dirname, 'public/tfhe_bg.wasm'),
         'tkms/kms_lib_bg.wasm': path.resolve(__dirname, 'public/kms_lib_bg.wasm'),
         'fetch-retry': path.resolve(__dirname, 'node_modules/fetch-retry/index.js'),
+        // ⚠️ Critical browser compat fixes:
+        // readable-stream v4 (top-level) has a different file structure (lib/ours/) but keccak
+        // expects the v3 structure (lib/_stream_*.js). Alias to stream-browserify's own v3 copy.
+        'readable-stream': path.resolve(__dirname, 'node_modules/stream-browserify/node_modules/readable-stream'),
+        'keccak': path.resolve(__dirname, 'node_modules/keccak/js.js'),
+        'crypto': path.resolve(__dirname, 'node_modules/crypto-browserify'),
       },
     },
     optimizeDeps: {
-      include: ['keccak', 'readable-stream', 'buffer', 'fetch-retry'],
+      include: ['keccak', 'buffer', 'fetch-retry', 'stream-browserify', 'crypto-browserify'], // Update to include stream-browserify and crypto-browserify
       exclude: ['@zama-fhe/relayer-sdk', 'tfhe', 'tkms'],
       esbuildOptions: {
         target: 'esnext',
