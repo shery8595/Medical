@@ -98,12 +98,9 @@ export function Sidebar({ role }: SidebarProps) {
           <div className="relative flex h-11 w-[53px] items-center justify-center overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-105">
             <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain" />
           </div>
-          <div className="flex flex-col">
-            <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
+          <div className="flex flex-col justify-center">
+            <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white mt-1.5">
               MedVault
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-accent/80">
-              By Zama FHE
             </span>
           </div>
         </Link>
