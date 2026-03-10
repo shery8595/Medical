@@ -1,0 +1,163 @@
+import { Prose } from "../../components/docs/Prose";
+import { CodeBlock } from "../../components/docs/CodeBlock";
+import { Callout } from "../../components/docs/Callout";
+import { MermaidDiagram } from "../../components/docs/MermaidDiagram";
+import { motion } from "framer-motion";
+import { Coins, ShieldCheck, TrendingUp, Landmark, ArrowRight, Wallet } from "lucide-react";
+
+export function PrivateStakingDoc() {
+    return (
+        <motion.div>
+            <Prose className="max-w-none">
+                <span className="text-teal-500 font-bold tracking-widest uppercase text-xs">Operations & Guides</span>
+                <h1 className="mt-2 text-5xl">Private Yield Staking (Aave V3 Integration)</h1>
+
+                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
+                    MedVault enables patients to earn yield on their clinical trial rewards without exposing their financial activity or balances on the public blockchain. By leveraging Zama's FHEVM and Aave V3, we maintain a "Confidential Enclave" for patient payouts.
+                </p>
+
+                {/* Feature Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-12 not-prose text-white">
+                    <div className="p-8 rounded-[32px] bg-gradient-to-br from-indigo-500 to-purple-600 shadow-xl shadow-purple-500/20">
+                        <ShieldCheck className="w-10 h-10 mb-4 opacity-80" />
+                        <h3 className="text-xl font-black mb-2">Privacy First</h3>
+                        <p className="text-sm opacity-90 font-medium">Staked balances are stored as <code>euint64</code>. No one, not even Aave, can see how much you have staked.</p>
+                    </div>
+                    <div className="p-8 rounded-[32px] bg-gradient-to-br from-teal-500 to-emerald-600 shadow-xl shadow-emerald-500/20">
+                        <TrendingUp className="w-10 h-10 mb-4 opacity-80" />
+                        <h3 className="text-xl font-black mb-2">Passive Yield</h3>
+                        <p className="text-sm opacity-90 font-medium">Rewards are automatically converted to aWETH behind a gateway, collecting real-time interest from Aave V3.</p>
+                    </div>
+                    <div className="p-8 rounded-[32px] bg-gradient-to-br from-slate-800 to-slate-950 shadow-xl shadow-black/20">
+                        <Landmark className="w-10 h-10 mb-4 opacity-80" />
+                        <h3 className="text-xl font-black mb-2">Instant Unstake</h3>
+                        <p className="text-sm opacity-90 font-medium">Withdraw your ETH at any time. The contract handles the redemption from Aave and re-encryption back to your wallet.</p>
+                    </div>
+                </div>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>I. Staking Architecture</h2>
+                <p>
+                    The staking system operates as a gateway between the <strong>MedVault Confidential Enclave</strong> and the <strong>Aave V3 Liquidity Pool</strong>. Because Aave requires public <code>uint256</code> values for accounting, MedVault acts as an "accumulator" that pools private intents and manages the public interactions.
+                </p>
+
+                <div className="not-prose my-10 p-8 rounded-3xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                    <MermaidDiagram chart={`
+                        graph LR
+                            subgraph Enclave [MedVault Confidential Enclave]
+                                cETH[ConfidentialETH Contract]
+                                SM[StakingManager Contract]
+                            end
+                            subgraph Aave [Aave V3 Protocol]
+                                LP[WETH Liquidity Pool]
+                                aWETH[aWETH Yield Token]
+                            end
+
+                            Patient -- "Encrypted Intent" --> SM
+                            SM -- "Withdraw Reward" --> cETH
+                            cETH -- "Public ETH" --> SM
+                            SM -- "Supply ETH" --> LP
+                            LP -- "Mint" --> aWETH
+                            aWETH -- "Holdings" --> SM
+                    `} />
+                    <p className="text-center text-xs text-slate-400 mt-4 italic">Figure 1. High-level architecture of the Private Staking Gateway.</p>
+                </div>
+
+                <h2>II. The Staking Manager</h2>
+                <p>
+                    The <code>StakingManager.sol</code> contract is the primary entry point. It handles two types of staking:
+                </p>
+                <ul>
+                    <li><strong>Direct Staking:</strong> Users send public ETH from their wallet.</li>
+                    <li><strong>Confidential Staking:</strong> Users stake rewards directly from their <code>ConfidentialETH</code> balance.</li>
+                </ul>
+
+                <Callout type="info" title="Precision & e-Types">
+                    MedVault uses <code>euint64</code> for staking balances to maintain high precision. We map 1 ETH to $10^6$ units in the FHE layer, allowing for granular interest tracking without the extreme gas costs of 256-bit FHE types.
+                </Callout>
+
+                <h3>Contract Implementation Preview</h3>
+                <CodeBlock
+                    filename="StakingManager.sol"
+                    language="solidity"
+                    code={`// SPDX-License-Identifier: BSD-3-Clause-Clear
+pragma solidity ^0.8.27;
+
+import "@zama-ai/fhevm/contracts/lib/TFHE.sol";
+
+contract StakingManager {
+    // Encrypted balance mapping (User => euint64)
+    mapping(address => euint64) private _stakedBalances;
+
+    /**
+     * @notice Stakes rewards directly from the user's confidential balance
+     * @param amountUnits The amount in micro-ETH units to stake
+     */
+    function stakeFromConfidential(euint64 amountUnits) external {
+        // 1. Authorize transfer from ConfidentialETH
+        // 2. Wrap ETH into WETH
+        // 3. Supply WETH to Aave V3 Pool
+        // 4. Update the patient's encrypted stake record
+        euint64 current = _stakedBalances[msg.sender];
+        _stakedBalances[msg.sender] = TFHE.add(current, amountUnits);
+        
+        TFHE.allow(_stakedBalances[msg.sender], msg.sender);
+    }
+}`}
+                />
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>III. User Experience Patterns</h2>
+                <p>
+                    Integrated into the Patient Dashboard, the staking experience is designed to be seamless.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 my-8">
+                    <div className="space-y-4">
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center shrink-0 font-bold">1</div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <strong>Claim Choice:</strong> When a trial payment is released, the patient sees a "Secure Payout" modal. They can choose to withdraw to their wallet or "Stake & Earn".
+                            </p>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center shrink-0 font-bold">2</div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <strong>Confidential Vault:</strong> The "Private Staking Vault" card on the dashboard remains locked until the user requests decryption via a re-encryption request.
+                            </p>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center shrink-0 font-bold">3</div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <strong>Manual Deposits:</strong> Users can also top up their vault using public ETH, which is automatically converted and added to their private balance.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Coins className="w-24 h-24" />
+                        </div>
+                        <div className="relative z-10">
+                            <div className="text-[10px] font-black uppercase tracking-widest text-teal-500 mb-2">Dashboard Preview</div>
+                            <div className="h-6 w-32 bg-slate-800 rounded mb-4" />
+                            <div className="space-y-2">
+                                <div className="h-2 w-full bg-slate-800 rounded" />
+                                <div className="h-2 w-3/4 bg-slate-800 rounded" />
+                            </div>
+                            <div className="mt-8 flex gap-2">
+                                <div className="h-8 flex-1 bg-teal-500 rounded-lg shadow-[0_0_15px_rgba(20,184,166,0.2)]" />
+                                <div className="h-8 flex-1 bg-slate-800 rounded-lg" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <Callout type="warning" title="Decentralization Notice">
+                    While the <code>StakingManager</code> is trustless, yield generated depends on Aave V3’s protocol health and WETH liquidity. MedVault does not custody your staked assets; they are held in the pool until you unstake.
+                </Callout>
+            </Prose>
+        </motion.div>
+    );
+}

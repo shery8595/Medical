@@ -1,0 +1,15 @@
+{
+    "sepolia": {
+        "PatientRegistry": "0x8A1BDD9bF4052c018c77c101d1FFdE88686c9BA1",
+        "SponsorRegistry": "0x659C3836B69b4B92FbECc0E119FfA5b3B2Cfd558",
+        "TrialManager": "0x6b77AC1c39b2878371aBCF601A2865D0eBb87083",
+        "ConsentManager": "0x01AEFB624DbAe61A5559Bf9EECf601Accc861af2",
+        "EligibilityEngine": "0xbE90Eed156706b4783E5FDa152b9AACf06110B45",
+        "SponsorIncentiveVault": "0x00d43DE6A1e797F7f680919d5BC7e519c070da3a",
+        "MedVaultAutomation": "0xC889b47e9Ec1999dAf0Ce2a5f003b7a79B6327f3",
+        "ConfidentialETH": "0x7bde18FBF23fE2A605d9b94E9A793E4305320a2f",
+        "StakingManager": "0x6E365ACC369C69A65A2337f44bf1386F5e2cF4b4",
+        "TrialMilestoneManager": "0x404212953F2058B8a665078B8d34187381ad71c8",
+        "DataAccessLog": "0xF98E80786D78641aDa7cFb727eB7ac20bd10b6C5"
+    }
+}

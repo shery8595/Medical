@@ -1,0 +1,122 @@
+type Patient @entity(immutable: false) {
+  id: Bytes!                           # wallet address
+  profileUpdatedAt: BigInt!
+  profileTxHash: Bytes!
+}
+
+type Sponsor @entity(immutable: false) {
+  id: Bytes!                           # wallet address
+  name: String!
+  verified: Boolean!
+  addedAt: BigInt!
+  trials: [Trial!]! @derivedFrom(field: "sponsor")
+}
+
+type Trial @entity(immutable: false) {
+  id: ID!                              # on-chain trial ID
+  sponsor: Sponsor!
+  name: String!
+  phase: String!
+  location: String!
+  compensation: String!
+  minAge: Int!
+  maxAge: Int!
+  requiresDiabetes: Boolean!
+  minHb: Int!
+  
+  # Expanded Criteria
+  genderRequirement: Int!              # 0=any, 1=Male, 2=Female
+  minHeight: Int!
+  maxWeight: Int!
+  requiresNonSmoker: Boolean!
+  requiresNormalBP: Boolean!
+  
+  active: Boolean!
+  endTime: BigInt!
+  createdAt: BigInt!
+  consents: [Consent!]! @derivedFrom(field: "trial")
+  eligibilityResults: [EligibilityResult!]! @derivedFrom(field: "trial")
+  applications: [Application!]! @derivedFrom(field: "trial")
+  incentivePool: IncentivePool @derivedFrom(field: "trial")
+  milestones: [TrialMilestone!]! @derivedFrom(field: "trial")
+  progress: [ParticipantProgress!]! @derivedFrom(field: "trial")
+}
+
+type TrialMilestone @entity(immutable: false) {
+  id: ID!                              # trialId-index
+  trial: Trial!
+  index: Int!
+  name: String!
+  weightBps: Int!
+  deadline: BigInt!
+  distributed: Boolean!
+}
+
+type ParticipantProgress @entity(immutable: false) {
+  id: ID!                              # trialId-patientAddress
+  trial: Trial!
+  patient: Bytes!
+  lastCompletedMilestoneIndex: Int!    # -1 if none, 0-3 for milestones
+  updatedAt: BigInt!
+}
+
+type AuditLog @entity(immutable: true) {
+  id: ID!                              # incremental or txHash-logIndex
+  action: String!                      # ActionType ENUM as string
+  trialId: BigInt!
+  patientHash: Bytes!
+  timestamp: BigInt!
+  performer: Bytes!
+  txHash: Bytes!
+}
+
+type Consent @entity(immutable: false) {
+  id: ID!                              # patient-trialId (concatenated)
+  patient: Bytes!
+  trial: Trial!
+  granted: Boolean!
+  lastUpdatedAt: BigInt!
+  txHash: Bytes!
+}
+
+type EligibilityResult @entity(immutable: true) {
+  id: ID!                              # patient-trialId (concatenated)
+  patient: Bytes!
+  trial: Trial!
+  computedAt: BigInt!
+  txHash: Bytes!
+}
+
+type Application @entity(immutable: false) {
+  id: ID!                              # patient-trialId
+  patient: Bytes!
+  trial: Trial!
+  status: String!                      # Pending, Accepted, Rejected
+  message: Bytes                       # Encrypted message from sponsor
+  updatedAt: BigInt!
+  txHash: Bytes!
+}
+
+type IncentivePool @entity(immutable: false) {
+  id: ID!                              # trialId
+  trial: Trial!
+  totalFundedWei: BigInt!
+  participantCount: Int!
+  distributed: Boolean!
+  shareWei: BigInt
+  distributedAt: BigInt
+  participants: [IncentiveParticipant!]! @derivedFrom(field: "pool")
+}
+
+type IncentiveParticipant @entity(immutable: true) {
+  id: ID!                              # trialId-patientAddress
+  pool: IncentivePool!
+  patient: Bytes!
+  registeredAt: BigInt!
+}
+
+type StakingUser @entity(immutable: false) {
+  id: ID!                              # user wallet address
+  totalStakedWei: BigInt!
+  lastUpdatedAt: BigInt!
+}

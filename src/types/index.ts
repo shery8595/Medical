@@ -1,0 +1,162 @@
+export interface Trial {
+  id: string;
+  name: string;
+  sponsor: {
+    id: string;
+    name: string;
+  };
+  phase: string;
+  location: string;
+  compensation: string;
+  minAge: number;
+  maxAge: number;
+  requiresDiabetes: boolean;
+  minHb: number;
+  active: boolean;
+  endTime?: string;
+  isExpired?: boolean;
+  createdAt?: string;
+  eligibilityScore?: number;
+  matchCount?: number;
+  hasConsent?: boolean;
+  hasComputed?: boolean;
+  applicationStatus?: "Pending" | "Accepted" | "Rejected";
+  applicationMessage?: string;
+  criteria?: {
+    ageRange: [number, number];
+    labThresholds: { labName: string; operator: string; value: number }[];
+    diagnosis: string[];
+    exclusions: string[];
+  };
+  breakdown?: {
+    met: string[];
+    missing: string[];
+    borderline: string[];
+  };
+  incentivePool?: {
+    id: string;
+    distributed: boolean;
+    totalFundedWei: string;
+    shareWei?: string;
+    distributedAt?: string;
+  };
+}
+
+export interface MedicalReport {
+  id: string;
+  patientAddress: string;
+  age: number;
+  hasDiabetes: boolean;
+  hbLevel: number;
+  timestamp: string;
+  txHash: string;
+  name?: string; // For mock data compatibility
+  date?: string; // For mock data compatibility
+  status?: string; // For mock data compatibility
+  features?: any; // For mock data compatibility
+}
+
+export interface ConsentLog {
+  id: string;
+  trialId?: string;
+  trialName: string;
+  patientAddress?: string;
+  granted?: boolean;
+  timestamp: string;
+  txHash?: string;
+  sponsorName?: string; // For mock data compatibility
+  dataShared?: string[]; // For mock data compatibility
+  status?: string; // For mock data compatibility
+  message?: string; // For mock data compatibility
+}
+
+export interface Match {
+  id: string;
+  trialId: string;
+  trialName: string;
+  patientAddress: string;
+  status: string;
+  timestamp: string;
+  patientId?: string; // For UI display
+  matchScore?: number; // For UI display
+  applicationStatus?: "Pending" | "Accepted" | "Rejected" | "None";
+  applicationMessage?: string;
+  currentMilestone?: number; // 0 = none, 1-4 for milestones
+}
+
+export interface AnalyticsData {
+  ageDistribution: { name: string; value: number }[];
+  enrollmentProgress: number;
+}
+
+// Subgraph specific types
+export interface SubgraphPatient {
+  id: string;
+  profileUpdatedAt: string;
+  profileTxHash: string;
+}
+
+export interface SubgraphTrial {
+  id: string;
+  sponsor: {
+    id: string;
+    name: string;
+  };
+  name: string;
+  phase: string;
+  location: string;
+  compensation: string;
+  minAge: number;
+  maxAge: number;
+  requiresDiabetes: boolean;
+  minHb: number;
+  active: boolean;
+  endTime: string;
+  createdAt: string;
+}
+
+export interface SubgraphConsent {
+  id: string;
+  patient: string;
+  trial: {
+    id: string;
+    name: string;
+  };
+  granted: boolean;
+  lastUpdatedAt: string;
+  txHash: string;
+}
+
+export interface SubgraphEligibilityResult {
+  id: string;
+  patient: string;
+  trial: {
+    id: string;
+    name: string;
+  };
+  computedAt: string;
+  txHash: string;
+}
+
+export interface Application {
+  id: string;
+  patient: string;
+  trialId: string;
+  status: "Pending" | "Accepted" | "Rejected";
+  message?: string;
+  updatedAt: string;
+  txHash: string;
+}
+
+export interface SubgraphApplication {
+  id: string;
+  patient: string;
+  trial: {
+    id: string;
+    name: string;
+  };
+  status: string;
+  message: string | null;
+  updatedAt: string;
+  txHash: string;
+}

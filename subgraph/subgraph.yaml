@@ -1,0 +1,221 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: PatientRegistry
+    network: sepolia
+    source:
+      address: "0x8A1BDD9bF4052c018c77c101d1FFdE88686c9BA1"
+      abi: PatientRegistry
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Patient
+      abis:
+        - name: PatientRegistry
+          file: ./abis/PatientRegistry.json
+      eventHandlers:
+        - event: ProfileUpdated(indexed address,uint256)
+          handler: handleProfileUpdated
+      file: ./src/mappings/patient-registry.ts
+
+  - kind: ethereum
+    name: TrialManager
+    network: sepolia
+    source:
+      address: "0x6b77AC1c39b2878371aBCF601A2865D0eBb87083"
+      abi: TrialManager
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Trial
+        - Sponsor
+      abis:
+        - name: TrialManager
+          file: ./abis/TrialManager.json
+      eventHandlers:
+        - event: TrialCreated(indexed uint256,indexed address,string,uint256)
+          handler: handleTrialCreated
+        - event: TrialDeactivated(indexed uint256)
+          handler: handleTrialDeactivated
+        - event: SponsorNameUpdated(indexed address,string)
+          handler: handleSponsorNameUpdated
+      file: ./src/mappings/trial-manager.ts
+
+  - kind: ethereum
+    name: ConsentManager
+    network: sepolia
+    source:
+      address: "0x01AEFB624DbAe61A5559Bf9EECf601Accc861af2"
+      abi: ConsentManager
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Consent
+      abis:
+        - name: ConsentManager
+          file: ./abis/ConsentManager.json
+      eventHandlers:
+        - event: ConsentGranted(indexed address,indexed uint256)
+          handler: handleConsentGranted
+        - event: ConsentRevoked(indexed address,indexed uint256)
+          handler: handleConsentRevoked
+      file: ./src/mappings/consent-manager.ts
+
+  - kind: ethereum
+    name: EligibilityEngine
+    network: sepolia
+    source:
+      address: "0xbE90Eed156706b4783E5FDa152b9AACf06110B45"
+      abi: EligibilityEngine
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - EligibilityResult
+        - Application
+      abis:
+        - name: EligibilityEngine
+          file: ./abis/EligibilityEngine.json
+        - name: TrialManager
+          file: ./abis/TrialManager.json
+      eventHandlers:
+        - event: EligibilityComputed(indexed address,indexed uint256)
+          handler: handleEligibilityComputed
+        - event: EligibilityScoreComputed(indexed address,indexed uint256)
+          handler: handleEligibilityComputed
+        - event: AppliedToTrial(indexed address,indexed uint256)
+          handler: handleAppliedToTrial
+        - event: ApplicationStatusUpdated(indexed address,indexed uint256,uint8,bytes)
+          handler: handleApplicationStatusUpdated
+      file: ./src/mappings/eligibility-engine.ts
+
+  - kind: ethereum
+    name: SponsorIncentiveVault
+    network: sepolia
+    source:
+      address: "0x00d43DE6A1e797F7f680919d5BC7e519c070da3a"
+      abi: SponsorIncentiveVault
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - IncentivePool
+        - IncentiveParticipant
+      abis:
+        - name: SponsorIncentiveVault
+          file: ./abis/SponsorIncentiveVault.json
+      eventHandlers:
+        - event: IncentiveFunded(indexed uint256,indexed address,uint256)
+          handler: handleIncentiveFunded
+        - event: ParticipantRegistered(indexed uint256,indexed address)
+          handler: handleParticipantRegistered
+        - event: RewardsDistributed(indexed uint256,uint256,uint256)
+          handler: handleRewardsDistributed
+        - event: MilestoneRewardsDistributed(indexed uint256,uint256,uint256)
+          handler: handleMilestoneRewardsDistributed
+      file: ./src/mappings/sponsor-incentive-vault.ts
+
+  - kind: ethereum
+    name: DataAccessLog
+    network: sepolia
+    source:
+      address: "0xF98E80786D78641aDa7cFb727eB7ac20bd10b6C5"
+      abi: DataAccessLog
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - AuditLog
+      abis:
+        - name: DataAccessLog
+          file: ./abis/DataAccessLog.json
+      eventHandlers:
+        - event: ActionLogged(indexed uint8,indexed uint256,indexed bytes32)
+          handler: handleActionLogged
+      file: ./src/mappings/data-access-log.ts
+
+  - kind: ethereum
+    name: TrialMilestoneManager
+    network: sepolia
+    source:
+      address: "0x404212953F2058B8a665078B8d34187381ad71c8"
+      abi: TrialMilestoneManager
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - TrialMilestone
+        - ParticipantProgress
+      abis:
+        - name: TrialMilestoneManager
+          file: ./abis/TrialMilestoneManager.json
+      eventHandlers:
+        - event: MilestonesSet(indexed uint256,uint256)
+          handler: handleMilestonesSet
+        - event: MilestoneCompleted(indexed uint256,indexed address,uint256)
+          handler: handleMilestoneCompleted
+      file: ./src/mappings/trial-milestone-manager.ts
+  - kind: ethereum
+    name: SponsorRegistry
+    network: sepolia
+    source:
+      address: "0x659C3836B69b4B92FbECc0E119FfA5b3B2Cfd558"
+      abi: SponsorRegistry
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Sponsor
+      abis:
+        - name: SponsorRegistry
+          file: ./abis/SponsorRegistry.json
+      eventHandlers:
+        - event: SponsorAdded(indexed address,string)
+          handler: handleSponsorAdded
+        - event: SponsorRemoved(indexed address)
+          handler: handleSponsorRemoved
+      file: ./src/mappings/sponsor-registry.ts
+
+  - kind: ethereum
+    name: StakingManager
+    network: sepolia
+    source:
+      address: "0x6E365ACC369C69A65A2337f44bf1386F5e2cF4b4"
+      abi: StakingManager
+      startBlock: 7421000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - StakingUser
+      abis:
+        - name: StakingManager
+          file: ./abis/StakingManager.json
+      eventHandlers:
+        - event: Staked(indexed address,uint256)
+          handler: handleStaked
+        - event: Unstaked(indexed address,uint256)
+          handler: handleUnstaked
+      file: ./src/mappings/staking-manager.ts

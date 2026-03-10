@@ -1,0 +1,485 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sponsor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      }
+    ],
+    "name": "SponsorNameUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "SponsorRegistryUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "trialId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sponsor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "endTime",
+        "type": "uint256"
+      }
+    ],
+    "name": "TrialCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "trialId",
+        "type": "uint256"
+      }
+    ],
+    "name": "TrialDeactivated",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "automationContract",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_name",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_phase",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_location",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_compensation",
+        "type": "string"
+      },
+      {
+        "internalType": "uint8",
+        "name": "_minAge",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "_maxAge",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "_requiresDiabetes",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_minHb",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint8",
+        "name": "_genderReq",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "_minHeight",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_maxWeight",
+        "type": "uint16"
+      },
+      {
+        "internalType": "bool",
+        "name": "_requiresNonSmoker",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "_requiresNormalBP",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_duration",
+        "type": "uint256"
+      }
+    ],
+    "name": "createTrial",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_trialId",
+        "type": "uint256"
+      }
+    ],
+    "name": "deactivateTrial",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_trialId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getTrial",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "phase",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "location",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "compensation",
+            "type": "string"
+          },
+          {
+            "internalType": "address",
+            "name": "sponsor",
+            "type": "address"
+          },
+          {
+            "internalType": "bool",
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint8",
+            "name": "minAge",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "maxAge",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bool",
+            "name": "requiresDiabetes",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint16",
+            "name": "minHb",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint8",
+            "name": "genderRequirement",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "minHeight",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint16",
+            "name": "maxWeight",
+            "type": "uint16"
+          },
+          {
+            "internalType": "bool",
+            "name": "requiresNonSmoker",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "requiresNormalBP",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "endTime",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct TrialManager.Trial",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_automation",
+        "type": "address"
+      }
+    ],
+    "name": "setAutomationContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_name",
+        "type": "string"
+      }
+    ],
+    "name": "setSponsorName",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_registry",
+        "type": "address"
+      }
+    ],
+    "name": "setSponsorRegistry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "sponsorNames",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "sponsorRegistry",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "trialCounter",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "trials",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "phase",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "location",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "compensation",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "sponsor",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint8",
+        "name": "minAge",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "maxAge",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "requiresDiabetes",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint16",
+        "name": "minHb",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint8",
+        "name": "genderRequirement",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "minHeight",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint16",
+        "name": "maxWeight",
+        "type": "uint16"
+      },
+      {
+        "internalType": "bool",
+        "name": "requiresNonSmoker",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "requiresNormalBP",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "endTime",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
