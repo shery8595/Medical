@@ -10,7 +10,6 @@ import { StrictMode } from 'react';
 
 // @ts-ignore
 if (window._cp) window._cp('main.tsx: react imported');
-
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
