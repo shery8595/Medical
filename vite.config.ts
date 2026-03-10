@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       nodePolyfills({
-        include: ['buffer', 'crypto', 'stream', 'util', 'process'],
+        include: ['buffer', 'crypto', 'stream', 'util', 'process', 'events'],
         globals: {
           Buffer: true,
           global: true,
