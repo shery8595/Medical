@@ -31,14 +31,16 @@
             cwd: () => '/'
         };
 
-        // 2. Class-based placeholders to prevent "prototype of undefined" crashes
-        // These are overwritten by polyfills.ts once the bundle loads.
+        // 2. Minimal placeholders to prevent "prototype of undefined" crashes.
+        // These are overwritten by the real polyfills once the bundle loads.
         if (!window.EventEmitter) {
-            class EventEmitter { static prototype = {}; }
+            function EventEmitter() {}
+            EventEmitter.prototype = {};
             window.EventEmitter = EventEmitter;
         }
         if (!window.Stream) {
-            class Stream { static prototype = {}; }
+            function Stream() {}
+            Stream.prototype = {};
             window.Stream = Stream;
         }
         window.Buffer = window.Buffer || { isBuffer: () => false };
