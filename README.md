@@ -14,87 +14,200 @@
 
 ---
 
-## 🔒 The FHE Difference
+## 🏗️ 1. Architecture Overview
 
-Traditional clinical trials require patients to leak sensitive data to determine eligibility. MedVault reimagines this with an **Encrypted-by-Default** architecture:
+MedVault uses a multi-layered approach to synchronize browser-level encryption with on-chain computation. The system ensures that patient data never exists in plaintext outside of the user's localized memory.
 
-*   **Zero-Knowledge Discovery**: Trial matching happens entirely on ciphertexts. The network computes `Age > 18` and `HbA1c < 7.0` without ever seeing the raw numbers.
-*   **Encrypted Yield**: Idle reward funds are staked into Aave V3 via our `StakingManager`, allowing private incentive pools to grow while maintaining absolute confidentiality.
-*   **Regulatory-First Audit**: A dedicated `DataAccessLog` provides on-chain proof of compliance (who accessed what) without compromising patient identity.
-
----
-
-## 🏗️ Technical Architecture
-
-MedVault uses a multi-layered approach to synchronize browser-level encryption with on-chain computation.
-
-### System Overview
 ```mermaid
 graph TD
     subgraph "Frontend Layer (React + Vite)"
         A[MedVault DApp] --> B[fhevmjs Client]
-        B --> C[EIP-712 Signing]
+        B -->|AES-256 + FHE Key Gen| C[EIP-712 Signing]
+        C -->|Encrypted Payloads| D[RPC Provider]
     end
-    subgraph "Security Layer"
-        C --> D[Zama Gateway RPC]
+    
+    subgraph "Execution Layer (Zama FHEVM)"
+        D --> E[EligibilityEngine.sol]
+        E -->|Homomorphic Compute| F[ConfidentialETH.sol]
+        E -->|Manage Trials| H[SponsorRegistry.sol]
+        F -->|Yield Generation| G[StakingManager.sol]
     end
-    subgraph "Execution Layer (FHEVM)"
-        D --> E[EligibilityEngine]
-        E --> F[ConfidentialETH]
-        F --> G[StakingManager]
-        E --> H[SponsorRegistry]
+    
+    subgraph "DeFi & Indexing"
+        G -->|Cross-Chain RPC| I[Aave V3 Protocol]
+        E .-x|Events emitted| J[The Graph Node]
+        J -->|GraphQL API| A
     end
-    subgraph "DeFi Layer"
-        G --> I[Aave V3 Gateway]
-    end
-```
 
-### Data Lifecycle State Machine
-```mermaid
-stateDiagram-v2
-    [*] --> Registration: User Input
-    Registration --> EncryptedProfile: fhevmjs.encrypt()
-    EncryptedProfile --> TrialMatching: Homomorphic Compare
-    TrialMatching --> ApprovalRequest: Conditional Match
-    ApprovalRequest --> Staking: Sponsor Approval
-    Staking --> MilestoneRewards: Trial Participation
-    MilestoneRewards --> [*]: Final Payout
+    classDef default fill:#0f172a,stroke:#334155,stroke-width:1px,color:#f1f5f9;
+    classDef zama fill:#064e3b,stroke:#059669,stroke-width:2px,color:#ecfdf5;
+    class E,F,G,H zama
 ```
 
 ---
 
-## 📜 Smart Contract Suite
+## 📜 2. Smart Contract Ecosystem
 
-MedVault's core logic is distributed across a modular set of FHE-aware smart contracts:
+MedVault's core logic is distributed across a modular set of FHE-aware smart contracts. Each contract is designed to handle encrypted types (`euint32`, `ebool`) securely.
+
+```mermaid
+erDiagram
+    SponsorRegistry ||--o{ TrialMilestoneManager : creates
+    TrialMilestoneManager ||--o{ EligibilityEngine : defines_criteria
+    EligibilityEngine }o--|| ConfidentialETH : secures_deposits
+    ConfidentialETH ||--o{ StakingManager : routes_liquidity
+    DataAccessLog }|--|| SponsorRegistry : tracks_access
+    
+    SponsorRegistry {
+        address sponsor
+        bool isVerified
+        string organizationName
+    }
+    
+    EligibilityEngine {
+        euint32 encryptedAge
+        euint32 encryptedBloodPressure
+        ebool trialMatchStatus
+    }
+```
 
 | Contract | Purpose | Key Feature |
 |-----------|---------|-------------|
-| **`EligibilityEngine.sol`** | Core Matching Logic | Homomorphic (CMUX) boundary checks. |
-| **`ConfidentialETH.sol`** | Privacy Wrapper | 1e12 scaled `euint32` encrypted balances. |
-| **`StakingManager.sol`** | De-Fi Integration | Native Aave V3 yield on private assets. |
-| **`SponsorIncentiveVault`** | Reward Governance | Automated milestone-based phased payouts. |
-| **`DataAccessLog.sol`** | Compliance Audit | Immutable, anonymized access tracking. |
-| **`TrialMilestoneManager`** | Lifecycle Management | Phased trial progress tracking. |
+| **`EligibilityEngine.sol`** | Core Matching Logic | Homomorphic (CMUX) boundary checks on `euint32`. |
+| **`ConfidentialETH.sol`** | Privacy Wrapper | 1e12 scaled `euint32` encrypted balances to prevent tracking. |
+| **`StakingManager.sol`** | De-Fi Integration | Native Aave V3 yield generation on private assets. |
+| **`SponsorRegistry.sol`** | Identity & Access | Strict KYC gates before trials can be published. |
+| **`DataAccessLog.sol`** | Compliance Audit | Immutable, anonymized HIPAA/GDPR access tracking. |
+| **`TrialMilestoneManager`** | Lifecycle Management | Automated milestone-based phased payouts. |
 
 ---
 
-## 💰 Private Staking Workflow
+## 🔐 3. Zama FHEVM Encryption / Decryption Lifecycle
 
-MedVault integrates with **Aave V3** to allow sponsors and patients to earn yield on their confidential assets.
+Fully Homomorphic Encryption allows the blockchain to do math on numbers it cannot see. Here is how MedVault utilizes Zama's `fhevmjs` and `TFHE.sol`.
 
 ```mermaid
 sequenceDiagram
-    participant User as Patient/Sponsor
-    participant SM as StakingManager
-    participant CETH as ConfidentialETH
-    participant Aave as Aave V3 Pool
-    User->>CETH: Deposit ETH (1e12 Scaling)
-    User->>SM: Request Stake
-    SM->>CETH: Transfer Encrypted Balance
-    SM->>Aave: Deposit Native ETH to WETH Pool
-    Aave-->>SM: Mint aWETH Shares
-    SM-->>User: Update Private Share Tracker
+    participant P as Patient (Browser)
+    participant RPC as Zama RPC
+    participant SC as Smart Contract (FHEVM)
+    participant KMS as Zama KMS (Threshold)
+    
+    Note over P: Patient enters: Age=35
+    P->>P: fhevmjs.encrypt(35) -> 0xabc...
+    P->>RPC: tx: applyForTrial(0xabc...)
+    RPC->>SC: execute transaction
+    Note over SC: Contract loads Sponsor's Encrypted Req: MinAge=18
+    SC->>SC: TFHE.ge(0xabc..., Encrypted_18)
+    Note over SC: Result is a new ciphertext (ebool)
+    SC->>KMS: Request Decryption of result
+    KMS-->>SC: Decrypted boolean: TRUE
+    SC->>SC: Emit MatchEvent(PatientAddress)
+    Note over SC,P: The network knows they matched, but NOT their age
 ```
+
+### The Cryptographic Guarantee:
+1. **Client-side Encryption:** `fhevmjs` generates a single-use public key derived from the network.
+2. **On-Chain Computation:** The smart contract uses `TFHE.add()`, `TFHE.ge()`, etc., to manipulate the ciphertexts.
+3. **Threshold Decryption (ACL):** Only the final binary result (e.g., "Matched? Yes/No") is allowed to be decrypted by the ACL. The raw inputs remain encrypted forever.
+
+---
+
+## 💰 4. Private Staking & Yield
+
+MedVault integrates with **Aave V3** to allow sponsors and patients to earn yield on their confidential assets while they are locked in trials.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    classDef secret fill:#4c1d95,stroke:#8b5cf6,color:white;
+    classDef public fill:#1e3a8a,stroke:#3b82f6,color:white;
+    
+    state "Public Wallet (ETH)" as Wallet ::: public
+    state "ConfidentialETH (cETH)" as CETH ::: secret
+    state "StakingManager" as SM ::: secret
+    state "Aave V3 (aWETH)" as Aave ::: public
+    
+    Wallet --> CETH: 1. Deposit (Shielding)
+    CETH --> SM: 2. Lock for Trial
+    SM --> Aave: 3. Supply Public Liquidity
+    Aave --> SM: 4. Accrue Yield
+    SM --> CETH: 5. Unstake + Yield (Encrypted State)
+    CETH --> Wallet: 6. Withdraw (Unshielding)
+```
+
+1. **Shielding:** Users deposit native ETH into `ConfidentialETH`, receiving an encrypted (`euint32`) balance.
+2. **Staking:** The user commits encrypted funds to a trial. The `StakingManager` deducts the encrypted balance.
+3. **Yield Generation:** The `StakingManager` pools the actual underlying native ETH and supplies it to Aave V3.
+4. **Unshielding:** When the trial finishes, the encrypted balance + yield is returned, and the user can unshield it back to their public wallet.
+
+---
+
+## 🧬 5. Engine Trial Matching Workflow
+
+The core value proposition of MedVault is the ability to evaluate a patient against a trial's criteria invisibly.
+
+```mermaid
+graph LR
+    subgraph "Patient Profile (Encrypted)"
+        A[Encrypted Age]
+        B[Encrypted BloodType]
+        C[Encrypted Condition Status]
+    end
+    
+    subgraph "TFHE Evaluation Gates"
+        A -->|TFHE.ge| D{Age >= MinAge?}
+        B -->|TFHE.eq| E{BloodType == Req?}
+        C -->|TFHE.eq| F{Condition == True?}
+        
+        D -->|TFHE.and| G((Global AND Gate))
+        E -->|TFHE.and| G
+        F -->|TFHE.and| G
+    end
+    
+    subgraph "Result"
+        G --> H[Encrypted Boolean]
+        H -->|Decryption Request| I[Match / Reject]
+    end
+    
+    classDef secret fill:#064e3b,stroke:#059669,stroke-width:2px,color:#ecfdf5;
+    class A,B,C,D,E,F,G,H secret
+```
+
+---
+
+## 🧰 6. Tech Stack
+
+MedVault is built using a modern, fully decentralized Web3 stack tailored for Homomorphic Encryption.
+
+```mermaid
+mindmap
+  root((MedVault Stack))
+    Frontend
+      React 18
+      Vite
+      Tailwind CSS
+      Framer Motion
+    Web3 & FHE
+      Zama fhevmjs
+      WAGMI / Viem
+      Ethers.js v5/v6
+    Smart Contracts
+      Solidity 0.8.24
+      Zama TFHE Library
+      Hardhat
+    Infrastructure
+      The Graph (Subgraphs)
+      Apollo GraphQL
+      Vercel Hosting
+```
+
+*   **Frontend UI:** React 18, Vite, Tailwind CSS, Shadcn (Lucide Icons), Framer Motion for highly optimized animations.
+*   **Cryptography:** `@zama-ai/fhevmjs` for client-side encryption and EIP-712 credential signing.
+*   **Blockchain Dev:** `Hardhat` with `@fhevm/hardhat-plugin` for testing mocked FHE operations locally.
+*   **Smart Contracts:** Solidity `0.8.24` utilizing the core `TFHE.sol` library.
+*   **Data Indexing:** The Graph (AssemblyScript mappings) paired with Apollo Client for rapid UI rendering without heavy RPC polling.
+*   **Tooling:** TypeChain, Eslint, Prettier, PostCSS.
 
 ---
 
