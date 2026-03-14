@@ -13,7 +13,9 @@ import {
     Server,
     Key,
     Activity,
-    Coins
+    Coins,
+    Shield,
+    Scale
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,6 +53,13 @@ const docSections = [
             { title: "Private Staking", href: "/docs/staking", icon: Coins },
             { title: "Testing & Verification", href: "/docs/testing", icon: ShieldCheck },
             { title: "Deployment Guide", href: "/docs/deployment", icon: Terminal },
+        ]
+    },
+    {
+        title: "Security & Compliance",
+        items: [
+            { title: "Security Model", href: "/docs/security-model", icon: Shield },
+            { title: "Compliance & Audit", href: "/docs/compliance", icon: Scale },
         ]
     }
 ];

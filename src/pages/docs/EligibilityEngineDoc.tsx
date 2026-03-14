@@ -100,10 +100,59 @@ function _computeScore(address patient, uint256 trialId) internal returns (euint
 
                 <hr className="my-12 border-slate-200 dark:border-slate-800" />
 
+                <h2>Scoring Rubric & Weighted Dimensions</h2>
+
+                <p>
+                    The EligibilityEngine evaluates patients across three health dimensions, each contributing a weighted portion of the total 100-point score. This scoring rubric is hardcoded into the contract logic and applies uniformly to all trials.
+                </p>
+
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">Dimension</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">Weight</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">TFHE Operation</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">Condition</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">CMUX Points</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[
+                                    { dim: "Age", weight: "40%", op: "TFHE.ge() AND TFHE.le()", cond: "minAge ≤ age ≤ maxAge", pts: "+40 / +0" },
+                                    { dim: "Blood Pressure", weight: "30%", op: "TFHE.ge() AND TFHE.le()", cond: "minBP ≤ bp ≤ maxBP", pts: "+30 / +0" },
+                                    { dim: "HbA1c", weight: "30%", op: "TFHE.le()", cond: "hba1c ≤ maxHba1c", pts: "+30 / +0" },
+                                ].map((row, i) => (
+                                    <tr key={row.dim} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
+                                        <td className="px-4 py-3 font-bold text-teal-600 dark:text-teal-400 text-xs">{row.dim}</td>
+                                        <td className="px-4 py-3 font-bold text-slate-900 dark:text-white text-xs">{row.weight}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{row.op}</td>
+                                        <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{row.cond}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-emerald-600 dark:text-emerald-400">{row.pts}</td>
+                                    </tr>
+                                ))}
+                                <tr className="bg-teal-50 dark:bg-teal-900/20 border-t-2 border-teal-500">
+                                    <td className="px-4 py-3 font-bold text-teal-700 dark:text-teal-300 text-xs">Total</td>
+                                    <td className="px-4 py-3 font-bold text-teal-700 dark:text-teal-300 text-xs">100%</td>
+                                    <td className="px-4 py-3 text-xs text-teal-600 dark:text-teal-400 font-mono">5 TFHE ops + 3 CMUX</td>
+                                    <td className="px-4 py-3 text-xs text-teal-600 dark:text-teal-400">All dimensions pass</td>
+                                    <td className="px-4 py-3 font-bold font-mono text-teal-700 dark:text-teal-300 text-xs">= 100</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
+                        Table 1. A score of 100 indicates a perfect match across all health dimensions. Partial matches yield 40, 30, 60, 70, etc.
+                    </div>
+                </div>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
                 <h2>Understanding the Score State</h2>
 
                 <p>
-                    Notice how the resulting score accumulates up to a perfectly matching `100`. But what happens to this score?
+                    Notice how the resulting score accumulates up to a perfectly matching <code>100</code>. But what happens to this score?
                 </p>
 
                 <p>
@@ -111,7 +160,7 @@ function _computeScore(address patient, uint256 trialId) internal returns (euint
                 </p>
 
                 <Callout type="danger" title="The Event Anti-Pattern">
-                    <strong>Never emit encrypted types in standard events.</strong> Doing so forces indexers to parse massive byte arrays. Store cyphertexts securely in contract state mappings instead.
+                    <strong>Never emit encrypted types in standard events.</strong> Doing so forces indexers to parse massive byte arrays and creates unnecessary ciphertext exposure surface. Store ciphertexts securely in contract state mappings instead, and emit only non-sensitive metadata (trial ID, patient address, status enum).
                 </Callout>
 
                 <p>Instead, MedVault maps the score securely in the contract state:</p>
@@ -123,15 +172,48 @@ mapping(uint256 => mapping(address => euint32)) private trialApplicantScores;
 
 function storeScore(uint256 trialId, address patient, euint32 score) internal {
     trialApplicantScores[trialId][patient] = score;
+    // Grant decryption rights ONLY to the patient
+    TFHE.allow(score, patient);
+    // Allow this contract to read the score for future operations
+    TFHE.allowThis(score);
 }`}
                 />
 
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>Threshold & Boundary Behavior</h2>
+                <p>
+                    Understanding what happens at the exact boundary values is critical for both patients and auditors:
+                </p>
+
+                <ul>
+                    <li><strong>Exact boundary match passes:</strong> If a trial requires <code>minAge = 18</code> and the patient's encrypted age is exactly <code>18</code>, the <code>TFHE.ge(age, minAge)</code> check returns <code>ebool(true)</code>. The patient receives the full 40 points for that dimension.</li>
+                    <li><strong>Off-by-one fails:</strong> If a trial requires <code>maxAge = 65</code> and the patient's age is <code>66</code>, the <code>TFHE.le(age, maxAge)</code> returns <code>ebool(false)</code>. The CMUX adds 0 points. The sponsor never learns the patient's actual age — only the aggregate score reflects the mismatch.</li>
+                    <li><strong>Partial matches are informative:</strong> A score of <code>70</code> tells the patient they passed the Age and BP checks (40+30) but failed HbA1c. A score of <code>60</code> means BP + HbA1c passed but Age was out of range. This partial information helps patients identify which health factors need attention.</li>
+                </ul>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>Multi-Trial Concurrent Applications</h2>
+                <p>
+                    A single patient can apply to multiple trials simultaneously. The <code>EligibilityEngine</code> evaluates each application independently because the scoring mapping is keyed by <code>(trialId, patientAddress)</code>. This design means:
+                </p>
+                <ul>
+                    <li><strong>No re-encryption needed:</strong> The patient's encrypted health data is stored once in <code>PatientRegistry</code>. Each <code>computeEligibility()</code> call reads the same ciphertext handles. The TFHE ACL ensures the Engine has read access.</li>
+                    <li><strong>Independent scoring:</strong> Score for Trial #1 does not affect or leak information about score for Trial #2. Each trial has its own encrypted requirements, producing its own encrypted score.</li>
+                    <li><strong>Gas per application:</strong> Each <code>computeEligibility()</code> call costs approximately the same gas regardless of how many other trials the patient has applied to — there is no accumulating state read overhead.</li>
+                </ul>
+
+                <Callout type="tip" title="Gas Cost Estimation">
+                    A typical <code>computeEligibility()</code> transaction on Zama Sepolia uses approximately <strong>3-5 million gas</strong> due to the 5 TFHE comparison operations and 3 CMUX multiplexing operations. Each TFHE precompile call costs roughly 300,000-500,000 gas. Transaction confirmation takes 15-60 seconds due to the coprocessor's polynomial math processing time.
+                </Callout>
+
                 <h3>Decoupling Storage from Computation</h3>
                 <p>
-                    Why not update the `Applied Trials` array right here in the Engine? Because updating complex array structures while simultaneously performing heavy TFHE opcodes would routinely exceed the Zama Sepolia block gas limits.
+                    Why not update the <code>Applied Trials</code> array right here in the Engine? Because updating complex array structures while simultaneously performing heavy TFHE opcodes would routinely exceed the Zama Sepolia block gas limits.
                 </p>
                 <p>
-                    Therefore, the `EligibilityEngine` calculates the score and stores it. The frontend `PatientRegistry` and Subgraph then index the simple `ApplicationStatusUpdated` event (which contains the trial ID but <em>not</em> the score) to update the user's dashboard asynchronously.
+                    Therefore, the <code>EligibilityEngine</code> calculates the score and stores it. The frontend <code>PatientRegistry</code> and Subgraph then index the simple <code>ApplicationStatusUpdated</code> event (which contains the trial ID but <em>not</em> the score) to update the user's dashboard asynchronously.
                 </p>
 
             </Prose>

@@ -38,6 +38,8 @@ import { UserGuideDoc } from "./pages/docs/UserGuideDoc";
 import { DeploymentGuideDoc } from "./pages/docs/DeploymentGuideDoc";
 import { PrivateStakingDoc } from "./pages/docs/PrivateStakingDoc";
 import { TestingVerificationDoc } from "./pages/docs/TestingVerificationDoc";
+import { SecurityModelDoc } from "./pages/docs/SecurityModelDoc";
+import { ComplianceDoc } from "./pages/docs/ComplianceDoc";
 
 import { Web3Provider } from "./lib/Web3Context";
 import { EncryptedDataProvider } from "./lib/EncryptedDataContext";
@@ -312,6 +314,22 @@ export default function App() {
               element={
                 <DocsLayout>
                   <TestingVerificationDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/security-model"
+              element={
+                <DocsLayout>
+                  <SecurityModelDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/compliance"
+              element={
+                <DocsLayout>
+                  <ComplianceDoc />
                 </DocsLayout>
               }
             />

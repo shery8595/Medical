@@ -9,7 +9,7 @@ export function PrivateStakingDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-teal-500 font-bold tracking-widest uppercase text-xs">Operations & Guides</span>
+                <span className="text-teal-500 font-bold tracking-widest uppercase text-xs">Operations &amp; Guides</span>
                 <h1 className="mt-2 text-5xl">Private Yield Staking (Aave V3 Integration)</h1>
 
                 <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
@@ -66,8 +66,8 @@ export function PrivateStakingDoc() {
                     <li><strong>Confidential Staking:</strong> Users stake rewards directly from their <code>ConfidentialETH</code> balance.</li>
                 </ul>
 
-                <Callout type="info" title="Precision & e-Types">
-                    MedVault uses <code>euint64</code> for staking balances to maintain high precision. We map 1 ETH to $10^6$ units in the FHE layer, allowing for granular interest tracking without the extreme gas costs of 256-bit FHE types.
+                <Callout type="info" title="Precision &amp; e-Types">
+                    MedVault uses <code>euint64</code> for staking balances to maintain high precision. We map 1 ETH to 10^6 units in the FHE layer, allowing for granular interest tracking without the extreme gas costs of 256-bit FHE types.
                 </Callout>
 
                 <h3>Contract Implementation Preview</h3>
@@ -112,7 +112,7 @@ contract StakingManager {
                         <div className="flex items-start gap-4">
                             <div className="w-8 h-8 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center shrink-0 font-bold">1</div>
                             <p className="text-sm text-slate-600 dark:text-slate-400">
-                                <strong>Claim Choice:</strong> When a trial payment is released, the patient sees a "Secure Payout" modal. They can choose to withdraw to their wallet or "Stake & Earn".
+                                <strong>Claim Choice:</strong> When a trial payment is released, the patient sees a "Secure Payout" modal. They can choose to withdraw to their wallet or "Stake &amp; Earn".
                             </p>
                         </div>
                         <div className="flex items-start gap-4">
@@ -148,8 +148,76 @@ contract StakingManager {
                 </div>
 
                 <Callout type="warning" title="Decentralization Notice">
-                    While the <code>StakingManager</code> is trustless, yield generated depends on Aave V3’s protocol health and WETH liquidity. MedVault does not custody your staked assets; they are held in the pool until you unstake.
+                    While the <code>StakingManager</code> is trustless, yield generated depends on Aave V3's protocol health and WETH liquidity. MedVault does not custody your staked assets; they are held in the pool until you unstake.
                 </Callout>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>IV. Yield Mathematics</h2>
+                <p>
+                    The interest earned on staked MedVault rewards follows Aave V3's variable-rate lending model. When the <code>StakingManager</code> supplies WETH to the Aave pool, it receives <code>aWETH</code> receipt tokens that appreciate in value as borrowers pay interest.
+                </p>
+
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="px-4 pt-4 pb-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
+                        <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Yield Accrual Formula</span>
+                    </div>
+                    <div className="overflow-x-auto p-6 bg-white dark:bg-slate-900">
+                        <div className="text-sm font-mono text-slate-600 dark:text-slate-400 space-y-2">
+                            <p>Yield = Principal × (1 + APY/365)^days_staked - Principal</p>
+                            <p className="text-xs text-slate-400 mt-4">Where:</p>
+                            <p className="text-xs text-slate-400">• Principal = amount of WETH supplied to Aave via StakingManager</p>
+                            <p className="text-xs text-slate-400">• APY = Aave V3 variable supply rate (typically 1-5% for WETH)</p>
+                            <p className="text-xs text-slate-400">• days_staked = time from stake to unstake (accumulated per-block)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <p>
+                    The key innovation is that the <strong>patient's share of this yield is tracked privately</strong> using encrypted <code>euint64</code> balances. The <code>StakingManager</code> knows the total pool size (public), but individual positions are encrypted.
+                </p>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>V. ConfidentialETH Scaling</h2>
+                <p>
+                    The <code>ConfidentialETH</code> wrapper uses a critical scaling factor to bridge between Ethereum's 18-decimal wei representation and the TFHE type system:
+                </p>
+
+                <ul>
+                    <li><strong>ETH uses 18 decimals:</strong> 1 ETH = 10^18 wei. This is far too large for <code>euint32</code> (max ~4.29 billion) or even <code>euint64</code>.</li>
+                    <li><strong>Scaling factor: 1e12:</strong> MedVault divides incoming wei by <code>10^12</code> before storing as an encrypted value. This means 1 ETH = 10^6 encrypted units (1,000,000 "micro-ETH"). This provides 6 decimal places of precision.</li>
+                    <li><strong>Reverse on unshield:</strong> When a patient withdraws (unshields), the contract multiplies the decrypted amount by <code>10^12</code> to convert back to wei.</li>
+                </ul>
+
+                <Callout type="danger" title="Precision Limitation">
+                    Due to the <code>1e12</code> scaling, the smallest representable unit is <code>0.000001 ETH</code> (~$0.0025 at current prices). This means sub-micro-ETH amounts are truncated. For clinical trial rewards (typically $100-$10,000), this precision is more than sufficient.
+                </Callout>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>VI. Risk Factors</h2>
+                <p>
+                    Patients and auditors should be aware of the following risk factors affecting the private staking system:
+                </p>
+
+                <div className="not-prose space-y-4 my-8">
+                    {[
+                        { title: "Aave Protocol Risk", desc: "Yield generation depends on Aave V3's continued operation and solvency. In the unlikely event of an Aave pool exploit or WETH liquidity crisis, staked funds could be partially or fully lost.", severity: "Medium" },
+                        { title: "Smart Contract Risk", desc: "The StakingManager, ConfidentialETH, and their interactions with Aave introduce additional smart contract surface area. Each contract has been tested with 100+ test cases, but formal verification has not been completed.", severity: "Medium" },
+                        { title: "FHE Liveness Dependency", desc: "If the Zama coprocessor experiences downtime, encrypted staking operations (deposits, withdrawals) will be blocked. Public ETH operations remain unaffected.", severity: "Low" },
+                        { title: "Scaling Truncation", desc: "The 1e12 scaling factor means very small yield amounts may be lost to truncation. Over long staking periods with small balances, this can result in slightly lower effective APY than quoted.", severity: "Low" },
+                    ].map(risk => (
+                        <div key={risk.title} className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-bold text-slate-900 dark:text-white text-sm m-0">{risk.title}</h4>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${risk.severity === "Medium" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"}`}>{risk.severity}</span>
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed m-0">{risk.desc}</p>
+                        </div>
+                    ))}
+                </div>
+
             </Prose>
         </motion.div>
     );

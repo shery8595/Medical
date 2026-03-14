@@ -3,6 +3,8 @@ import { DocsSidebar } from "../../components/docs/DocsSidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "react-router-dom";
 
+import { DocsFooter } from "../../components/docs/DocsFooter";
+
 interface DocsLayoutProps {
     children: ReactNode;
 }
@@ -44,8 +46,9 @@ export function DocsLayout({ children }: DocsLayoutProps) {
                         {/* The page content is rendered here. 
                 We use max-w-4xl max-w-prose inside individual pages, 
                 but this shell allows full width for diagrams if needed. */}
-                        <div className="w-full h-full p-6 md:p-12 lg:p-16">
+                        <div className="w-full h-full px-6 py-12 md:px-12 md:py-16 lg:px-16 lg:py-20 pb-32 md:pb-48 lg:pb-64">
                             {children}
+                            <DocsFooter />
                         </div>
                     </motion.div>
                 </AnimatePresence>

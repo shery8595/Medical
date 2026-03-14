@@ -101,8 +101,53 @@ contract SponsorRegistry is Ownable {
                 />
 
                 <Callout type="tip" title="Decoupled Authorization">
-                    The `TrialManager` contract holds an interface to the `SponsorRegistry`. Maintaining these as separate contracts allows MedVault admins to upgrade the Trial Logic independently of the existing list of verified sponsors, preventing the need to re-KYC hundreds of institutions during a V2 migration.
+                    The <code>TrialManager</code> contract holds an interface to the <code>SponsorRegistry</code>. Maintaining these as separate contracts allows MedVault admins to upgrade the Trial Logic independently of the existing list of verified sponsors, preventing the need to re-KYC hundreds of institutions during a V2 migration.
                 </Callout>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>Consent Architecture Deep Dive</h2>
+                <p>
+                    The consent flow in MedVault is not a simple boolean toggle. It is a <strong>cryptographic re-encryption protocol</strong> that ensures the sponsor can only view the patient's profile if the patient explicitly authorizes it via a signed Ethereum transaction. Here is the detailed flow:
+                </p>
+
+                <ol className="space-y-4 my-8">
+                    <li><strong>Post-Match Notification:</strong> After the <code>EligibilityEngine</code> computes a score, the patient views their result by generating an EIP-712 viewing key. If the score is satisfactory (typically 100 = perfect match), the UI presents a "Grant Access to Sponsor" button.</li>
+                    <li><strong>On-Chain Consent Record:</strong> The patient calls <code>ConsentManager.grantConsent(sponsorAddress, trialId)</code>. This stores a consent record scoped to the specific <code>(patient, sponsor, trialId)</code> tuple and emits a <code>ConsentGranted</code> event for the subgraph to index.</li>
+                    <li><strong>Re-Encryption via KMS:</strong> With consent on-chain, the sponsor can request re-encryption of the patient's ciphertext handles through the Zama KMS. The KMS verifies: (a) the consent record exists on-chain, (b) the requesting address matches the authorized sponsor, and (c) the consent has not been revoked.</li>
+                    <li><strong>Sponsor-Side Decryption:</strong> The KMS re-encrypts the patient's TFHE ciphertexts using the sponsor's public key. The sponsor downloads these re-encrypted blobs and decrypts locally. The blockchain never sees the plaintext values.</li>
+                    <li><strong>Revocation:</strong> At any time, the patient can call <code>revokeConsent(sponsor, trialId)</code>. This immediately invalidates the consent record on-chain. Future re-encryption requests from that sponsor will be rejected by the KMS. Previously decrypted data cannot be "un-decrypted," but no new data access is possible.</li>
+                </ol>
+
+                <Callout type="warning" title="Consent Scope Isolation">
+                    Consent is always scoped to a specific <code>(patient, sponsor, trialId)</code> triple. Granting consent for Trial #1 does <strong>not</strong> give the sponsor access to the patient's data for Trial #2 or any other trial. Each consent grant is an independent, auditable on-chain transaction logged in <code>DataAccessLog</code>.
+                </Callout>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>Emergency Procedures</h2>
+                <p>
+                    MedVault includes emergency mechanisms to handle critical security incidents involving sponsor accounts:
+                </p>
+
+                <ul>
+                    <li><strong>Sponsor Key Compromise:</strong> If a sponsor's private key is compromised, the protocol admin can immediately call <code>emergencyRemoveSponsor(address)</code> on the <code>SponsorRegistry</code>. This revokes the sponsor's verified status, preventing them from creating new trials. Existing trials remain viewable but new applications are frozen.</li>
+                    <li><strong>Trial Halt:</strong> Any active trial can be deactivated by its owning sponsor or the protocol admin via <code>TrialManager.deactivateTrial(trialId)</code>. This sets the trial's <code>active</code> flag to <code>false</code>, which prevents new <code>computeEligibility()</code> calls from executing.</li>
+                    <li><strong>Consent Auto-Expiry (Planned):</strong> In a future upgrade, consent tokens will include time-locked expiration. After the trial period ends, consent automatically revokes without requiring patient action.</li>
+                </ul>
+
+                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+
+                <h2>Multi-Sponsor Governance Model</h2>
+                <p>
+                    The <code>SponsorRegistry</code> is owned by a single admin address. In a production deployment, this would be a multisig wallet (e.g., Gnosis Safe) requiring N-of-M signatures from protocol governors to add or remove sponsors. This prevents any single actor from unilaterally adding a malicious sponsor. The governance model includes:
+                </p>
+                <ul>
+                    <li><strong>Off-chain KYC verification</strong> before any on-chain sponsor addition</li>
+                    <li><strong>Multi-signature approval</strong> via Gnosis Safe for all <code>addSponsor()</code> calls</li>
+                    <li><strong>Time-locked removal</strong> for non-emergency sponsor deauthorization</li>
+                    <li><strong>Subgraph-indexed sponsor events</strong> for full transparency of the authorization history</li>
+                </ul>
 
             </Prose>
         </motion.div>
