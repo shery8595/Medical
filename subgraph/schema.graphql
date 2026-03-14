@@ -12,6 +12,14 @@ type Sponsor @entity(immutable: false) {
   trials: [Trial!]! @derivedFrom(field: "sponsor")
 }
 
+type SponsorshipRequest @entity(immutable: false) {
+  id: Bytes!                           # wallet address
+  encryptedData: Bytes!
+  status: String!                      # Pending, Approved, Rejected
+  requestedAt: BigInt!
+  txHash: Bytes!
+}
+
 type Trial @entity(immutable: false) {
   id: ID!                              # on-chain trial ID
   sponsor: Sponsor!

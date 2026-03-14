@@ -6,7 +6,7 @@ import { getMedVaultAutomation } from '../lib/contracts';
 
 const GET_TRIALS_WITH_USER_STATE = `
   query GetTrialsWithUserState($account: Bytes!) {
-    trials {
+    trials(orderBy: createdAt, orderDirection: desc) {
       id
       endTime
       sponsor {
@@ -48,7 +48,7 @@ const GET_TRIALS_WITH_USER_STATE = `
 
 const GET_TRIALS_BY_SPONSOR = `
   query GetTrialsBySponsor($sponsor: Bytes!) {
-    trials(where: { sponsor: $sponsor }) {
+    trials(where: { sponsor: $sponsor }, orderBy: createdAt, orderDirection: desc) {
       id
       endTime
       sponsor {

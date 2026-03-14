@@ -50,6 +50,85 @@ export class SponsorRemoved__Params {
   }
 }
 
+export class SponsorshipRequestResolved extends ethereum.Event {
+  get params(): SponsorshipRequestResolved__Params {
+    return new SponsorshipRequestResolved__Params(this);
+  }
+}
+
+export class SponsorshipRequestResolved__Params {
+  _event: SponsorshipRequestResolved;
+
+  constructor(event: SponsorshipRequestResolved) {
+    this._event = event;
+  }
+
+  get applicant(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+
+  get status(): i32 {
+    return this._event.parameters[1].value.toI32();
+  }
+}
+
+export class SponsorshipRequested extends ethereum.Event {
+  get params(): SponsorshipRequested__Params {
+    return new SponsorshipRequested__Params(this);
+  }
+}
+
+export class SponsorshipRequested__Params {
+  _event: SponsorshipRequested;
+
+  constructor(event: SponsorshipRequested) {
+    this._event = event;
+  }
+
+  get applicant(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+
+  get encryptedData(): Bytes {
+    return this._event.parameters[1].value.toBytes();
+  }
+}
+
+export class SponsorRegistry__requestsResult {
+  value0: Bytes;
+  value1: i32;
+  value2: BigInt;
+
+  constructor(value0: Bytes, value1: i32, value2: BigInt) {
+    this.value0 = value0;
+    this.value1 = value1;
+    this.value2 = value2;
+  }
+
+  toMap(): TypedMap<string, ethereum.Value> {
+    let map = new TypedMap<string, ethereum.Value>();
+    map.set("value0", ethereum.Value.fromBytes(this.value0));
+    map.set(
+      "value1",
+      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value1))
+    );
+    map.set("value2", ethereum.Value.fromUnsignedBigInt(this.value2));
+    return map;
+  }
+
+  getEncryptedData(): Bytes {
+    return this.value0;
+  }
+
+  getStatus(): i32 {
+    return this.value1;
+  }
+
+  getRequestedAt(): BigInt {
+    return this.value2;
+  }
+}
+
 export class SponsorRegistry__sponsorsResult {
   value0: string;
   value1: boolean;
@@ -123,6 +202,41 @@ export class SponsorRegistry extends ethereum.SmartContract {
     }
     let value = result.value;
     return ethereum.CallResult.fromValue(value[0].toAddress());
+  }
+
+  requests(param0: Address): SponsorRegistry__requestsResult {
+    let result = super.call(
+      "requests",
+      "requests(address):(bytes,uint8,uint256)",
+      [ethereum.Value.fromAddress(param0)]
+    );
+
+    return new SponsorRegistry__requestsResult(
+      result[0].toBytes(),
+      result[1].toI32(),
+      result[2].toBigInt()
+    );
+  }
+
+  try_requests(
+    param0: Address
+  ): ethereum.CallResult<SponsorRegistry__requestsResult> {
+    let result = super.tryCall(
+      "requests",
+      "requests(address):(bytes,uint8,uint256)",
+      [ethereum.Value.fromAddress(param0)]
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(
+      new SponsorRegistry__requestsResult(
+        value[0].toBytes(),
+        value[1].toI32(),
+        value[2].toBigInt()
+      )
+    );
   }
 
   sponsors(param0: Address): SponsorRegistry__sponsorsResult {
@@ -221,6 +335,36 @@ export class AddSponsorCall__Outputs {
   }
 }
 
+export class RejectSponsorshipCall extends ethereum.Call {
+  get inputs(): RejectSponsorshipCall__Inputs {
+    return new RejectSponsorshipCall__Inputs(this);
+  }
+
+  get outputs(): RejectSponsorshipCall__Outputs {
+    return new RejectSponsorshipCall__Outputs(this);
+  }
+}
+
+export class RejectSponsorshipCall__Inputs {
+  _call: RejectSponsorshipCall;
+
+  constructor(call: RejectSponsorshipCall) {
+    this._call = call;
+  }
+
+  get _applicant(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+}
+
+export class RejectSponsorshipCall__Outputs {
+  _call: RejectSponsorshipCall;
+
+  constructor(call: RejectSponsorshipCall) {
+    this._call = call;
+  }
+}
+
 export class RemoveSponsorCall extends ethereum.Call {
   get inputs(): RemoveSponsorCall__Inputs {
     return new RemoveSponsorCall__Inputs(this);
@@ -247,6 +391,36 @@ export class RemoveSponsorCall__Outputs {
   _call: RemoveSponsorCall;
 
   constructor(call: RemoveSponsorCall) {
+    this._call = call;
+  }
+}
+
+export class RequestSponsorshipCall extends ethereum.Call {
+  get inputs(): RequestSponsorshipCall__Inputs {
+    return new RequestSponsorshipCall__Inputs(this);
+  }
+
+  get outputs(): RequestSponsorshipCall__Outputs {
+    return new RequestSponsorshipCall__Outputs(this);
+  }
+}
+
+export class RequestSponsorshipCall__Inputs {
+  _call: RequestSponsorshipCall;
+
+  constructor(call: RequestSponsorshipCall) {
+    this._call = call;
+  }
+
+  get _encryptedData(): Bytes {
+    return this._call.inputValues[0].value.toBytes();
+  }
+}
+
+export class RequestSponsorshipCall__Outputs {
+  _call: RequestSponsorshipCall;
+
+  constructor(call: RequestSponsorshipCall) {
     this._call = call;
   }
 }

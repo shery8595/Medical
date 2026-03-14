@@ -5,20 +5,22 @@ import { getContract } from "../lib/contracts";
 
 interface UseSponsorVerificationResult {
     isVerified: boolean;
+    isAdmin: boolean;
     isLoading: boolean;
     sponsorName: string | null;
     error: string | null;
 }
 
 export function useSponsorVerification(): UseSponsorVerificationResult {
-    const { account, provider } = useWeb3();
+    const { account, provider, readOnlyProvider } = useWeb3();
     const [isVerified, setIsVerified] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [sponsorName, setSponsorName] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!account || !provider) {
+        if (!account || !readOnlyProvider) {
             setIsVerified(false);
             setIsLoading(false);
             setSponsorName(null);
@@ -31,13 +33,15 @@ export function useSponsorVerification(): UseSponsorVerificationResult {
             setIsLoading(true);
             setError(null);
             try {
-                const registry = getContract("SponsorRegistry", provider);
-                const [verified, sponsorData] = await Promise.all([
+                const registry = getContract("SponsorRegistry", readOnlyProvider);
+                const [verified, sponsorData, owner] = await Promise.all([
                     registry.isVerifiedSponsor(account) as Promise<boolean>,
                     registry.sponsors(account) as Promise<{ name: string; verified: boolean; addedAt: bigint }>,
+                    registry.owner() as Promise<string>
                 ]);
-
+                
                 if (!cancelled) {
+                    setIsAdmin(owner.toLowerCase() === account.toLowerCase());
                     setIsVerified(verified);
                     setSponsorName(verified && sponsorData.name ? sponsorData.name : null);
                 }
@@ -58,7 +62,7 @@ export function useSponsorVerification(): UseSponsorVerificationResult {
         return () => {
             cancelled = true;
         };
-    }, [account, provider]);
+    }, [account, provider, readOnlyProvider]);
 
-    return { isVerified, isLoading, sponsorName, error };
+    return { isVerified, isAdmin, isLoading, sponsorName, error };
 }

@@ -53,7 +53,7 @@ export function useMatches(sponsorAddress?: string) {
                 patientStateMap.set(c.patient, {
                     id: c.id,
                     status: "Interested",
-                    timestamp: new Date(Number(c.lastUpdatedAt) * 1000).toLocaleString(),
+                    timestamp: Number(c.lastUpdatedAt),
                     score: 0
                 });
             });
@@ -63,7 +63,7 @@ export function useMatches(sponsorAddress?: string) {
                 patientStateMap.set(er.patient, {
                     id: er.id,
                     status: "Computed",
-                    timestamp: new Date(Number(er.computedAt) * 1000).toLocaleString(),
+                    timestamp: Number(er.computedAt),
                     score: 100
                 });
             });
@@ -73,7 +73,7 @@ export function useMatches(sponsorAddress?: string) {
                 patientStateMap.set(app.patient, {
                     id: app.id,
                     status: app.status,
-                    timestamp: new Date(Number(app.updatedAt) * 1000).toLocaleString(),
+                    timestamp: Number(app.updatedAt),
                     score: 100,
                     message: app.message,
                     currentMilestone: 0
@@ -97,7 +97,8 @@ export function useMatches(sponsorAddress?: string) {
                     patientAddress: patientAddr as string,
                     patientId: `${(patientAddr as string).slice(0, 6)}...${(patientAddr as string).slice(-4)}`,
                     status: state.status,
-                    timestamp: state.timestamp,
+                    timestamp: new Date(state.timestamp * 1000).toLocaleString(),
+                    rawTimestamp: state.timestamp,
                     matchScore: state.score,
                     applicationStatus: ["Pending", "Accepted", "Rejected"].includes(state.status) ? state.status : "None",
                     applicationMessage: state.message,
@@ -106,7 +107,7 @@ export function useMatches(sponsorAddress?: string) {
             });
         });
 
-        return allMatches.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return allMatches.sort((a, b) => (b as any).rawTimestamp - (a as any).rawTimestamp);
     }, [data]);
 
     return {

@@ -3,6 +3,7 @@
 /* eslint-disable */
 import type {
   BaseContract,
+  BigNumberish,
   BytesLike,
   FunctionFragment,
   Result,
@@ -28,13 +29,20 @@ export interface SponsorRegistryInterface extends Interface {
       | "addSponsor"
       | "isVerifiedSponsor"
       | "owner"
+      | "rejectSponsorship"
       | "removeSponsor"
+      | "requestSponsorship"
+      | "requests"
       | "sponsors"
       | "transferOwnership"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "SponsorAdded" | "SponsorRemoved"
+    nameOrSignatureOrTopic:
+      | "SponsorAdded"
+      | "SponsorRemoved"
+      | "SponsorshipRequestResolved"
+      | "SponsorshipRequested"
   ): EventFragment;
 
   encodeFunctionData(
@@ -47,7 +55,19 @@ export interface SponsorRegistryInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "rejectSponsorship",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "removeSponsor",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "requestSponsorship",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "requests",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
@@ -66,9 +86,18 @@ export interface SponsorRegistryInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "rejectSponsorship",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "removeSponsor",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "requestSponsorship",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "requests", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "sponsors", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
@@ -94,6 +123,32 @@ export namespace SponsorRemovedEvent {
   export type OutputTuple = [sponsor: string];
   export interface OutputObject {
     sponsor: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace SponsorshipRequestResolvedEvent {
+  export type InputTuple = [applicant: AddressLike, status: BigNumberish];
+  export type OutputTuple = [applicant: string, status: bigint];
+  export interface OutputObject {
+    applicant: string;
+    status: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace SponsorshipRequestedEvent {
+  export type InputTuple = [applicant: AddressLike, encryptedData: BytesLike];
+  export type OutputTuple = [applicant: string, encryptedData: string];
+  export interface OutputObject {
+    applicant: string;
+    encryptedData: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -158,10 +213,34 @@ export interface SponsorRegistry extends BaseContract {
 
   owner: TypedContractMethod<[], [string], "view">;
 
+  rejectSponsorship: TypedContractMethod<
+    [_applicant: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   removeSponsor: TypedContractMethod<
     [_sponsor: AddressLike],
     [void],
     "nonpayable"
+  >;
+
+  requestSponsorship: TypedContractMethod<
+    [_encryptedData: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+
+  requests: TypedContractMethod<
+    [arg0: AddressLike],
+    [
+      [string, bigint, bigint] & {
+        encryptedData: string;
+        status: bigint;
+        requestedAt: bigint;
+      }
+    ],
+    "view"
   >;
 
   sponsors: TypedContractMethod<
@@ -200,8 +279,27 @@ export interface SponsorRegistry extends BaseContract {
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "rejectSponsorship"
+  ): TypedContractMethod<[_applicant: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "removeSponsor"
   ): TypedContractMethod<[_sponsor: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "requestSponsorship"
+  ): TypedContractMethod<[_encryptedData: BytesLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "requests"
+  ): TypedContractMethod<
+    [arg0: AddressLike],
+    [
+      [string, bigint, bigint] & {
+        encryptedData: string;
+        status: bigint;
+        requestedAt: bigint;
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "sponsors"
   ): TypedContractMethod<
@@ -233,6 +331,20 @@ export interface SponsorRegistry extends BaseContract {
     SponsorRemovedEvent.OutputTuple,
     SponsorRemovedEvent.OutputObject
   >;
+  getEvent(
+    key: "SponsorshipRequestResolved"
+  ): TypedContractEvent<
+    SponsorshipRequestResolvedEvent.InputTuple,
+    SponsorshipRequestResolvedEvent.OutputTuple,
+    SponsorshipRequestResolvedEvent.OutputObject
+  >;
+  getEvent(
+    key: "SponsorshipRequested"
+  ): TypedContractEvent<
+    SponsorshipRequestedEvent.InputTuple,
+    SponsorshipRequestedEvent.OutputTuple,
+    SponsorshipRequestedEvent.OutputObject
+  >;
 
   filters: {
     "SponsorAdded(address,string)": TypedContractEvent<
@@ -255,6 +367,28 @@ export interface SponsorRegistry extends BaseContract {
       SponsorRemovedEvent.InputTuple,
       SponsorRemovedEvent.OutputTuple,
       SponsorRemovedEvent.OutputObject
+    >;
+
+    "SponsorshipRequestResolved(address,uint8)": TypedContractEvent<
+      SponsorshipRequestResolvedEvent.InputTuple,
+      SponsorshipRequestResolvedEvent.OutputTuple,
+      SponsorshipRequestResolvedEvent.OutputObject
+    >;
+    SponsorshipRequestResolved: TypedContractEvent<
+      SponsorshipRequestResolvedEvent.InputTuple,
+      SponsorshipRequestResolvedEvent.OutputTuple,
+      SponsorshipRequestResolvedEvent.OutputObject
+    >;
+
+    "SponsorshipRequested(address,bytes)": TypedContractEvent<
+      SponsorshipRequestedEvent.InputTuple,
+      SponsorshipRequestedEvent.OutputTuple,
+      SponsorshipRequestedEvent.OutputObject
+    >;
+    SponsorshipRequested: TypedContractEvent<
+      SponsorshipRequestedEvent.InputTuple,
+      SponsorshipRequestedEvent.OutputTuple,
+      SponsorshipRequestedEvent.OutputObject
     >;
   };
 }

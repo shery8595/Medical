@@ -65,14 +65,14 @@ export const getContract = (
     return new ethers.Contract(address, abi, signerOrProvider);
 };
 
-export const getPatientRegistry = (signer: ethers.Signer) => getContract("PatientRegistry", signer);
-export const getTrialManager = (signer: ethers.Signer) => getContract("TrialManager", signer);
-export const getConsentManager = (signer: ethers.Signer) => getContract("ConsentManager", signer);
-export const getEligibilityEngine = (signer: ethers.Signer) => getContract("EligibilityEngine", signer);
-export const getConfidentialETH = (signer: ethers.Signer) => getContract("ConfidentialETH", signer);
-export const getSponsorIncentiveVault = (signer: ethers.Signer) => getContract("SponsorIncentiveVault", signer);
-export const getDataAccessLog = (signer: ethers.Signer) => getContract("DataAccessLog", signer);
-export const getTrialMilestoneManager = (signer: ethers.Signer) => getContract("TrialMilestoneManager", signer);
-export const getSponsorRegistry = (signer: ethers.Signer) => getContract("SponsorRegistry", signer);
+export const getPatientRegistry = (signer: ethers.Signer | ethers.Provider) => getContract("PatientRegistry", signer);
+export const getTrialManager = (signer: ethers.Signer | ethers.Provider) => getContract("TrialManager", signer);
+export const getConsentManager = (signer: ethers.Signer | ethers.Provider) => getContract("ConsentManager", signer);
+export const getEligibilityEngine = (signer: ethers.Signer | ethers.Provider) => getContract("EligibilityEngine", signer);
+export const getConfidentialETH = (signer: ethers.Signer | ethers.Provider) => getContract("ConfidentialETH", signer);
+export const getSponsorIncentiveVault = (signer: ethers.Signer | ethers.Provider) => getContract("SponsorIncentiveVault", signer);
+export const getDataAccessLog = (signer: ethers.Signer | ethers.Provider) => getContract("DataAccessLog", signer);
+export const getTrialMilestoneManager = (signer: ethers.Signer | ethers.Provider) => getContract("TrialMilestoneManager", signer);
+export const getSponsorRegistry = (signer: ethers.Signer | ethers.Provider) => getContract("SponsorRegistry", signer);
 export const getMedVaultAutomation = (signer: ethers.Signer | ethers.Provider) => getContract("MedVaultAutomation", signer);
-export const getStakingManager = (signer: ethers.Signer) => getContract("StakingManager", signer);
+export const getStakingManager = (signer: ethers.Signer | ethers.Provider) => getContract("StakingManager", signer);

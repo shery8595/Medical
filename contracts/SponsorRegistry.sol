@@ -6,6 +6,14 @@ pragma solidity ^0.8.27;
  * @notice Maintains an allowlist of verified clinical trial sponsors
  */
 contract SponsorRegistry {
+    enum RequestStatus { None, Pending, Approved, Rejected }
+    
+    struct SponsorshipRequest {
+        bytes encryptedData; // Encrypted institutional details
+        RequestStatus status;
+        uint256 requestedAt;
+    }
+
     struct Sponsor {
         string name;
         bool verified;
@@ -13,10 +21,13 @@ contract SponsorRegistry {
     }
 
     mapping(address => Sponsor) public sponsors;
+    mapping(address => SponsorshipRequest) public requests;
     address public owner;
 
     event SponsorAdded(address indexed sponsor, string name);
     event SponsorRemoved(address indexed sponsor);
+    event SponsorshipRequested(address indexed applicant, bytes encryptedData);
+    event SponsorshipRequestResolved(address indexed applicant, RequestStatus status);
 
     constructor() {
         owner = msg.sender;
@@ -28,7 +39,20 @@ contract SponsorRegistry {
     }
 
     /**
-     * @notice Add a verified sponsor to the registry
+     * @notice Submit an encrypted sponsorship request
+     */
+    function requestSponsorship(bytes calldata _encryptedData) external {
+        require(requests[msg.sender].status == RequestStatus.None, "Request already exists");
+        requests[msg.sender] = SponsorshipRequest({
+            encryptedData: _encryptedData,
+            status: RequestStatus.Pending,
+            requestedAt: block.timestamp
+        });
+        emit SponsorshipRequested(msg.sender, _encryptedData);
+    }
+
+    /**
+     * @notice Add a verified sponsor to the registry and resolve any pending request
      */
     function addSponsor(address _sponsor, string calldata _name) external onlyOwner {
         require(bytes(_name).length > 0, "Name required");
@@ -37,6 +61,12 @@ contract SponsorRegistry {
             verified: true,
             addedAt: block.timestamp
         });
+        
+        if (requests[_sponsor].status == RequestStatus.Pending) {
+            requests[_sponsor].status = RequestStatus.Approved;
+            emit SponsorshipRequestResolved(_sponsor, RequestStatus.Approved);
+        }
+        
         emit SponsorAdded(_sponsor, _name);
     }
 
@@ -53,6 +83,15 @@ contract SponsorRegistry {
      */
     function isVerifiedSponsor(address _sponsor) external view returns (bool) {
         return sponsors[_sponsor].verified;
+    }
+
+    /**
+     * @notice Reject a sponsorship request
+     */
+    function rejectSponsorship(address _applicant) external onlyOwner {
+        require(requests[_applicant].status == RequestStatus.Pending, "No pending request");
+        requests[_applicant].status = RequestStatus.Rejected;
+        emit SponsorshipRequestResolved(_applicant, RequestStatus.Rejected);
     }
 
     /**

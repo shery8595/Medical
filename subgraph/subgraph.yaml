@@ -178,7 +178,7 @@ dataSources:
     name: SponsorRegistry
     network: sepolia
     source:
-      address: "0x659C3836B69b4B92FbECc0E119FfA5b3B2Cfd558"
+      address: "0xE1F39ca6eb80008B868461283A2767ef95a83f59"
       abi: SponsorRegistry
       startBlock: 7421000
     mapping:
@@ -195,6 +195,10 @@ dataSources:
           handler: handleSponsorAdded
         - event: SponsorRemoved(indexed address)
           handler: handleSponsorRemoved
+        - event: SponsorshipRequested(indexed address,bytes)
+          handler: handleSponsorshipRequested
+        - event: SponsorshipRequestResolved(indexed address,uint8)
+          handler: handleSponsorshipRequestResolved
       file: ./src/mappings/sponsor-registry.ts
 
   - kind: ethereum

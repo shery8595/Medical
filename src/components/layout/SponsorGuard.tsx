@@ -12,7 +12,7 @@ interface SponsorGuardProps {
 
 export function SponsorGuard({ children }: SponsorGuardProps) {
     const { account, connect, isConnecting } = useWeb3();
-    const { isVerified, isLoading, sponsorName } = useSponsorVerification();
+    const { isVerified, isAdmin, isLoading, sponsorName } = useSponsorVerification();
 
     /* ─── No wallet connected ─────────────────────────────────────────────── */
     if (!account) {
@@ -62,8 +62,8 @@ export function SponsorGuard({ children }: SponsorGuardProps) {
         );
     }
 
-    /* ─── Verified — render children ──────────────────────────────────────── */
-    if (isVerified) {
+    /* ─── Verified or Admin — render children ──────────────────────────────── */
+    if (isVerified || isAdmin) {
         return <>{children}</>;
     }
 

@@ -6,6 +6,7 @@ interface Web3ContextType {
     account: string | null;
     signer: ethers.Signer | null;
     provider: ethers.Provider | null;
+    readOnlyProvider: ethers.Provider | null;
     connect: () => Promise<void>;
     isFHEReady: boolean;
     isConnecting: boolean;
@@ -18,11 +19,18 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     const [account, setAccount] = useState<string | null>(null);
     const [signer, setSigner] = useState<ethers.Signer | null>(null);
     const [provider, setProvider] = useState<ethers.Provider | null>(null);
+    const [readOnlyProvider, setReadOnlyProvider] = useState<ethers.Provider | null>(null);
     const [isFHEReady, setIsFHEReady] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
+    const RPC_URL = import.meta.env.VITE_RPC_URL || "https://eth-sepolia.g.alchemy.com/v2/rtwAOMEZ9SRzYI81Qwtpc";
+
+    useEffect(() => {
+        const rp = new ethers.JsonRpcProvider(RPC_URL);
+        setReadOnlyProvider(rp);
+    }, []);
 
     const connect = async () => {
         if (typeof window.ethereum === "undefined") {
@@ -104,6 +112,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
                 account,
                 signer,
                 provider,
+                readOnlyProvider,
                 connect,
                 isFHEReady,
                 isConnecting,

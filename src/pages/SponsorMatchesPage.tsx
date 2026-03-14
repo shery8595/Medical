@@ -51,17 +51,24 @@ export function SponsorMatchesPage() {
 
   // Group matches by trial
   const groupedMatches = useMemo(() => {
-    const groups: { [key: string]: { trialName: string; matches: any[] } } = {};
+    const groups: { [key: string]: { trialName: string; matches: any[]; maxTimestamp: number } } = {};
     matches.forEach(match => {
       if (!groups[match.trialId]) {
-        groups[match.trialId] = { trialName: match.trialName, matches: [] };
+        groups[match.trialId] = { trialName: match.trialName, matches: [], maxTimestamp: 0 };
       }
       groups[match.trialId].matches.push(match);
+      const matchTs = (match as any).rawTimestamp || 0;
+      if (matchTs > groups[match.trialId].maxTimestamp) {
+        groups[match.trialId].maxTimestamp = matchTs;
+      }
     });
     return groups;
   }, [matches]);
 
-  const groupedEntries = Object.entries(groupedMatches) as [string, { trialName: string; matches: any[] }][];
+  const groupedEntries = useMemo(() => {
+    return (Object.entries(groupedMatches) as [string, { trialName: string; matches: any[]; maxTimestamp: number }][])
+      .sort((a, b) => b[1].maxTimestamp - a[1].maxTimestamp);
+  }, [groupedMatches]);
 
   return (
     <div className="min-h-screen pb-16 space-y-10">

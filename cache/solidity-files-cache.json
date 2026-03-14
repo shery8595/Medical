@@ -262,8 +262,8 @@
       ]
     },
     "D:\\medvault\\fhevmTemp\\@fhevm\\solidity\\config\\ZamaConfig.sol": {
-      "lastModificationDate": 1773162033459,
-      "contentHash": "2ed697106fb9cc5510d56baf77bbda66",
+      "lastModificationDate": 1773516572958,
+      "contentHash": "c85e28972111397253ff2be2b8b9287e",
       "sourceName": "@fhevm/solidity/config/ZamaConfig.sol",
       "solcConfig": {
         "version": "0.8.27",
@@ -725,8 +725,8 @@
       ]
     },
     "D:\\medvault\\contracts\\SponsorRegistry.sol": {
-      "lastModificationDate": 1772832932660,
-      "contentHash": "3312c170fa689e07944907518e115a17",
+      "lastModificationDate": 1773516005913,
+      "contentHash": "c9ab8e23445b77433121c36286f0e80c",
       "sourceName": "contracts/SponsorRegistry.sol",
       "solcConfig": {
         "version": "0.8.27",

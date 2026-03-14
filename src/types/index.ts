@@ -68,6 +68,7 @@ export interface ConsentLog {
   dataShared?: string[]; // For mock data compatibility
   status?: string; // For mock data compatibility
   message?: string; // For mock data compatibility
+  rawTimestamp?: number; // For sorting
 }
 
 export interface Match {
@@ -81,6 +82,7 @@ export interface Match {
   matchScore?: number; // For UI display
   applicationStatus?: "Pending" | "Accepted" | "Rejected" | "None";
   applicationMessage?: string;
+  rawTimestamp?: number; // For sorting
   currentMilestone?: number; // 0 = none, 1-4 for milestones
 }
 

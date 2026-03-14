@@ -20,7 +20,7 @@ const ACTION_TYPES = [
 ];
 
 export function useAuditLogs() {
-    const { signer, provider } = useWeb3();
+    const { readOnlyProvider } = useWeb3();
     const [logs, setLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export function useAuditLogs() {
         let mounted = true;
 
         const fetchLogs = async () => {
-            if (!provider) {
+            if (!readOnlyProvider) {
                 if (mounted) {
                     setLoading(false);
                     setLogs([]);
@@ -39,8 +39,7 @@ export function useAuditLogs() {
 
             try {
                 if (mounted) setLoading(true);
-                // Type assertion to bypass ethers v6 strict typing for read-only provider calls
-                const contract = getDataAccessLog((signer || provider) as any);
+                const contract = getDataAccessLog(readOnlyProvider);
                 const count = await contract.getLogCount();
 
                 const fetchedLogs: AuditLogEntry[] = [];
@@ -73,7 +72,7 @@ export function useAuditLogs() {
         return () => {
             mounted = false;
         };
-    }, [provider]);
+    }, [readOnlyProvider]);
 
     return { logs, loading, error };
 }

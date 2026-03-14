@@ -87,6 +87,7 @@ export function ConsentLogPage() {
         trialId: c.trial.id,
         trialName: c.trial.name,
         timestamp: new Date(parseInt(c.lastUpdatedAt) * 1000).toLocaleString(),
+        rawTimestamp: parseInt(c.lastUpdatedAt),
         txHash: c.txHash,
         status: "Active",
         sponsorName: c.trial.sponsor.name.startsWith('0x')
@@ -99,27 +100,31 @@ export function ConsentLogPage() {
     // Merge applications (which have messages and specific statuses)
     applications.forEach((app: any) => {
       const existing = trialMap.get(app.trial.id);
-
-      const combinedLog: ConsentLog = {
-        id: app.id,
-        trialId: app.trial.id,
-        trialName: app.trial.name,
-        timestamp: new Date(parseInt(app.updatedAt) * 1000).toLocaleString(),
-        txHash: app.txHash,
-        status: app.status,
-        message: app.message,
-        sponsorName: app.trial.sponsor.name.startsWith('0x')
-          ? `${app.trial.sponsor.name.slice(0, 6)}...${app.trial.sponsor.name.slice(-4)}`
-          : app.trial.sponsor.name,
-        // Carry over dataShared if we have it from consent, or use default
-        dataShared: existing?.dataShared || ["Full Medical Disclosure"]
-      };
-
-      trialMap.set(app.trial.id, combinedLog);
+      
+      // If the application is newer than the consent (or no consent exists), use its data
+      const appTs = parseInt(app.updatedAt);
+      if (!existing || appTs >= (existing.rawTimestamp || 0)) {
+          const combinedLog: any = {
+            id: app.id,
+            trialId: app.trial.id,
+            trialName: app.trial.name,
+            timestamp: new Date(appTs * 1000).toLocaleString(),
+            rawTimestamp: appTs,
+            txHash: app.txHash,
+            status: app.status,
+            message: app.message,
+            sponsorName: app.trial.sponsor.name.startsWith('0x')
+              ? `${app.trial.sponsor.name.slice(0, 6)}...${app.trial.sponsor.name.slice(-4)}`
+              : app.trial.sponsor.name,
+            // Carry over dataShared if we have it from consent, or use default
+            dataShared: existing?.dataShared || ["Full Medical Disclosure"]
+          };
+          trialMap.set(app.trial.id, combinedLog);
+      }
     });
 
     const logs = Array.from(trialMap.values());
-    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return logs.sort((a: any, b: any) => b.rawTimestamp - a.rawTimestamp);
   }, [consents, applications]);
 
   // Derive counts from real data
