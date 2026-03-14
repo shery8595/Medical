@@ -20,6 +20,8 @@ import { SponsorAnalyticsPage } from "./pages/SponsorAnalyticsPage";
 import { SponsorSettingsPage } from "./pages/SponsorSettingsPage";
 import { SponsorAuditLogPage } from './pages/SponsorAuditLogPage';
 import { ConsentLogPage } from "./pages/ConsentLogPage";
+import { TechnologyPage } from "./pages/TechnologyPage";
+import { SecurityPage } from "./pages/SecurityPage";
 import AdminSponsorsPage from "./pages/AdminSponsorsPage";
 import { SponsorGuard } from "./components/layout/SponsorGuard";
 import { DocsLayout } from "./pages/docs/DocsLayout";
@@ -39,12 +41,14 @@ import { TestingVerificationDoc } from "./pages/docs/TestingVerificationDoc";
 
 import { Web3Provider } from "./lib/Web3Context";
 import { EncryptedDataProvider } from "./lib/EncryptedDataContext";
+import { ScrollToTop } from "./components/ui/ScrollToTop";
 
 export default function App() {
   return (
     <Web3Provider>
       <EncryptedDataProvider>
         <Router>
+          <ScrollToTop />
           <Routes>
             {/* Landing Page Route */}
             <Route
@@ -52,6 +56,23 @@ export default function App() {
               element={
                 <LandingLayout>
                   <LandingPage />
+                </LandingLayout>
+              }
+            />
+
+            <Route
+              path="/technology"
+              element={
+                <LandingLayout>
+                  <TechnologyPage />
+                </LandingLayout>
+              }
+            />
+            <Route
+              path="/security"
+              element={
+                <LandingLayout>
+                  <SecurityPage />
                 </LandingLayout>
               }
             />

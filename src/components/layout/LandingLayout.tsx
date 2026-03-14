@@ -25,9 +25,9 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-[1440px] mx-auto flex h-[72px] items-center justify-between px-6 lg:px-14">
 
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3.5 group">
-            <div className="flex h-10 w-12 items-center justify-center transition-colors overflow-hidden rounded-xl">
-              <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain" />
+          <Link to="/" className="flex items-center gap-0 group">
+            <div className="flex h-12 w-20 items-center justify-center transition-all duration-300 group-hover:scale-110 -mr-2">
+              <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain drop-shadow-xl" />
             </div>
             <div className="flex flex-col leading-none justify-center">
               <span className="font-bold text-[17px] tracking-tight text-slate-900 dark:text-white mt-1">MedVault</span>
@@ -36,13 +36,17 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
 
           {/* Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {["Technology", "Security", "Sponsors", "Documentation"].map((item) => (
+            {[
+              { name: "Technology", href: "/technology" },
+              { name: "Security", href: "/security" },
+              { name: "Documentation", href: "/docs" }
+            ].map((item) => (
               <Link
-                key={item}
-                to={`#${item.toLowerCase()}`}
+                key={item.name}
+                to={item.href}
                 className="px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-all"
               >
-                {item}
+                {item.name}
               </Link>
             ))}
           </nav>
@@ -83,9 +87,9 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
 
             {/* Brand col — spans 2 */}
             <div className="lg:col-span-2 space-y-6">
-              <Link to="/" className="flex items-center gap-3.5 group w-fit">
-                <div className="flex h-10 w-12 items-center justify-center overflow-hidden rounded-xl">
-                  <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain" />
+              <Link to="/" className="flex items-center gap-0 group w-fit">
+                <div className="flex h-12 w-20 items-center justify-center transition-transform duration-300 group-hover:scale-110 -mr-2">
+                  <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain drop-shadow-xl" />
                 </div>
                 <span className="font-bold text-lg tracking-tight">MedVault</span>
               </Link>

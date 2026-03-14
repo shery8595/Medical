@@ -94,9 +94,9 @@ export function Sidebar({ role }: SidebarProps) {
     <div className="flex h-full w-[280px] flex-col border-r border-slate-200/60 bg-white dark:border-slate-800/60 dark:bg-slate-950 transition-all duration-300">
       {/* ─── Premium Branding Header ─── */}
       <div className="relative flex h-24 items-center px-8">
-        <Link to={homeLink} className="group flex items-center gap-3.5">
-          <div className="relative flex h-11 w-[53px] items-center justify-center overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-105">
-            <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain" />
+        <Link to={homeLink} className="group flex items-center gap-0">
+          <div className="relative flex h-14 w-24 items-center justify-center transition-transform duration-300 group-hover:scale-110 -mr-2">
+            <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain drop-shadow-2xl" />
           </div>
           <div className="flex flex-col justify-center">
             <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white mt-1.5">

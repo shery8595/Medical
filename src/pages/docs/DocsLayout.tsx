@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import React, { ReactNode } from "react";
 import { DocsSidebar } from "../../components/docs/DocsSidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "react-router-dom";
@@ -9,6 +9,13 @@ interface DocsLayoutProps {
 
 export function DocsLayout({ children }: DocsLayoutProps) {
     const location = useLocation();
+    const scrollRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0;
+        }
+    }, [location.pathname]);
 
     return (
         <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#020810] font-sans antialiased text-slate-900 dark:text-slate-50">
@@ -18,7 +25,7 @@ export function DocsLayout({ children }: DocsLayoutProps) {
             </div>
 
             {/* Main Content Area */}
-            <main className="flex-1 relative flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
+            <main ref={scrollRef} className="flex-1 relative flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
                 {/* Mobile Header (simplified for docs) */}
                 <div className="md:hidden flex items-center h-16 px-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 sticky top-0 z-10 w-full">
                     <span className="font-bold tracking-tight">MedVault Docs</span>

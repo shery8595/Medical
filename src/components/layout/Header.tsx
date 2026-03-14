@@ -13,9 +13,9 @@ export function Header() {
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-white px-6 dark:bg-slate-950 border-slate-200/60 dark:border-slate-800/60">
-      <div className="flex items-center gap-3.5">
-        <div className="h-9 w-[43px] overflow-hidden rounded-lg">
-          <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain" />
+      <div className="flex items-center gap-0 group cursor-pointer" onClick={() => window.location.href = '/'}>
+        <div className="flex h-12 w-20 items-center justify-center transition-all duration-300 group-hover:scale-110 -mr-2">
+          <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain drop-shadow-xl" />
         </div>
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">
           Med<span className="text-teal-500">Vault</span>

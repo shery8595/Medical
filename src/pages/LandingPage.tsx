@@ -14,6 +14,7 @@ import {
   Shield,
   Zap,
   Terminal,
+  Building2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { HeartbeatBackground } from "../components/ui/HeartbeatBackground";
@@ -23,7 +24,7 @@ const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 22 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true },
-  transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1], delay },
+  transition: { duration: 0.6, ease: "easeOut" as any, delay },
 });
 
 const fadeIn = (delay = 0) => ({
@@ -139,14 +140,14 @@ export function LandingPage() {
           <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
             <Link to="/patient">
               <Button size="lg" className="bg-accent hover:bg-accent/90 text-white font-bold h-14 px-10 rounded-2xl text-base shadow-xl shadow-accent/20 gap-2.5 group transition-all">
-                Access your Portal
+                Enter your Portal
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
               </Button>
             </Link>
             <Link to="/sponsor">
               <Button variant="outline" size="lg" className="h-14 px-10 rounded-2xl text-base border-slate-200 dark:border-slate-700 font-semibold gap-2.5 transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
                 For Trial Sponsors
-                <Globe className="h-4 w-4" />
+                <Building2 className="h-4 w-4" />
               </Button>
             </Link>
           </motion.div>
@@ -630,13 +631,15 @@ export function LandingPage() {
                     <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
                   </Button>
                 </Link>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="border-slate-700 hover:bg-white/5 text-white font-semibold h-13 px-10 rounded-2xl text-base transition-all"
-                >
-                  Contact Sales
-                </Button>
+                <Link to="/sponsor">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-slate-700 hover:bg-white/5 text-white font-semibold h-13 px-10 rounded-2xl text-base transition-all"
+                  >
+                    For Trial Sponsors
+                  </Button>
+                </Link>
               </div>
             </div>
           </motion.div>
