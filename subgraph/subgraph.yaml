@@ -178,7 +178,7 @@ dataSources:
     name: SponsorRegistry
     network: sepolia
     source:
-      address: "0x0C92743f2a0D083be876c38344b995995d980f87"
+      address: "0x11B247232406F87E9de7a2Bf1F2bf7439A88F511"
       abi: SponsorRegistry
       startBlock: 7641000
     mapping:
