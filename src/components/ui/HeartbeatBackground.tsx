@@ -91,6 +91,7 @@ export function HeartbeatBackground() {
         window.addEventListener("resize", resize);
 
         /* ── Animation ── */
+        /* ── Animation Constants (Inside useEffect to prevent TDZ) ── */
         const SPEED = 0.00028;          // progress per ms (full loop ≈ 3.6 s)
         const TAIL_FRAC = 0.22;        // tail length as fraction of total path
         const DOT_R = 5;
