@@ -85,13 +85,11 @@ export function HeartbeatBackground() {
             canvas!.width = w * dpr;
             canvas!.height = h * dpr;
             ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-            cachedSegments = buildSegments();
         }
         resize();
         window.addEventListener("resize", resize);
 
         /* ── Animation ── */
-        /* ── Animation Constants (Inside useEffect to prevent TDZ) ── */
         const SPEED = 0.00028;          // progress per ms (full loop ≈ 3.6 s)
         const TAIL_FRAC = 0.22;        // tail length as fraction of total path
         const DOT_R = 5;
@@ -102,7 +100,6 @@ export function HeartbeatBackground() {
 
         let progress = 0;
         let lastTime: number | null = null;
-        let cachedSegments = buildSegments();
 
         function draw(ts: number) {
             if (lastTime === null) lastTime = ts;
@@ -111,7 +108,7 @@ export function HeartbeatBackground() {
 
             progress = (progress + SPEED * dt) % 1;
 
-            const { segs, totalLen } = cachedSegments;
+            const { segs, totalLen } = buildSegments();
             const headDist = progress * totalLen;
             const tailDist = Math.max(0, headDist - TAIL_FRAC * totalLen);
 

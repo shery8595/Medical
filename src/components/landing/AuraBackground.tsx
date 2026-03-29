@@ -3,26 +3,22 @@ import React, { useEffect } from 'react';
 export function AuraBackground() {
   useEffect(() => {
     const w = window as any;
-    const timer = setTimeout(() => {
-      if (!w.UnicornStudio) {
-        w.UnicornStudio = { isInitialized: false };
-        const script = document.createElement("script");
-        script.src = "https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.29/dist/unicornStudio.umd.js";
-        script.onload = () => {
-          if (!w.UnicornStudio.isInitialized) {
-            w.UnicornStudio.init();
-            w.UnicornStudio.isInitialized = true;
-          }
-        };
-        document.head.appendChild(script);
-      } else {
-        if (w.UnicornStudio.init) {
+    if (!w.UnicornStudio) {
+      w.UnicornStudio = { isInitialized: false };
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.29/dist/unicornStudio.umd.js";
+      script.onload = () => {
+        if (!w.UnicornStudio.isInitialized) {
           w.UnicornStudio.init();
+          w.UnicornStudio.isInitialized = true;
         }
+      };
+      document.head.appendChild(script);
+    } else {
+      if (w.UnicornStudio.init) {
+        w.UnicornStudio.init();
       }
-    }, 500);
-
-    return () => clearTimeout(timer);
+    }
   }, []);
 
   return (

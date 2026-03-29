@@ -56,24 +56,19 @@ function useTypewriter(words: string[], speed = 80, pause = 1800) {
 }
 
 /* ─── Animation Presets ───────────────────────────────────────────────────── */
-/* ─── Animation Presets (Using Functions for Hoisting) ─── */
-function fadeUp(delay = 0) {
-  return {
-    initial: { opacity: 0, y: 22 },
-    whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true },
-    transition: { duration: 0.6, ease: "easeOut" as any, delay },
-  };
-}
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 22 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.6, ease: "easeOut" as any, delay },
+});
 
-function fadeIn(delay = 0) {
-  return {
-    initial: { opacity: 0 },
-    whileInView: { opacity: 1 },
-    viewport: { once: true },
-    transition: { duration: 0.7, delay },
-  };
-}
+const fadeIn = (delay = 0) => ({
+  initial: { opacity: 0 },
+  whileInView: { opacity: 1 },
+  viewport: { once: true },
+  transition: { duration: 0.7, delay },
+});
 
 
 
@@ -97,11 +92,9 @@ function BentoCard({
       className={`rounded-3xl p-6 lg:p-10 ${className} relative overflow-hidden group`}
       style={{
         background: "rgba(10, 22, 40, 0.45)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
+        backdropFilter: "blur(20px)",
         border: "1px solid rgba(59, 130, 246, 0.15)",
         boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-        willChange: "transform, opacity",
         ...style,
       }}
     >
@@ -125,9 +118,9 @@ function BentoTitle({ children }: { children: React.ReactNode }) {
 }
 
 /* ─── Hero Heading with Typewriter ────────────────────────────────────────── */
-/* ─── Hero Heading with Typewriter ────────────────────────────────────────── */
+const TYPEWRITER_WORDS = ["Zero Exposure.", "Full Privacy.", "Your Rules.", "Encrypted. Always."];
+
 function HeroHeading() {
-  const TYPEWRITER_WORDS = ["Zero Exposure.", "Full Privacy.", "Your Rules.", "Encrypted. Always."];
   const { displayed, wordIdx, isFinished } = useTypewriter(TYPEWRITER_WORDS, 95, 2300);
   const currentWord = TYPEWRITER_WORDS[wordIdx];
 
