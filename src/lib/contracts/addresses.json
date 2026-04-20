@@ -11,5 +11,18 @@
         "SponsorIncentiveVault": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
         "SponsorRegistry": "0x4F5d99b08EC26903d2CEDBee06CA1867E4b682b3",
         "StakingManager": "0x946e1C0C73dd643ebab62fd52c2e354c831fcc4a"
+    },
+    "arbitrumSepolia": {
+        "DataAccessLog": "0xDE3850ed625a4774edFf2412EcD3e71875D97f7c",
+        "PatientRegistry": "0x21d5cc08D2157e22D04ADfAC503f51E5DDef6569",
+        "TrialManager": "0x6A07c67BD6794556448F915Cd2caA9322a340BA8",
+        "TrialMilestoneManager": "0x3EC011a5b294Be143c09f1Ed63444B1fedc034e4",
+        "ConsentManager": "0xB51085f1477A61DC386Bb112FE07246e2ADa8464",
+        "EligibilityEngine": "0x7De6b81F6EB85C28DE9D39cdCe16BF3b3E61C44C",
+        "MedVaultAutomation": "0xC1D09A275B24F89B8807ac47f18b37092174E5E6",
+        "ConfidentialETH": "0x01e4e8f448175958Ba4D2cbce0E576cd14A0f43b",
+        "SponsorIncentiveVault": "0xEd56bEC99Ca2702709B33F2559058d5b50eF90D8",
+        "SponsorRegistry": "0xDC48f4E79383C678f95A1B2aE50c8Db5F63fD239",
+        "StakingManager": "0x6c7f1a27007e19DecE000c859C588FC2b791cD60"
     }
 }

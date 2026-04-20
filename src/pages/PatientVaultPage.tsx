@@ -34,9 +34,9 @@ const fadeIn = (delay = 0) => ({
 });
 
 export function PatientVaultPage() {
-  const { account, connect, isConnecting } = useWeb3();
+  const { account, signer, isFHEReady, connect, isConnecting } = useWeb3();
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const { profile, loading, hasProfile } = usePatientProfile(account || undefined);
+  const { profile, loading, hasProfile, refetch: refetchPatient } = usePatientProfile(account || undefined);
 
   return (
     <div className="max-w-[1600px] mx-auto pb-24 px-4 md:px-8 lg:px-12 space-y-10">
@@ -103,7 +103,15 @@ export function PatientVaultPage() {
                 className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl custom-scrollbar relative z-[110]"
               >
                 <PatientRecordForm
-                  onSuccess={() => setShowUploadForm(false)}
+                  onSuccess={async () => {
+                    setShowUploadForm(false);
+                    // Subgraph may lag the confirmed tx; poll until the Patient entity exists.
+                    for (let i = 0; i < 20; i++) {
+                      const fresh = await refetchPatient();
+                      if (fresh?.patient) break;
+                      await new Promise((r) => setTimeout(r, 3000));
+                    }
+                  }}
                   onCancel={() => setShowUploadForm(false)}
                 />
               </motion.div>
@@ -143,7 +151,11 @@ export function PatientVaultPage() {
           </div>
         ) : hasProfile ? (
           <motion.div {...fadeUp(0.2)}>
-            <VaultCard report={{
+            <VaultCard
+              signer={signer}
+              account={account}
+              isFHEReady={isFHEReady}
+              report={{
               id: profile.id,
               patientAddress: account || "",
               age: 0, // Placeholder as it's encrypted

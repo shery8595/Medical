@@ -95,7 +95,7 @@ function StatCard({ icon: Icon, iconColor, iconBg, label, value, tag, tagColor, 
 
 /* ─── Main Component ──────────────────────────────────────────────────────── */
 export function PatientDashboard() {
-  const { account } = useWeb3();
+  const { account, signer, isFHEReady } = useWeb3();
   const { profile, loading: profileLoading, hasProfile } = usePatientProfile(account || undefined);
   const { trials, loading: trialsLoading } = useTrials(account || undefined);
 
@@ -301,7 +301,11 @@ export function PatientDashboard() {
                 </div>
               ) : hasProfile ? (
                 <motion.div {...fadeUp(0.5)}>
-                  <VaultCard report={{
+                  <VaultCard
+                    signer={signer}
+                    account={account}
+                    isFHEReady={isFHEReady}
+                    report={{
                     id: profile.id,
                     patientAddress: account || "",
                     age: 0,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -29,7 +29,6 @@ import {
     getTrialManager,
     getSponsorIncentiveVault,
     getTrialMilestoneManager,
-    getSponsorRegistry
 } from "../lib/contracts";
 import { ethers } from "ethers";
 import { cn } from "../lib/utils";
@@ -67,25 +66,6 @@ export function SponsorCreateTrialPage() {
         { name: "Phase 1 Completion", weight: 7500, deadline: 30 } // 75.00%
     ]);
     const [usePhasedPayouts, setUsePhasedPayouts] = useState(true);
-    const [isVerified, setIsVerified] = useState<boolean | null>(null);
-
-    useEffect(() => {
-        const checkVerification = async () => {
-            if (signer && account) {
-                try {
-                    const registry = getSponsorRegistry(signer);
-                    const verified = await registry.isVerifiedSponsor(account);
-                    setIsVerified(verified);
-                } catch (err) {
-                    console.error("Verification check failed:", err);
-                    setIsVerified(false);
-                }
-            } else {
-                setIsVerified(null);
-            }
-        };
-        checkVerification();
-    }, [signer, account]);
 
     const nextStep = () => setStep(step + 1);
     const prevStep = () => setStep(step - 1);
@@ -128,7 +108,7 @@ export function SponsorCreateTrialPage() {
             const receipt = await tx.wait();
 
             // Extract Trial ID from events
-            const event = receipt.logs
+            const parsedEvent = receipt.logs
                 .map((log: any) => {
                     try {
                         return trialManager.interface.parseLog(log);
@@ -138,11 +118,19 @@ export function SponsorCreateTrialPage() {
                 })
                 .find((e: any) => e && e.name === "TrialCreated");
 
-            if (!event || !event.args) {
-                throw new Error("Could not find TrialCreated event in receipt.");
+            let trialId: bigint;
+            if (parsedEvent && parsedEvent.args) {
+                trialId = parsedEvent.args.trialId;
+            } else {
+                // Fallback: trialCounter is incremented before the trial is stored,
+                // so the new trial's ID is (current counter - 1).
+                console.warn("TrialCreated event not found in receipt — falling back to trialCounter read.");
+                const currentCounter = await trialManager.trialCounter();
+                trialId = BigInt(currentCounter) - 1n;
+                if (trialId <= 0n) {
+                    throw new Error("Could not determine trial ID from receipt or contract state.");
+                }
             }
-
-            const trialId = event.args.trialId;
 
             // V1.2: Set Milestones if enabled
             if (usePhasedPayouts && milestones.length > 0) {
@@ -607,27 +595,14 @@ export function SponsorCreateTrialPage() {
                                 <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                             </Button>
                         ) : (
-                            <div className="flex flex-col items-end gap-4">
-                                {!isVerified && account && isVerified !== null && (
-                                    <div className="flex items-center gap-2 text-rose-500 text-[10px] font-black uppercase tracking-widest animate-pulse px-4 py-2 bg-rose-500/5 rounded-full border border-rose-500/20">
-                                        <AlertCircle className="h-3.5 w-3.5" />
-                                        Sponsor Credentials Not Verified
-                                    </div>
-                                )}
-                                <Button
+                            <Button
                                     onClick={handleSubmit}
-                                    disabled={!isVerified || !account}
-                                    className={cn(
-                                        "h-16 px-10 rounded-[1.5rem] text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all hover:scale-[1.05] active:scale-95",
-                                        isVerified
-                                            ? "bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-500"
-                                            : "bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5 opacity-50"
-                                    )}
+                                    disabled={!account}
+                                    className="h-16 px-10 rounded-[1.5rem] text-white font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all hover:scale-[1.05] active:scale-95 bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 >
                                     Initialize & Broadcast Protocol
                                     <ShieldIcon className="h-4 w-4 ml-2" />
                                 </Button>
-                            </div>
                         )}
                     </div>
                 </CardContent>

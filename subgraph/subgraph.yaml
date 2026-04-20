@@ -6,9 +6,9 @@ dataSources:
     name: PatientRegistry
     network: arbitrum-sepolia
     source:
-      address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      address: "0x21d5cc08D2157e22D04ADfAC503f51E5DDef6569"
       abi: PatientRegistry
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -27,9 +27,9 @@ dataSources:
     name: TrialManager
     network: arbitrum-sepolia
     source:
-      address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+      address: "0x6A07c67BD6794556448F915Cd2caA9322a340BA8"
       abi: TrialManager
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -53,32 +53,35 @@ dataSources:
     name: ConsentManager
     network: arbitrum-sepolia
     source:
-      address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
+      address: "0xB51085f1477A61DC386Bb112FE07246e2ADa8464"
       abi: ConsentManager
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
       language: wasm/assemblyscript
       entities:
         - Consent
+        - PatientConsentEpoch
       abis:
         - name: ConsentManager
           file: ./abis/ConsentManager.json
       eventHandlers:
-        - event: ConsentGranted(indexed address,indexed uint256)
+        - event: ConsentGranted(indexed address,indexed uint256,uint256,uint256)
           handler: handleConsentGranted
         - event: ConsentRevoked(indexed address,indexed uint256)
           handler: handleConsentRevoked
+        - event: AllConsentRevoked(indexed address,uint256)
+          handler: handleAllConsentRevoked
       file: ./src/mappings/consent-manager.ts
 
   - kind: ethereum
     name: EligibilityEngine
     network: arbitrum-sepolia
     source:
-      address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+      address: "0x7De6b81F6EB85C28DE9D39cdCe16BF3b3E61C44C"
       abi: EligibilityEngine
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -106,9 +109,9 @@ dataSources:
     name: SponsorIncentiveVault
     network: arbitrum-sepolia
     source:
-      address: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+      address: "0xEd56bEC99Ca2702709B33F2559058d5b50eF90D8"
       abi: SponsorIncentiveVault
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -134,9 +137,9 @@ dataSources:
     name: DataAccessLog
     network: arbitrum-sepolia
     source:
-      address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+      address: "0xDE3850ed625a4774edFf2412EcD3e71875D97f7c"
       abi: DataAccessLog
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -155,9 +158,9 @@ dataSources:
     name: TrialMilestoneManager
     network: arbitrum-sepolia
     source:
-      address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+      address: "0x3EC011a5b294Be143c09f1Ed63444B1fedc034e4"
       abi: TrialMilestoneManager
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -179,9 +182,9 @@ dataSources:
     name: SponsorRegistry
     network: arbitrum-sepolia
     source:
-      address: "0x4F5d99b08EC26903d2CEDBee06CA1867E4b682b3"
+      address: "0xDC48f4E79383C678f95A1B2aE50c8Db5F63fD239"
       abi: SponsorRegistry
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -206,9 +209,9 @@ dataSources:
     name: StakingManager
     network: arbitrum-sepolia
     source:
-      address: "0x946e1C0C73dd643ebab62fd52c2e354c831fcc4a"
+      address: "0x6c7f1a27007e19DecE000c859C588FC2b791cD60"
       abi: StakingManager
-      startBlock: 252990000
+      startBlock: 261440095
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -224,3 +227,6 @@ dataSources:
         - event: Unstaked(indexed address,uint256)
           handler: handleUnstaked
       file: ./src/mappings/staking-manager.ts
+
+
+

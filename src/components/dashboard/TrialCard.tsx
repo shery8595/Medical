@@ -26,6 +26,7 @@ import { cn } from "../../lib/utils";
 import { Link } from "react-router-dom";
 import { useWeb3 } from "../../lib/Web3Context";
 import { getConsentManager, getEligibilityEngine, getSponsorIncentiveVault } from "../../lib/contracts";
+import { CONSENT_DURATION_OPTIONS, DEFAULT_CONSENT_DURATION_SECONDS } from "../../lib/consentPolicy";
 import { useEncryptedData } from "../../lib/EncryptedDataContext";
 
 import { reencryptUint8, getFHEClient } from "../../lib/fhe";
@@ -39,6 +40,13 @@ interface TrialCardProps {
 }
 
 const ZERO_HANDLE = "0x" + "0".repeat(64);
+
+const formatDurationLabel = (seconds: number) => {
+  if (seconds === 0) return "No expiry";
+  if (seconds % 86400 === 0) return `${seconds / 86400} day(s)`;
+  if (seconds % 3600 === 0) return `${seconds / 3600} hour(s)`;
+  return `${seconds} sec`;
+};
 
 export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -58,14 +66,15 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
   const [isRegistering, setIsRegistering] = useState(false);
   const [poolFunded, setPoolFunded] = useState(false);
   const [incentiveStatus, setIncentiveStatus] = useState<string | null>(null);
+  const [consentDurationSeconds, setConsentDurationSeconds] = useState<number>(DEFAULT_CONSENT_DURATION_SECONDS);
 
   // FIX 1: Track eligibility bool + signature separately from score
   const [isEligibleDecrypted, setIsEligibleDecrypted] = useState<boolean | null>(null);
   const [eligibilitySignature, setEligibilitySignature] = useState<string | null>(null);
   const [isFetchingEligibility, setIsFetchingEligibility] = useState(false);
 
-  // FIX 2: Use correct network key — arbSepolia not sepolia
-  const engineAddress = (addresses as any).arbSepolia?.EligibilityEngine
+  const engineAddress =
+    (addresses as any).arbitrumSepolia?.EligibilityEngine
     ?? (addresses as any).sepolia?.EligibilityEngine;
 
   // Incentive Pool Logic
@@ -190,7 +199,10 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
       if (!trial.hasConsent) {
         setApplyStatus("consenting");
         const consentManager = getConsentManager(signer);
-        const consentTx = await consentManager.grantConsent(BigInt(trial.id));
+        const consentTx = await consentManager.grantConsent(
+          BigInt(trial.id),
+          BigInt(consentDurationSeconds)
+        );
         await consentTx.wait();
       }
 
@@ -702,6 +714,26 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                         </Link>
                       ) : (
                         <div className="mt-6 space-y-2">
+                          {!trial.hasConsent && applyStatus !== "applied" && !trial.applicationStatus && (
+                            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40">
+                              <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-2">Consent Window</label>
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={consentDurationSeconds}
+                                  onChange={(e) => setConsentDurationSeconds(Number(e.target.value))}
+                                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200"
+                                >
+                                  {CONSENT_DURATION_OPTIONS.map((opt) => (
+                                    <option key={opt.seconds} value={opt.seconds}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="text-[10px] text-slate-500 font-medium">{formatDurationLabel(consentDurationSeconds)}</span>
+                              </div>
+                            </div>
+                          )}
+
                           <Button
                             className={cn(
                               "w-full shadow-lg gap-2 font-bold",
@@ -856,3 +888,6 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
     </motion.div>
   );
 }
+
+
+

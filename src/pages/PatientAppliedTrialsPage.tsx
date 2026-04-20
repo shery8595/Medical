@@ -33,6 +33,10 @@ import { reencryptUint8 } from "../lib/fhe";
 import addresses from "../lib/contracts/addresses.json";
 import { Trial } from "../types";
 
+const eligibilityEngineAddr =
+  (addresses as any).arbitrumSepolia?.EligibilityEngine
+  ?? (addresses as any).sepolia?.EligibilityEngine;
+
 /* ─── Status Configuration ─── */
 const statusConfig = {
     Pending: {
@@ -95,7 +99,7 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
     // Load score from store
     useEffect(() => {
         if (account && trial.id) {
-            const score = getRevealedScore(addresses.sepolia.EligibilityEngine, trial.id);
+            const score = getRevealedScore(eligibilityEngineAddr, trial.id);
             setDecryptedScore(score);
         }
     }, [account, trial.id, getRevealedScore]);
@@ -129,10 +133,10 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                 setDecryptedScore(0);
                 return;
             }
-            const score = await reencryptUint8(addresses.sepolia.EligibilityEngine, account, handle);
+            const score = await reencryptUint8(eligibilityEngineAddr, account, handle);
             const scoreNum = Number(score);
             setDecryptedScore(scoreNum);
-            setRevealedScore(addresses.sepolia.EligibilityEngine, trial.id, scoreNum);
+            setRevealedScore(eligibilityEngineAddr, trial.id, scoreNum);
         } catch (err: any) {
             console.error("Decryption failed:", err);
         } finally {

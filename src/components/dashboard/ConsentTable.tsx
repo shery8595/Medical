@@ -1,16 +1,22 @@
 import { ConsentLog } from "../../types";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
-import { Trash2, MessageSquare } from "lucide-react";
+import { Trash2, MessageSquare, Loader2 } from "lucide-react";
 import { ethers } from "ethers";
-import { useMemo } from "react";
 
 interface ConsentTableProps {
   logs: ConsentLog[];
   searchQuery?: string;
+  onRevokeTrial?: (trialId: string) => void;
+  revokeBusyTrialId?: string | null;
 }
 
-export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
+export function ConsentTable({
+  logs,
+  searchQuery = "",
+  onRevokeTrial,
+  revokeBusyTrialId,
+}: ConsentTableProps) {
   const filteredLogs = logs.filter(log =>
     log.sponsorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     log.trialName.toLowerCase().includes(searchQuery.toLowerCase())
@@ -19,14 +25,9 @@ export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
   const decodeMessage = (hexMessage?: string) => {
     if (!hexMessage) return null;
     try {
-      // Subgraph returns bytes as hex strings
-      if (hexMessage.startsWith("0x")) {
-        // Remove padding if necessary or handles as is if it's a valid hex string for UTF8
-        return ethers.toUtf8String(hexMessage);
-      }
+      if (hexMessage.startsWith("0x")) return ethers.toUtf8String(hexMessage);
       return hexMessage;
-    } catch (e) {
-      console.warn("Failed to decode message", e);
+    } catch {
       return "Message encrypted or undecodable";
     }
   };
@@ -47,6 +48,9 @@ export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
           {filteredLogs.map((log) => {
             const decoded = decodeMessage(log.message);
+            const canRevoke = (log.status === "Active" || (log.status as string) === "granted") && !!log.trialId;
+            const isRevoking = revokeBusyTrialId === log.trialId;
+
             return (
               <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                 <td className="px-6 py-5">
@@ -72,7 +76,12 @@ export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
                     <span className="text-xs text-slate-400 italic">No message</span>
                   )}
                 </td>
-                <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">{log.timestamp}</td>
+                <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
+                  <div>{log.timestamp}</div>
+                  {log.expiresAt && (
+                    <div className="text-[10px] text-amber-500 font-semibold mt-1">Expires: {new Date(log.expiresAt * 1000).toLocaleString()}</div>
+                  )}
+                </td>
                 <td className="px-6 py-5">
                   <Badge variant={
                     log.status === "Active" || log.status === "Accepted" || (log.status as string) === "granted"
@@ -85,9 +94,19 @@ export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
                   </Badge>
                 </td>
                 <td className="px-6 py-5 text-right">
-                  {(log.status === "Active" || (log.status as string) === "granted") && (
-                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold text-xs h-8 rounded-lg">
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Revoke
+                  {canRevoke && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isRevoking}
+                      onClick={() => log.trialId && onRevokeTrial?.(log.trialId)}
+                      className="text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold text-xs h-8 rounded-lg"
+                    >
+                      {isRevoking ? (
+                        <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Revoking</>
+                      ) : (
+                        <><Trash2 className="h-3.5 w-3.5 mr-1" /> Revoke</>
+                      )}
                     </Button>
                   )}
                 </td>

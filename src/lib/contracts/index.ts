@@ -25,7 +25,7 @@ type ContractName =
     | "MedVaultAutomation"
     | "StakingManager";
 
-export const getContractAddresses = (network: string = "sepolia") => {
+export const getContractAddresses = (network: string = "arbitrumSepolia") => {
     return (addresses as any)[network];
 };
 
@@ -50,7 +50,7 @@ const abiMap: Record<ContractName, any> = {
 export const getContract = (
     contractName: ContractName,
     signerOrProvider: ethers.Signer | ethers.Provider,
-    network: string = "sepolia"
+    network: string = "arbitrumSepolia"
 ) => {
     const networkAddresses = getContractAddresses(network);
     if (!networkAddresses) {

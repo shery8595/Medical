@@ -16,9 +16,10 @@ interface IERC20 {
 }
 
 contract StakingManager {
-    address public constant AAVE_POOL = 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951;
-    address public constant WETH_GATEWAY = 0x387d311e47e80b498169e6fb51d3193167d89F7D;
-    address public constant AWETH = 0x5B071B590a59395FE4025a0CCc1Fcc931EaC2323;
+    // Aave V3 Arbitrum Sepolia market addresses.
+    address public constant AAVE_POOL = 0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff;
+    address public constant WETH_GATEWAY = 0x20040a64612555042335926d72B4E5F667a67fA1;
+    address public constant AWETH = 0xf5f17EbE81E516Dc7cB38D61908EC252F150CE60;
 
     // Reentrancy Guard
     uint256 private constant _NOT_ENTERED = 1;

@@ -1,6 +1,6 @@
 import { useSubgraph } from './useSubgraph';
 
-const GET_PATIENT = `
+export const GET_PATIENT = `
   query GetPatient($id: ID!) {
     patient(id: $id) {
       id
@@ -10,9 +10,17 @@ const GET_PATIENT = `
   }
 `;
 
+export type PatientProfileData = {
+    patient: {
+        id: string;
+        profileUpdatedAt: string;
+        profileTxHash: string;
+    } | null;
+};
+
 export function usePatientProfile(address?: string) {
-    const { data, loading, error, refetch } = useSubgraph(GET_PATIENT, {
-        id: address?.toLowerCase()
+    const { data, loading, error, refetch } = useSubgraph<PatientProfileData>(GET_PATIENT, {
+        id: address?.toLowerCase(),
     });
 
     return {
@@ -20,6 +28,6 @@ export function usePatientProfile(address?: string) {
         hasProfile: !!data?.patient,
         loading,
         error,
-        refetch
+        refetch,
     };
 }

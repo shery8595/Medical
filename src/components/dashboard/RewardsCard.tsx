@@ -32,7 +32,9 @@ export function RewardsCard() {
 
     const { stakeFromConfidential } = useStaking();
 
-    const cETHAddress = (addresses as any).sepolia.ConfidentialETH;
+    const cETHAddress =
+        (addresses as any).arbitrumSepolia?.ConfidentialETH
+        ?? (addresses as any).sepolia?.ConfidentialETH;
 
     const fetchEncryptedBalance = async () => {
         if (!signer || !account) return;

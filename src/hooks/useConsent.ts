@@ -1,9 +1,17 @@
-import { useSubgraph } from './useSubgraph';
+import { useMemo } from "react";
+import { useSubgraph } from "./useSubgraph";
+import { isConsentRowEffective } from "../lib/consentEffective";
 
 const GET_CONSENTS = `
-  query GetConsents($patient: Bytes!) {
-    consents(where: { patient: $patient, granted: true }, orderBy: lastUpdatedAt, orderDirection: desc) {
+  query GetConsents($patient: Bytes!, $patientId: ID!) {
+    patientConsentEpoch(id: $patientId) {
+      epoch
+    }
+    consents(where: { patient: $patient }, orderBy: lastUpdatedAt, orderDirection: desc) {
       id
+      granted
+      validEpoch
+      expiresAt
       trial {
         id
         name
@@ -34,15 +42,27 @@ const GET_CONSENTS = `
 `;
 
 export function useConsent(address?: string) {
+  const al = address?.toLowerCase() || "0x0000000000000000000000000000000000000000";
   const { data, loading, error, refetch } = useSubgraph(GET_CONSENTS, {
-    patient: address?.toLowerCase() || "0x0000000000000000000000000000000000000000"
+    patient: al,
+    patientId: al,
   });
 
+  const patientEpoch =
+    data?.patientConsentEpoch?.epoch != null ? String(data.patientConsentEpoch.epoch) : "1";
+
+  const consents = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000);
+    const raw = data?.consents || [];
+    return raw.filter((c: any) => isConsentRowEffective(c, patientEpoch, now));
+  }, [data?.consents, patientEpoch]);
+
   return {
-    consents: data?.consents || [],
+    consents,
     applications: data?.applications || [],
+    patientConsentEpoch: patientEpoch,
     loading,
     error,
-    refetch
+    refetch,
   };
 }

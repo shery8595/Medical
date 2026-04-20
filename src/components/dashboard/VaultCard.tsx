@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import type { Signer } from "ethers";
 import { MedicalReport } from "../../types";
 import { motion } from "framer-motion";
 import {
@@ -11,11 +12,17 @@ import {
   Hash,
   ExternalLink,
   Cpu,
-  Layers,
+  EyeOff,
+  Loader2,
+  Unlock,
 } from "lucide-react";
+import { fetchAndDecryptPatientProfile, type DecryptedPatientProfile } from "../../lib/patientProfileDecrypt";
 
 interface VaultCardProps {
   report: MedicalReport;
+  signer?: Signer | null;
+  account?: string | null;
+  isFHEReady?: boolean;
 }
 
 const EncryptedField: React.FC<{ label: string; delay?: number }> = ({ label, delay = 0 }) => (
@@ -33,13 +40,64 @@ const EncryptedField: React.FC<{ label: string; delay?: number }> = ({ label, de
   </motion.div>
 );
 
-export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
+const DecryptedField: React.FC<{ label: string; value: string; delay?: number }> = ({
+  label,
+  value,
+  delay = 0,
+}) => (
+  <motion.div
+    initial={{ opacity: 0, x: -8 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ duration: 0.4, delay }}
+    className="flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl bg-emerald-950/30 border border-emerald-500/20"
+  >
+    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">{label}</span>
+    <div className="flex items-center gap-1.5 min-w-0">
+      <Unlock className="h-2.5 w-2.5 text-emerald-400/80 shrink-0" />
+      <span className="text-[11px] font-medium text-emerald-100/95 text-right truncate">{value}</span>
+    </div>
+  </motion.div>
+);
+
+export const VaultCard: React.FC<VaultCardProps> = ({ report, signer, account, isFHEReady }) => {
+  const [plain, setPlain] = useState<DecryptedPatientProfile | null>(null);
+  const [decryptBusy, setDecryptBusy] = useState(false);
+  const [decryptError, setDecryptError] = useState<string | null>(null);
+
   const shortTx = report.txHash
     ? `${report.txHash.slice(0, 6)}…${report.txHash.slice(-4)}`
     : "—";
-  const etherscanUrl = report.txHash
-    ? `https://sepolia.etherscan.io/tx/${report.txHash}`
+  const arbiscanUrl = report.txHash
+    ? `https://sepolia.arbiscan.io/tx/${report.txHash}`
     : "#";
+
+  const canDecrypt = !!(signer && account && isFHEReady);
+
+  const handleView = async () => {
+    setDecryptError(null);
+    if (!canDecrypt) {
+      setDecryptError("Connect your wallet and wait for FHE to finish loading.");
+      return;
+    }
+    setDecryptBusy(true);
+    try {
+      const data = await fetchAndDecryptPatientProfile(signer, account);
+      setPlain(data);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Decryption failed.";
+      setDecryptError(msg);
+      setPlain(null);
+    } finally {
+      setDecryptBusy(false);
+    }
+  };
+
+  const handleHide = () => {
+    setPlain(null);
+    setDecryptError(null);
+  };
+
+  const boolLabel = (v: boolean) => (v ? "Yes" : "No");
 
   return (
     <motion.div
@@ -48,13 +106,11 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className="group relative overflow-hidden rounded-[2rem] border border-blue-800/20 bg-gradient-to-br from-[#0a192f] via-[#0d2142] to-[#020617] shadow-2xl shadow-blue-900/10"
     >
-      {/* ── Animated background decorations ── */}
       <div className="absolute top-0 right-0 h-72 w-72 -translate-y-1/3 translate-x-1/4 rounded-full bg-blue-500/[0.06] blur-[80px] pointer-events-none transition-all group-hover:bg-blue-500/[0.1]" />
       <div className="absolute bottom-0 left-0 h-56 w-56 translate-y-1/3 -translate-x-1/4 rounded-full bg-blue-500/[0.05] blur-[80px] pointer-events-none transition-all group-hover:bg-blue-500/[0.08]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.04),transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 p-7">
-        {/* ── Header ── */}
         <div className="flex items-start justify-between mb-7">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -79,19 +135,32 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
           </div>
         </div>
 
-        {/* ── Encrypted Fields Grid ── */}
         <div className="grid grid-cols-2 gap-2 mb-6">
-          <EncryptedField label="Age" delay={0.1} />
-          <EncryptedField label="Gender" delay={0.15} />
-          <EncryptedField label="Weight" delay={0.2} />
-          <EncryptedField label="Height" delay={0.25} />
-          <EncryptedField label="Diabetes" delay={0.3} />
-          <EncryptedField label="HB Level" delay={0.35} />
-          <EncryptedField label="Smoker" delay={0.4} />
-          <EncryptedField label="Blood Pressure" delay={0.45} />
+          {plain ? (
+            <>
+              <DecryptedField label="Age" value={`${plain.age}`} delay={0.1} />
+              <DecryptedField label="Gender" value={plain.genderMale ? "Male" : "Female"} delay={0.15} />
+              <DecryptedField label="Weight" value={`${plain.weight} kg`} delay={0.2} />
+              <DecryptedField label="Height" value={`${plain.height} cm`} delay={0.25} />
+              <DecryptedField label="Diabetes" value={boolLabel(plain.hasDiabetes)} delay={0.3} />
+              <DecryptedField label="HB Level" value={`${plain.hbLevel}`} delay={0.35} />
+              <DecryptedField label="Smoker" value={boolLabel(plain.isSmoker)} delay={0.4} />
+              <DecryptedField label="Blood Pressure" value={boolLabel(plain.hasHypertension)} delay={0.45} />
+            </>
+          ) : (
+            <>
+              <EncryptedField label="Age" delay={0.1} />
+              <EncryptedField label="Gender" delay={0.15} />
+              <EncryptedField label="Weight" delay={0.2} />
+              <EncryptedField label="Height" delay={0.25} />
+              <EncryptedField label="Diabetes" delay={0.3} />
+              <EncryptedField label="HB Level" delay={0.35} />
+              <EncryptedField label="Smoker" delay={0.4} />
+              <EncryptedField label="Blood Pressure" delay={0.45} />
+            </>
+          )}
         </div>
 
-        {/* ── Security Pulse Bar ── */}
         <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-950/40 border border-blue-900/20 mb-6">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-blue-500/10">
@@ -111,7 +180,10 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
           </div>
         </div>
 
-        {/* ── Metadata Footer ── */}
+        {decryptError && (
+          <p className="text-[11px] text-red-400 mb-3 px-0.5">{decryptError}</p>
+        )}
+
         <div className="flex items-center justify-between pt-5 border-t border-blue-900/40">
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-1.5 text-slate-500">
@@ -119,7 +191,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
               <span className="text-[11px] font-medium">{report.timestamp || "—"}</span>
             </div>
             <a
-              href={etherscanUrl}
+              href={arbiscanUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-slate-500 hover:text-blue-400 transition-colors group/link"
@@ -131,10 +203,33 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
           </div>
 
           <div className="flex gap-2">
-            <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-500/90 to-blue-600/90 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/20 transition-all">
-              <Eye className="h-3.5 w-3.5" /> View
-            </button>
-            <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-400 border border-blue-800/30 bg-blue-900/10 hover:text-blue-400 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all">
+            {plain ? (
+              <button
+                type="button"
+                onClick={handleHide}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-200 border border-blue-800/40 bg-blue-950/40 hover:bg-blue-900/50 transition-all"
+              >
+                <EyeOff className="h-3.5 w-3.5" /> Hide
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={decryptBusy}
+                onClick={() => void handleView()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-500/90 to-blue-600/90 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-60 disabled:pointer-events-none"
+              >
+                {decryptBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                {decryptBusy ? "Decrypting…" : "View"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-400 border border-blue-800/30 bg-blue-900/10 hover:text-blue-400 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all"
+            >
               <Activity className="h-3.5 w-3.5" /> Audit
             </button>
           </div>
