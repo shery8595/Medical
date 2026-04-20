@@ -11,7 +11,7 @@ type TabType = "discover" | "eligible" | "applied";
 
 export function PatientTrialsPage() {
     const { account } = useWeb3();
-    const { trials, loading } = useTrials(account || undefined);
+    const { trials, loading, refetch } = useTrials(account || undefined);
     const [activeTab, setActiveTab] = useState<TabType>("discover");
 
     const filteredTrials = useMemo(() => {
@@ -121,6 +121,7 @@ export function PatientTrialsPage() {
                                     key={trial.id}
                                     trial={trial}
                                     index={i}
+                                    refetchTrials={refetch}
                                 />
                             ))}
                             {filteredTrials.length === 0 && (

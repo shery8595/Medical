@@ -5,6 +5,9 @@ import { Ethers6Adapter } from "@cofhe/sdk/adapters";
 
 export { FheTypes };
 
+/** Must match wallet + contracts (Arbitrum Sepolia). Used so TN / sealoutput use the correct network in hosted builds. */
+export const ARBITRUM_SEPOLIA_CHAIN_ID = 421614n;
+
 declare global {
     interface Window {
         ethereum: any;
@@ -76,6 +79,7 @@ export async function publicDecrypt(ctHash: bigint | string) {
     const result = await c
         .decryptForTx(handle)
         .withoutPermit()
+        .setChainId(ARBITRUM_SEPOLIA_CHAIN_ID)
         .execute();
     return result; // { ctHash, decryptedValue: bigint, signature: string }
 }
@@ -92,6 +96,7 @@ export async function decryptForView(ctHash: bigint | string, utype: FheTypes) {
     const plaintext = await c
         .decryptForView(handle, utype)
         .withPermit(permit)
+        .setChainId(ARBITRUM_SEPOLIA_CHAIN_ID)
         .execute();
     return plaintext; // boolean | bigint | string depending on utype
 }
@@ -106,6 +111,7 @@ async function genericReencrypt(contractAddress: string, ciphertext: string, typ
     // Use Fhenix async decryption view protocol with the signed permit
     const result = await c.decryptForView(ciphertext, type)
         .withPermit(permit)
+        .setChainId(ARBITRUM_SEPOLIA_CHAIN_ID)
         .execute();
     return result;
 }

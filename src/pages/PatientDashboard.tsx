@@ -97,7 +97,7 @@ function StatCard({ icon: Icon, iconColor, iconBg, label, value, tag, tagColor, 
 export function PatientDashboard() {
   const { account, signer, isFHEReady } = useWeb3();
   const { profile, loading: profileLoading, hasProfile } = usePatientProfile(account || undefined);
-  const { trials, loading: trialsLoading } = useTrials(account || undefined);
+  const { trials, loading: trialsLoading, refetch: refetchTrials } = useTrials(account || undefined);
 
   const appliedTrials = trials.filter(t => t.applicationStatus !== null);
   const eligibleTrials = trials.filter(t => t.hasComputed && !t.isExpired);
@@ -361,7 +361,7 @@ export function PatientDashboard() {
               ) : discoverableTrials.length > 0 ? (
                 discoverableTrials.slice(0, 4).map((trial, i) => (
                   <motion.div key={trial.id} {...fadeUp(i * 0.08 + 0.7)}>
-                    <TrialCard trial={trial} />
+                    <TrialCard trial={trial} refetchTrials={refetchTrials} />
                   </motion.div>
                 ))
               ) : (
