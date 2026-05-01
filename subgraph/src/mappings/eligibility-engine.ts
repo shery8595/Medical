@@ -1,9 +1,10 @@
 import {
     EligibilityComputed,
     AppliedToTrial,
-    ApplicationStatusUpdated
+    ApplicationStatusUpdated,
+    AnonymousApplicationStatusUpdated
 } from "../../generated/EligibilityEngine/EligibilityEngine"
-import { EligibilityResult, Application } from "../../generated/schema"
+import { EligibilityResult, Application, AnonymousSubmission } from "../../generated/schema"
 
 export function handleEligibilityComputed(event: EligibilityComputed): void {
     let id = event.params.patient.toHex() + "-" + event.params.trialId.toString()
@@ -41,5 +42,22 @@ export function handleApplicationStatusUpdated(event: ApplicationStatusUpdated):
         app.message = event.params.message
         app.updatedAt = event.block.timestamp
         app.save()
+    }
+}
+
+export function handleAnonymousApplicationStatusUpdated(event: AnonymousApplicationStatusUpdated): void {
+    let trialId = event.params.trialId.toString()
+    let nullifier = event.params.nullifier.toString()
+    let applicationId = nullifier + "-" + trialId
+
+    let application = AnonymousSubmission.load(applicationId)
+
+    if (application) {
+        let status = event.params.status === 0 ? "None" :
+                      event.params.status === 1 ? "Pending" :
+                      event.params.status === 2 ? "Accepted" : "Rejected"
+        application.status = status
+        application.statusUpdatedAt = event.block.timestamp
+        application.save()
     }
 }

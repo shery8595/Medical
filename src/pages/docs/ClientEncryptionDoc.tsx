@@ -1,6 +1,7 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 import { Shield, Key, Cpu, Database, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -8,7 +9,7 @@ import { Shield, Key, Cpu, Database, AlertTriangle, CheckCircle2 } from "lucide-
 const encryptionFlowChart = `
 sequenceDiagram
     participant U as User Interface
-    participant SDK as fhevmjs SDK
+    participant SDK as @cofhe/sdk SDK
     participant MM as MetaMask
     participant RPC as Fhenix RPC
     participant C as Smart Contract
@@ -44,22 +45,22 @@ const sdkMethods = [
 
 const colorStyles: Record<string, { iconBg: string; iconText: string; cardBorder: string; cardBg: string }> = {
     teal: {
-        iconBg: "bg-blue-100 dark:bg-blue-900/30",
-        iconText: "text-blue-600 dark:text-blue-400",
-        cardBorder: "border-blue-200 dark:border-blue-900/40",
-        cardBg: "bg-blue-50/50 dark:bg-blue-950/10",
+        iconBg: "bg-blue-100",
+        iconText: "text-blue-600",
+        cardBorder: "border-blue-200",
+        cardBg: "bg-blue-50/50",
     },
     purple: {
-        iconBg: "bg-purple-100 dark:bg-purple-900/30",
-        iconText: "text-purple-600 dark:text-purple-400",
-        cardBorder: "border-purple-200 dark:border-purple-900/40",
-        cardBg: "bg-purple-50/50 dark:bg-purple-950/10",
+        iconBg: "bg-purple-100",
+        iconText: "text-purple-600",
+        cardBorder: "border-purple-200",
+        cardBg: "bg-purple-50/50",
     },
     amber: {
-        iconBg: "bg-amber-100 dark:bg-amber-900/30",
-        iconText: "text-amber-600 dark:text-amber-400",
-        cardBorder: "border-amber-200 dark:border-amber-900/40",
-        cardBg: "bg-amber-50/50 dark:bg-amber-950/10",
+        iconBg: "bg-amber-100",
+        iconText: "text-amber-600",
+        cardBorder: "border-amber-200",
+        cardBg: "bg-amber-50/50",
     },
 };
 
@@ -67,12 +68,7 @@ export function ClientEncryptionDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-blue-500 font-bold tracking-widest uppercase text-xs">Integration</span>
-                <h1 className="mt-2 text-5xl">Client-Side Encryption with <code>fhevmjs</code></h1>
-
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
-                    The core security guarantee of MedVault is that <strong>raw medical data never leaves the browser unencrypted</strong>. The Fhenix <code>fhevmjs</code> SDK performs all FHE ciphertext generation on the client, before any transaction is submitted to the network.
-                </p>
+                <DocsPageHeaderForRoute />
 
                 {/* Key Guarantees */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-10 not-prose">
@@ -83,40 +79,40 @@ export function ClientEncryptionDoc() {
                     ].map(g => {
                         const styles = colorStyles[g.color];
                         return (
-                        <div key={g.title} className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                        <div key={g.title} className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
                             <div className={`p-2 w-fit rounded-xl ${styles.iconBg} ${styles.iconText} mb-3`}>{g.icon}</div>
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-1">{g.title}</h4>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">{g.title}</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">{g.desc}</p>
                         </div>
                         );
                     })}
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
-                <h2>I. Architecture of the <code>fhevmjs</code> Client</h2>
+                <h2>I. Architecture of the <code>@cofhe/sdk</code> Client</h2>
                 <p>
-                    Standard Ethereum libraries like Ethers.js or viem are designed to format ABI-encoded payloads for RPC calls. <code>fhevmjs</code> does something fundamentally different — it is a cryptographic library first, a blockchain connector second.
+                    Standard Ethereum libraries like Ethers.js or viem are designed to format ABI-encoded payloads for RPC calls. <code>@cofhe/sdk</code> does something fundamentally different — it is a cryptographic library first, a blockchain connector second.
                 </p>
                 <p>
                     The library has two distinct responsibilities at runtime:
                 </p>
 
                 <div className="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
-                    <div className="p-5 rounded-2xl border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950/20 border border-l-blue-500 border-slate-200 dark:border-slate-800">
-                        <h4 className="font-bold text-slate-900 dark:text-white mb-2">① Parameter Encryption</h4>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Transforms plain integer form values (e.g., <code>42</code>, <code>180</code>) into full FHE ciphertexts capable of being passed as Solidity <code>euint32</code> or <code>euint16</code> types.</p>
+                    <div className="p-5 rounded-2xl border-l-4 border-blue-500 bg-blue-50 border border-l-blue-500 border-slate-200">
+                        <h4 className="font-bold text-slate-900 mb-2">① Parameter Encryption</h4>
+                        <p className="text-sm text-slate-600">Transforms plain integer form values (e.g., <code>42</code>, <code>180</code>) into full FHE ciphertexts capable of being passed as Solidity <code>euint32</code> or <code>euint16</code> types.</p>
                     </div>
-                    <div className="p-5 rounded-2xl border-l-4 border-purple-500 bg-purple-50 dark:bg-purple-950/20 border border-slate-200 dark:border-slate-800">
-                        <h4 className="font-bold text-slate-900 dark:text-white mb-2">② Viewing Key Management</h4>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Generates and manages EIP-712-signed viewing tokens that allow the patient (and only the patient) to request decryption of their specific on-chain ciphertext mappings.</p>
+                    <div className="p-5 rounded-2xl border-l-4 border-purple-500 bg-purple-50 border border-slate-200">
+                        <h4 className="font-bold text-slate-900 mb-2">② Viewing Key Management</h4>
+                        <p className="text-sm text-slate-600">Generates and manages EIP-712-signed viewing tokens that allow the patient (and only the patient) to request decryption of their specific on-chain ciphertext mappings.</p>
                     </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 mb-8 mt-6">
-                    <h3 className="text-xl font-semibold text-slate-200 mb-4">fhevmjs Encryption & Decryption Lifecycle</h3>
-                    <div className="text-slate-300 space-y-4">
-                        <p>1. <strong>Frontend</strong> initializes fhevmjs instance using the network's public key.</p>
+                <div className="not-prose bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8 mt-6">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">@cofhe/sdk encryption & decryption lifecycle</h3>
+                    <div className="text-slate-600 text-sm space-y-4">
+                        <p>1. <strong>Frontend</strong> initializes @cofhe/sdk instance using the network's public key.</p>
                         <p>2. <strong>Frontend</strong> encrypts raw numbers into ciphertexts locally in the browser.</p>
                         <p>3. <strong>Frontend</strong> packages ciphertexts into a transaction and sends to blockchain.</p>
                         <p>4. <strong>Smart Contract</strong> processes ciphertexts homomorphically without ever decrypting.</p>
@@ -124,7 +120,7 @@ export function ClientEncryptionDoc() {
                     </div>
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>II. Instance Initialization</h2>
                 <p>
@@ -134,7 +130,7 @@ export function ClientEncryptionDoc() {
                 <CodeBlock
                     filename="src/context/Web3Context.tsx — Initialization"
                     language="typescript"
-                    code={`import { createInstance, FhevmInstance } from 'fhevmjs';
+                    code={`import { createInstance, FhevmInstance } from '@cofhe/sdk';
 import { BrowserProvider } from 'ethers';
 
 const initializeFHEVM = async (provider: BrowserProvider): Promise<FhevmInstance | null> => {
@@ -145,7 +141,7 @@ const initializeFHEVM = async (provider: BrowserProvider): Promise<FhevmInstance
         // precompile address. Returns a 2048-byte FHE bootstrapping key.
         const instance = await createInstance({
             chainId: Number(network.chainId),
-            // networkUrl is optional — fhevmjs derives it from the provider
+            // networkUrl is optional — @cofhe/sdk derives it from the provider
         });
 
         console.log("[FHE] Instance initialized. FHE ready.");
@@ -172,11 +168,11 @@ useEffect(() => {
                     If the user is connected to a chain that doesn't support the Fhenix FHE precompile (e.g., Ethereum mainnet, Polygon), <code>createInstance</code> will fail. MedVault enforces a strict <code>isFHEReady</code> flag in the global context. All sensitive dashboard views are wrapped in a check gate that blocks rendering until the FHE instance is valid.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>III. Encrypting Medical Payloads</h2>
                 <p>
-                    When the patient fills out their health profile form and clicks "Save to Vault", the form data is never passed directly to any contract function. Instead, the raw values are intercepted and routed through the <code>fhevmjs</code> encryption pipeline.
+                    When the patient fills out their health profile form and clicks "Save to Vault", the form data is never passed directly to any contract function. Instead, the raw values are intercepted and routed through the <code>@cofhe/sdk</code> encryption pipeline.
                 </p>
 
                 <CodeBlock
@@ -222,30 +218,30 @@ useEffect(() => {
                 />
 
                 <Callout type="tip" title="The Input Proof — Why It Matters">
-                    The <code>inputProof</code> is a zero-knowledge argument proving that the ciphertext was constructed from a valid 32-bit integer — not garbage bytes crafted to confuse the FHE coprocessor. The <code>PatientRegistry</code> smart contract validates this proof on-chain before storing the handles. Without this check, a malicious actor could submit malformed ciphertexts that corrupt subsequent computation results in the <code>EligibilityEngine</code>.
+                    The <code>inputProof</code> is a zero-knowledge argument proving that the ciphertext was constructed from a valid 32-bit integer — not garbage bytes crafted to confuse the FHE coprocessor. The <code>MedVaultRegistry</code> smart contract validates this proof on-chain before storing the handles. Without this check, a malicious actor could submit malformed ciphertexts that corrupt subsequent computation results in the <code>EligibilityEngine</code>.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
-                <h2>IV. <code>fhevmjs</code> SDK Method Reference</h2>
-                <p>The key methods used inside MedVault from the <code>fhevmjs</code> SDK:</p>
+                <h2>IV. <code>@cofhe/sdk</code> SDK Method Reference</h2>
+                <p>The key methods used inside MedVault from the <code>@cofhe/sdk</code> SDK:</p>
 
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Method</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Returns</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Description</th>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Method</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Returns</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Description</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {sdkMethods.map((m, i) => (
-                                    <tr key={m.method} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
-                                        <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400 text-xs align-top">{m.method}</td>
-                                        <td className="px-4 py-3 font-mono text-purple-600 dark:text-purple-400 text-xs align-top whitespace-nowrap">{m.returns}</td>
-                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{m.desc}</td>
+                                    <tr key={m.method} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                        <td className="px-4 py-3 font-mono text-blue-600 text-xs align-top">{m.method}</td>
+                                        <td className="px-4 py-3 font-mono text-purple-600 text-xs align-top whitespace-nowrap">{m.returns}</td>
+                                        <td className="px-4 py-3 text-slate-600 text-xs">{m.desc}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -253,7 +249,7 @@ useEffect(() => {
                     </div>
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>V. The Hybrid State Model: Chain vs. LocalStorage</h2>
                 <p>
@@ -261,26 +257,37 @@ useEffect(() => {
                 </p>
 
                 <div className="not-prose grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 text-white">
+                    <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-4">
-                            <Database className="w-5 h-5 text-blue-400" />
-                            <span className="font-bold text-blue-400">Blockchain Layer</span>
+                            <Database className="w-5 h-5 text-blue-600" />
+                            <span className="font-bold text-slate-900">Blockchain layer</span>
                         </div>
-                        <div className="text-sm text-slate-300 space-y-2">
-                            <p>• <strong className="text-white">Source of truth for computation</strong> — the FHE engine reads ciphertexts from chain, never from local storage.</p>
-                            <p>• Ciphertext handles stored permanently in <code className="text-blue-300">PatientRegistry</code> mappings.</p>
-                            <p>• Decryption of results requires an on-chain EIP-712 token grant.</p>
+                        <div className="text-sm text-slate-600 space-y-2">
+                            <p>
+                                • <strong className="text-slate-800">Source of truth for computation</strong> — the FHE engine
+                                reads ciphertexts from chain, not from ad hoc browser caches for proving.
+                            </p>
+                            <p>
+                                • Ciphertext handles live in <code className="text-blue-700 bg-blue-50 px-1 rounded">MedVaultRegistry</code>{" "}
+                                mappings.
+                            </p>
+                            <p>• Decryption of results still flows through the intended viewing-key path.</p>
                         </div>
                     </div>
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-blue-900 text-white">
+                    <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-4">
-                            <CheckCircle2 className="w-5 h-5 text-blue-400" />
-                            <span className="font-bold text-blue-400">Browser localStorage Layer</span>
+                            <CheckCircle2 className="w-5 h-5 text-[#00685f]" />
+                            <span className="font-bold text-slate-900">Browser layer (UX)</span>
                         </div>
-                        <div className="text-sm text-slate-300 space-y-2">
-                            <p>• <strong className="text-white">Source of truth for UI rendering</strong> — the dashboard reads plaintext values from <code className="text-blue-300">localStorage</code> for seamless display.</p>
-                            <p>• Populated once, after a successful on-chain vault update.</p>
-                            <p>• Never used as input for any on-chain transaction. Purely presentational.</p>
+                        <div className="text-sm text-slate-600 space-y-2">
+                            <p>
+                                • <strong className="text-slate-800">Dashboard convenience</strong> — plaintext may be cached
+                                locally for display only when the product chooses that trade-off.
+                            </p>
+                            <p>
+                                • Never sign transactions from stale cached values without re-validating against your threat
+                                model.
+                            </p>
                         </div>
                     </div>
                 </div>

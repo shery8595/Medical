@@ -1,18 +1,19 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 import { Coins, ShieldCheck, TrendingUp, Landmark, ArrowRight, Wallet } from "lucide-react";
 
 const severityStyles: Record<string, { bg: string; text: string }> = {
     "Medium": {
-        bg: "bg-amber-100 dark:bg-amber-900/30",
-        text: "text-amber-700 dark:text-amber-400"
+        bg: "bg-amber-100",
+        text: "text-amber-700"
     },
     "Low": {
-        bg: "bg-blue-100 dark:bg-blue-900/30",
-        text: "text-blue-700 dark:text-blue-400"
+        bg: "bg-blue-100",
+        text: "text-blue-700"
     }
 };
 
@@ -20,12 +21,7 @@ export function PrivateStakingDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-blue-500 font-bold tracking-widest uppercase text-xs">Operations &amp; Guides</span>
-                <h1 className="mt-2 text-5xl">Private Yield Staking (Aave V3 Integration)</h1>
-
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
-                    MedVault enables patients to earn yield on their clinical trial rewards without exposing their financial activity or balances on the public blockchain. By leveraging Fhenix's FHEVM and Aave V3, we maintain a "Confidential Enclave" for patient payouts.
-                </p>
+                <DocsPageHeaderForRoute />
 
                 {/* Feature Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-12 not-prose text-white">
@@ -46,17 +42,17 @@ export function PrivateStakingDoc() {
                     </div>
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>I. Staking Architecture</h2>
                 <p>
                     The staking system operates as a gateway between the <strong>MedVault Confidential Enclave</strong> and the <strong>Aave V3 Liquidity Pool</strong>. Because Aave requires public <code>uint256</code> values for accounting, MedVault acts as an "accumulator" that pools private intents and manages the public interactions.
                 </p>
 
-                <div className="not-prose my-10 p-8 rounded-3xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-                    <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 mb-8">
-                        <h3 className="text-xl font-semibold text-slate-200 mb-4">Staking Lifecycle</h3>
-                        <div className="text-slate-300 space-y-4">
+                <div className="not-prose my-10 p-8 rounded-3xl bg-slate-50 border border-slate-200">
+                    <div className="not-prose bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
+                        <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">Staking lifecycle</h3>
+                        <div className="text-slate-600 text-sm space-y-4">
                             <p>1. <strong>Trial Setup:</strong> Sponsor deposits total reward pool</p>
                             <p>2. <strong>Enrollment:</strong> Patient stakes deposit (encrypted condition)</p>
                             <p>3. <strong>Trial Active:</strong> Both Sponsor and Patient funds locked in contract</p>
@@ -111,7 +107,7 @@ contract StakingManager {
 }`}
                 />
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>III. User Experience Patterns</h2>
                 <p>
@@ -122,19 +118,19 @@ contract StakingManager {
                     <div className="space-y-4">
                         <div className="flex items-start gap-4">
                             <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 font-bold">1</div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 <strong>Claim Choice:</strong> When a trial payment is released, the patient sees a "Secure Payout" modal. They can choose to withdraw to their wallet or "Stake &amp; Earn".
                             </p>
                         </div>
                         <div className="flex items-start gap-4">
                             <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 font-bold">2</div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 <strong>Confidential Vault:</strong> The "Private Staking Vault" card on the dashboard remains locked until the user requests decryption via a re-encryption request.
                             </p>
                         </div>
                         <div className="flex items-start gap-4">
                             <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 font-bold">3</div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 <strong>Manual Deposits:</strong> Users can also top up their vault using public ETH, which is automatically converted and added to their private balance.
                             </p>
                         </div>
@@ -158,19 +154,19 @@ contract StakingManager {
                     </div>
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>IV. Yield Mathematics</h2>
                 <p>
                     The interest earned on staked MedVault rewards follows Aave V3's variable-rate lending model. When the <code>StakingManager</code> supplies WETH to the Aave pool, it receives <code>aWETH</code> receipt tokens that appreciate in value as borrowers pay interest.
                 </p>
 
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div className="px-4 pt-4 pb-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                        <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Yield Accrual Formula</span>
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="px-4 pt-4 pb-2 bg-slate-50 border-b border-slate-200">
+                        <span className="font-bold text-sm text-slate-700">Yield Accrual Formula</span>
                     </div>
-                    <div className="overflow-x-auto p-6 bg-white dark:bg-slate-900">
-                        <div className="text-sm font-mono text-slate-600 dark:text-slate-400 space-y-2">
+                    <div className="overflow-x-auto p-6 bg-white">
+                        <div className="text-sm font-mono text-slate-600 space-y-2">
                             <p>Yield = Principal × (1 + APY/365)^days_staked - Principal</p>
                             <p className="text-xs text-slate-400 mt-4">Where:</p>
                             <p className="text-xs text-slate-400">• Principal = amount of WETH supplied to Aave via StakingManager</p>
@@ -184,7 +180,7 @@ contract StakingManager {
                     The key innovation is that the <strong>patient's share of this yield is tracked privately</strong> using encrypted <code>euint64</code> balances. The <code>StakingManager</code> knows the total pool size (public), but individual positions are encrypted.
                 </p>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>V. ConfidentialETH Scaling</h2>
                 <p>
@@ -201,7 +197,7 @@ contract StakingManager {
                     Due to the <code>1e12</code> scaling, the smallest representable unit is <code>0.000001 ETH</code> (~$0.0025 at current prices). This means sub-micro-ETH amounts are truncated. For clinical trial rewards (typically $100-$10,000), this precision is more than sufficient.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>VI. Risk Factors</h2>
                 <p>
@@ -217,12 +213,12 @@ contract StakingManager {
                     ].map(risk => {
                         const styles = severityStyles[risk.severity];
                         return (
-                        <div key={risk.title} className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div key={risk.title} className="p-5 rounded-2xl border border-slate-200 bg-white">
                             <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-bold text-slate-900 dark:text-white text-sm m-0">{risk.title}</h4>
+                                <h4 className="font-bold text-slate-900 text-sm m-0">{risk.title}</h4>
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${styles.bg} ${styles.text}`}>{risk.severity}</span>
                             </div>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed m-0">{risk.desc}</p>
+                            <p className="text-xs text-slate-600 leading-relaxed m-0">{risk.desc}</p>
                         </div>
                         );
                     })}

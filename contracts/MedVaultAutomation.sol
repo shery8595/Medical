@@ -2,49 +2,39 @@
 pragma solidity ^0.8.27;
 
 import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
-import "./EligibilityEngine.sol";
-import "./ConsentManager.sol";
 import "./TrialManager.sol";
 import "./SponsorIncentiveVault.sol";
 
 /**
  * @title MedVaultAutomation
- * @notice Automates clinical trial eligibility checks and trial finalization using Chainlink Automation
- * @dev Two task types:
- *   Type 0: Process queued eligibility checks (FHE computation)
+ * @notice Automates clinical trial finalization using Chainlink Automation
+ * @dev Single task type:
  *   Type 1: Finalize expired trials (distribute rewards + deactivate)
+ * @dev Note: Type 0 (queued eligibility checks) was removed - the anonymous flow
+ *      handles eligibility via MedVaultRegistry.applyToTrial
  */
 contract MedVaultAutomation is AutomationCompatibleInterface {
-    EligibilityEngine public engine;
-    ConsentManager public consentManager;
     TrialManager public trialManager;
     SponsorIncentiveVault public vault;
-
-    struct PendingCheck {
-        address patient;
-        uint256 trialId;
-    }
-
-    PendingCheck[] public queue;
-    mapping(address => mapping(uint256 => bool)) public enqueued;
     
     address public owner;
+    address public pendingOwner; // FINDING 11: Two-step ownership transfer
     
     // Track which trials have already been finalized to avoid re-processing
     mapping(uint256 => bool) public finalized;
 
-    event AddedToQueue(address indexed patient, uint256 indexed trialId);
+    // L-5: Chainlink forwarder address for access control
+    address public chainlinkForwarder;
+
     event TrialFinalized(uint256 indexed trialId, bool distributed, bool deactivated);
+    event OwnershipProposed(address indexed proposedOwner); // FINDING 11
+    event OwnershipAccepted(address indexed newOwner); // FINDING 11
 
     constructor(
-        address _engine, 
-        address _consentManager, 
         address _trialManager,
         address payable _vault
     ) {
         owner = msg.sender;
-        engine = EligibilityEngine(_engine);
-        consentManager = ConsentManager(_consentManager);
         trialManager = TrialManager(_trialManager);
         vault = SponsorIncentiveVault(_vault);
     }
@@ -54,51 +44,100 @@ contract MedVaultAutomation is AutomationCompatibleInterface {
         _;
     }
 
+    // FINDING 11: Two-step ownership transfer
+    function proposeOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Zero address");
+        pendingOwner = _newOwner;
+        emit OwnershipProposed(_newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not proposed owner");
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipAccepted(owner);
+    }
+
     function setVault(address payable _vault) external onlyOwner {
         vault = SponsorIncentiveVault(_vault);
     }
 
     /**
-     * @notice Manually add to queue (can also be triggered by events)
+     * @notice L-5: Set the Chainlink forwarder address for access control
+     * @param _forwarder The Chainlink Automation forwarder address
      */
-    function enqueue(address _patient, uint256 _trialId) external {
-        require(consentManager.hasConsent(_patient, _trialId), "No consent");
-        require(!enqueued[_patient][_trialId], "Already in queue");
-        
-        queue.push(PendingCheck({
-            patient: _patient,
-            trialId: _trialId
-        }));
-        enqueued[_patient][_trialId] = true;
-        
-        emit AddedToQueue(_patient, _trialId);
+    function setChainlinkForwarder(address _forwarder) external onlyOwner {
+        require(_forwarder != address(0), "Zero address");
+        chainlinkForwarder = _forwarder;
+    }
+
+    /**
+     * @notice L-5: Modifier to restrict access to Chainlink forwarder or owner
+     */
+    modifier onlyForwarder() {
+        require(
+            msg.sender == chainlinkForwarder || msg.sender == owner,
+            "Only forwarder or owner"
+        );
+        _;
+    }
+
+
+    // FINDING 12: Track active trial IDs for O(1) lookup instead of O(n) scan
+    uint256[] public activeTrialIds;
+    mapping(uint256 => uint256) private activeTrialIndex; // trialId => index in activeTrialIds (+1, 0 = not active)
+
+    /**
+     * @notice FINDING 12: Mark a trial as active for efficient checkUpkeep
+     * @dev Called by TrialManager when a trial is created
+     */
+    function onTrialCreated(uint256 _trialId) external {
+        require(msg.sender == address(trialManager), "Only TrialManager");
+        if (activeTrialIndex[_trialId] == 0) {
+            activeTrialIds.push(_trialId);
+            activeTrialIndex[_trialId] = activeTrialIds.length; // Store index+1
+        }
+    }
+
+    /**
+     * @notice FINDING 12: Mark a trial as inactive for efficient checkUpkeep
+     * @dev Called by TrialManager when a trial is deactivated
+     */
+    function onTrialDeactivated(uint256 _trialId) external {
+        require(msg.sender == address(trialManager), "Only TrialManager");
+        uint256 index = activeTrialIndex[_trialId];
+        if (index > 0) {
+            // Swap with last and pop for O(1) removal
+            uint256 lastIndex = activeTrialIds.length - 1;
+            uint256 lastTrialId = activeTrialIds[lastIndex];
+            if (index - 1 != lastIndex) {
+                activeTrialIds[index - 1] = lastTrialId;
+                activeTrialIndex[lastTrialId] = index;
+            }
+            activeTrialIds.pop();
+            activeTrialIndex[_trialId] = 0;
+        }
     }
 
     function checkUpkeep(bytes calldata /* checkData */) external view override returns (bool upkeepNeeded, bytes memory performData) {
-        // 1. Scan all trials for expired ones that need finalization
-        uint256 totalTrials = trialManager.trialCounter();
-        for (uint256 i = 1; i < totalTrials; i++) {
-            TrialManager.Trial memory trial = trialManager.getTrial(i);
-            if (trial.active && trial.endTime > 0 && block.timestamp >= trial.endTime && !finalized[i]) {
-                return (true, abi.encode(uint8(1), i)); // Type 1: Finalize
+        // FINDING 12: Only iterate over active trials, not all trials ever created
+        for (uint256 i = 0; i < activeTrialIds.length; i++) {
+            uint256 trialId = activeTrialIds[i];
+            TrialManager.Trial memory trial = trialManager.getTrial(trialId);
+            // Only check active trials with valid end times that haven't been finalized
+            if (trial.active && trial.endTime > 0 && block.timestamp >= trial.endTime && !finalized[trialId]) {
+                return (true, abi.encode(uint8(1), trialId)); // Type 1: Finalize
             }
         }
 
-        // 2. Check for pending eligibility checks
-        uint256 count = queue.length;
-        if (count > 0) {
-            for (uint256 i = 0; i < count; i++) {
-                PendingCheck memory check = queue[i];
-                if (consentManager.hasConsent(check.patient, check.trialId)) {
-                    return (true, abi.encode(uint8(0), i)); // Type 0: Eligibility
-                }
-            }
-        }
-        
+        // HIGH-1: Type 0 (legacy eligibility check) removed — it called deprecated function
+        // The anonymous flow handles eligibility via MedVaultRegistry.applyToTrial
+        // Only Type 1 (trial finalization) is now supported
+
         return (false, "");
     }
 
-    function performUpkeep(bytes calldata performData) external override {
+    function performUpkeep(bytes calldata performData) external override onlyForwarder {
         (uint8 taskType, uint256 indexOrId) = abi.decode(performData, (uint8, uint256));
         
         if (taskType == 1) {
@@ -130,19 +169,7 @@ contract MedVaultAutomation is AutomationCompatibleInterface {
             }
             
             emit TrialFinalized(trialId, distributed, deactivated);
-        } else {
-            // ========== Eligibility Check (Task Type 0) ==========
-            uint256 index = indexOrId;
-            require(index < queue.length, "Invalid index");
-            
-            PendingCheck memory check = queue[index];
-            queue[index] = queue[queue.length - 1];
-            queue.pop();
-            enqueued[check.patient][check.trialId] = false;
-
-            if (consentManager.hasConsent(check.patient, check.trialId)) {
-                engine.checkEligibility(check.patient, check.trialId);
-            }
         }
+        // HIGH-1: Type 0 (legacy eligibility check) removed — engine.checkEligibility() always reverts
     }
 }

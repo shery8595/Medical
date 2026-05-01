@@ -1,58 +1,208 @@
 import { useMatches } from "../hooks/useMatches";
 import { useWeb3 } from "../lib/Web3Context";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
+import { Card, CardContent } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
-import { Mail, CheckCircle, Clock, Search, Sparkles, UserCheck, XCircle, Send, Loader2, ShieldCheck } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
+import {
+  Mail,
+  Clock,
+  Search,
+  UserCheck,
+  Loader2,
+  ShieldCheck,
+  BadgeCheck,
+  ArrowRight,
+} from "lucide-react";
 import { useState, useMemo } from "react";
-import { getEligibilityEngine, getSponsorIncentiveVault } from "../lib/contracts";
-import { ethers } from "ethers";
 import { cn } from "../lib/utils";
+import { SectionTopBar } from "../components/layout/SectionTopBar";
+import { useSponsorApplicationActions } from "../hooks/useSponsorApplicationActions";
+import { useIsNullifierCertified } from "../hooks/useEligibilityProof";
+import { AnimatePresence, motion } from "framer-motion";
+
+const cardShell =
+  "rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_12px_-2px_rgba(15,23,42,0.05)]";
+
+function MatchRow({
+  match,
+  trialId,
+  onSelect,
+}: {
+  match: any;
+  trialId: string;
+  onSelect: (match: any) => void;
+}) {
+  const { certified } = useIsNullifierCertified(
+    match.isAnonymous ? match.nullifier : undefined,
+    match.isAnonymous ? trialId : undefined
+  );
+
+  return (
+    <div
+      className={cn(
+        "grid min-w-[720px] grid-cols-[1.5fr_1fr_1fr_1fr_120px] items-center gap-4 rounded-xl border px-5 py-4 transition-colors md:px-6",
+        match.isAnonymous
+          ? "border-violet-200/80 bg-violet-50/40 hover:border-violet-300"
+          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold ring-1",
+            match.isAnonymous
+              ? "bg-violet-100 text-violet-800 ring-violet-200"
+              : "bg-slate-100 text-[#1D2634] ring-slate-200"
+          )}
+        >
+          {match.isAnonymous ? "AN" : "VP"}
+        </div>
+        <div className="min-w-0">
+          <p
+            className={cn(
+              "truncate font-mono text-sm font-semibold",
+              match.isAnonymous ? "text-violet-900" : "text-slate-900"
+            )}
+          >
+            {match.patientId?.slice(0, 12) || "Unknown"}…
+          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {match.isAnonymous ? "Anonymous" : "Verified"}
+          </p>
+          {certified && (
+            <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700">
+              <BadgeCheck className="h-3 w-3" />
+              Noir certified
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            (match.matchScore || 0) === 100 ? "bg-emerald-500" : "bg-slate-400"
+          )}
+        />
+        <span className="text-xs font-medium text-slate-600">
+          {(match.matchScore || 0) === 100 ? "Verified 100%" : "Processing"}
+        </span>
+      </div>
+
+      <div>
+        <Badge
+          className={cn(
+            "border font-semibold text-[10px] uppercase tracking-wide",
+            match.status === "Accepted" && "border-emerald-200 bg-emerald-50 text-emerald-800",
+            match.status === "Rejected" && "border-rose-200 bg-rose-50 text-rose-800",
+            match.status !== "Accepted" &&
+              match.status !== "Rejected" &&
+              "border-slate-200 bg-slate-50 text-slate-700"
+          )}
+        >
+          {match.status}
+        </Badge>
+      </div>
+
+      <div className="font-mono text-[11px] font-medium text-slate-500">{match.timestamp}</div>
+
+      <div className="text-right">
+        {match.isAnonymous && match.status === "Pending" ? (
+          <Button
+            size="sm"
+            className="h-9 rounded-lg border border-violet-700 bg-violet-700 px-3 text-xs font-semibold text-white shadow-none hover:bg-violet-800"
+            onClick={() => onSelect(match)}
+          >
+            Review
+          </Button>
+        ) : match.isAnonymous && (match.status === "Accepted" || match.status === "Rejected") ? (
+          <div className="flex flex-col items-end gap-1">
+            <Badge
+              className={cn(
+                "border text-[10px] font-semibold",
+                match.status === "Accepted"
+                  ? "border-violet-200 bg-violet-50 text-violet-900"
+                  : "border-rose-200 bg-rose-50 text-rose-800"
+              )}
+            >
+              {match.status}
+            </Badge>
+            {certified && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-700">
+                <BadgeCheck className="h-3 w-3" />
+                Noir proof
+              </span>
+            )}
+          </div>
+        ) : match.isAnonymous ? (
+          <Badge className="border border-violet-200 bg-violet-50 text-[10px] font-semibold text-violet-900">
+            <ShieldCheck className="mr-1 inline h-3 w-3" />
+            ZK verified
+          </Badge>
+        ) : match.status === "Pending" ? (
+          <Button
+            size="sm"
+            className="h-9 rounded-lg border border-[#1D2634] bg-[#1D2634] px-3 text-xs font-semibold text-white shadow-none hover:bg-[#151c28]"
+            onClick={() => onSelect(match)}
+          >
+            Review
+          </Button>
+        ) : match.status === "Computed" && (match.matchScore || 0) === 100 ? (
+          <Badge className="border border-amber-200 bg-amber-50 text-[10px] font-semibold text-amber-900">
+            <Clock className="mr-1 inline h-3 w-3" />
+            Awaiting application
+          </Badge>
+        ) : match.status === "Accepted" || match.status === "Rejected" ? (
+          <button
+            type="button"
+            className="inline-flex rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-slate-300 hover:text-[#1D2634]"
+          >
+            <Mail className="h-4 w-4" />
+          </button>
+        ) : (
+          <span className="text-xs font-medium text-slate-400">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function SponsorMatchesPage() {
-  const { account, signer } = useWeb3();
+  const { account } = useWeb3();
   const { matches, loading, refetch } = useMatches(account || undefined);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const { updatingId, error, updateApplicationStatus, updateAnonymousApplicationStatus } =
+    useSponsorApplicationActions();
   const [message, setMessage] = useState<string>("");
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null);
 
   const handleUpdateStatus = async (trialId: string, patientAddress: string, status: number) => {
-    if (!signer) return;
-    setUpdatingId(`${trialId}-${patientAddress}`);
     try {
-      const engine = getEligibilityEngine(signer);
-      const messageBytes = ethers.hexlify(ethers.toUtf8Bytes(message || (status === 2 ? "Accepted" : "Rejected")));
-
-      const tx = await engine.updateApplicationStatus(
-        BigInt(trialId),
-        patientAddress,
-        status,
-        messageBytes
-      );
-      await tx.wait();
-
-      // V1.2.3: Automatic Registration for Reward Pool on Approval
-      if (status === 2) {
-        const vault = getSponsorIncentiveVault(signer);
-        const txReg = await vault.registerParticipant(BigInt(trialId), patientAddress);
-        await txReg.wait();
-      }
-
+      const ok = await updateApplicationStatus(trialId, patientAddress, status, message);
+      if (!ok) return;
       setMessage("");
       setSelectedMatch(null);
       refetch();
     } catch (err) {
       console.error("Failed to update status:", err);
-    } finally {
-      setUpdatingId(null);
     }
   };
 
-  // Group matches by trial
+  const handleUpdateAnonymousStatus = async (trialId: string, nullifier: string, status: number) => {
+    try {
+      const ok = await updateAnonymousApplicationStatus(trialId, nullifier, status);
+      if (!ok) return;
+      setSelectedMatch(null);
+      refetch();
+    } catch (err) {
+      console.error("Failed to update anonymous status:", err);
+    }
+  };
+
   const groupedMatches = useMemo(() => {
     const groups: { [key: string]: { trialName: string; matches: any[]; maxTimestamp: number } } = {};
-    matches.forEach(match => {
+    matches.forEach((match) => {
       if (!groups[match.trialId]) {
         groups[match.trialId] = { trialName: match.trialName, matches: [], maxTimestamp: 0 };
       }
@@ -66,279 +216,224 @@ export function SponsorMatchesPage() {
   }, [matches]);
 
   const groupedEntries = useMemo(() => {
-    return (Object.entries(groupedMatches) as [string, { trialName: string; matches: any[]; maxTimestamp: number }][])
-      .sort((a, b) => b[1].maxTimestamp - a[1].maxTimestamp);
+    return (
+      Object.entries(groupedMatches) as [string, { trialName: string; matches: any[]; maxTimestamp: number }][]
+    ).sort((a, b) => b[1].maxTimestamp - a[1].maxTimestamp);
   }, [groupedMatches]);
 
   return (
-    <div className="min-h-screen pb-16 space-y-10">
-      {/* ── Page Header ── */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-8 relative">
-        <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-8 w-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-              <UserCheck className="h-4 w-4 text-blue-400" />
+    <div className="space-y-8 pb-12">
+      <SectionTopBar
+        title="Patient matches"
+        rightContent={
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <Link to="/sponsor/active-trials" className="text-[#1D2634] hover:underline">
+              Active protocols
+            </Link>
+            <Link to="/sponsor/analytics" className="text-slate-600 hover:text-slate-900">
+              Analytics
+            </Link>
+          </div>
+        }
+      />
+
+      <header className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white via-white to-slate-50/50 px-6 py-8 md:px-10 md:py-9 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/50">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#1D2634]/[0.04] blur-3xl" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1D2634]/10 ring-1 ring-[#1D2634]/15">
+                <UserCheck className="h-4 w-4 text-[#1D2634]" strokeWidth={2} />
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">Recruitment</p>
             </div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-blue-400 font-black">
-              ◈ Recruitment Hub
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-900 md:text-[2rem] md:leading-tight">
+              Patient matches
+            </h1>
+            <p className="max-w-xl text-sm leading-relaxed text-slate-600">
+              Review applications grouped by protocol. Anonymous rows use a separate verification flow.
             </p>
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter mb-2">
-            Protocol Candidates
-          </h2>
-          <p className="text-slate-400 max-w-xl text-[15px] leading-relaxed border-l-2 border-blue-500/20 pl-5 py-1">
-            Review and manage cryptographically verified applications grouped by their respective clinical protocols.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 shrink-0 pt-2">
-          <button className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 font-mono text-[11px] uppercase tracking-widest font-black transition-all hover:bg-white/10 hover:text-white group">
-            <Search className="h-4 w-4 group-hover:text-blue-400 transition-colors" /> Search Candidates
+          <button
+            type="button"
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+          >
+            <Search className="h-4 w-4" />
+            Search (coming soon)
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* ── Candidate Queue ── */}
-      <div className="relative">
-        {loading ? (
-          <div className="py-32 flex flex-col items-center justify-center space-y-6">
-            <div className="relative">
-              <div className="h-16 w-16 rounded-3xl border-2 border-blue-500/20 animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="h-6 w-6 text-blue-400 animate-pulse" />
-              </div>
-            </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 animate-pulse">
-              Syncing Protocol Results...
-            </p>
-          </div>
-        ) : matches.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="py-32 flex flex-col items-center justify-center rounded-3xl bg-white/[0.02] border border-dashed border-white/10 text-center"
-          >
-            <div className="h-20 w-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mb-6">
-              <UserCheck className="h-8 w-8 text-slate-700" />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Empty Recruitment Queue</h3>
-            <p className="text-sm text-slate-500 max-w-xs mx-auto leading-relaxed">
-              No applications currently pending review. Verified candidates will appear here once they authorize disclosure.
-            </p>
-          </motion.div>
-        ) : (
-          <div className="space-y-12">
-            {groupedEntries.map(([trialId, group], groupIndex) => (
-              <motion.div
-                key={trialId}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: groupIndex * 0.1 }}
-                className="space-y-6"
-              >
-                {/* Trial Section Header */}
-                <div className="flex items-center justify-between px-2">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
-                      <ShieldCheck className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-white tracking-tight">{group.trialName}</h3>
-                      <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Protocol ID: {trialId}</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest px-3 py-1 text-slate-400">
-                    {group.matches.length} {group.matches.length === 1 ? 'Candidate' : 'Candidates'}
-                  </Badge>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_100px] px-8 mb-2">
-                    {["Patient Identity", "Match Confidence", "Current Status", "Timestamp", ""].map((header, i) => (
-                      <span key={i} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-                        {header}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="space-y-3">
-                    {group.matches.map((match, i) => (
-                      <motion.div
-                        key={match.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        className="group relative grid grid-cols-[1.5fr_1fr_1fr_1fr_100px] items-center px-8 py-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/5 hover:-translate-y-1 hover:border-blue-500/30 overflow-hidden"
-                      >
-                        {/* Glow layer */}
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
-                          <div className="absolute -top-20 -left-20 w-40 h-40 bg-blue-500/5 blur-[50px] rounded-full" />
-                        </div>
-
-                        {/* Identity */}
-                        <div className="flex items-center gap-4 relative z-10">
-                          <div className="h-11 w-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-[10px] text-blue-500 shadow-inner group-hover:scale-110 transition-transform duration-500">
-                            VP
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-mono text-sm font-black text-white group-hover:text-blue-400 transition-colors tracking-tight">
-                              {match.patientId?.slice(0, 12) || "Unknown"}...
-                            </span>
-                            <span className="text-[10px] uppercase font-black tracking-widest text-slate-500">
-                              Verified Identity
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Match Confidence */}
-                        <div className="flex items-center gap-2 relative z-10">
-                          <div className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            (match.matchScore || 0) === 100 ? "bg-blue-500 shadow-[0_0_8px_rgba(20,184,166,0.6)] animate-pulse" : "bg-indigo-500"
-                          )} />
-                          <span className="text-xs font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-widest transition-colors">
-                            {(match.matchScore || 0) === 100 ? "Verified 100%" : "Processing"}
-                          </span>
-                        </div>
-
-                        {/* Status */}
-                        <div className="relative z-10">
-                          <Badge
-                            className={cn(
-                              "font-black text-[9px] uppercase tracking-widest border-none px-3 py-1",
-                              match.status === "Accepted" ? "bg-blue-500/10 text-blue-400" :
-                                match.status === "Rejected" ? "bg-rose-500/10 text-rose-400" : "bg-indigo-500/10 text-indigo-400"
-                            )}
-                          >
-                            {match.status}
-                          </Badge>
-                        </div>
-
-                        {/* Date */}
-                        <div className="font-mono text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors uppercase tracking-widest relative z-10">
-                          {match.timestamp}
-                        </div>
-
-                        {/* Action */}
-                        <div className="text-right relative z-10">
-                          {match.status === "Pending" ? (
-                            <Button
-                              size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20 gap-2 font-black text-[10px] uppercase tracking-widest px-4 h-9 rounded-xl transition-all"
-                              onClick={() => setSelectedMatch(match)}
-                            >
-                              Review
-                            </Button>
-                          ) : match.status === "Computed" && (match.matchScore || 0) === 100 ? (
-                            <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 font-black text-[9px] uppercase tracking-widest px-3 py-1.5">
-                              <Clock className="h-3 w-3 mr-1.5 inline" />
-                              Awaiting Application
-                            </Badge>
-                          ) : match.status === "Accepted" || match.status === "Rejected" ? (
-                            <button className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-500 hover:text-blue-400 hover:bg-white/10 transition-all">
-                              <Mail className="h-4 w-4" />
-                            </button>
-                          ) : (
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
-                              —
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Inner glow border */}
-                        <div className="absolute inset-[1px] rounded-[inherit] pointer-events-none border border-white/5 opacity-50 group-hover:opacity-100 transition-opacity" />
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+      <div
+        className={cn(
+          cardShell,
+          "flex flex-col gap-3 border-0 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
         )}
+      >
+        <p className="text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">Privacy:</span> identities stay minimized until you complete
+          review.
+        </p>
+        <Link to="/sponsor/active-trials" className="inline-flex items-center gap-1 text-sm font-semibold text-[#1D2634] hover:underline">
+          View protocols
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
 
-      {/* ── Decision Atmosphere Modal ── */}
+      <Card className={`${cardShell} overflow-hidden border-0`}>
+        <CardContent className="p-4 md:p-6">
+          {error && (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-600">
+              <Loader2 className="h-9 w-9 animate-spin text-[#1D2634]" />
+              <p className="text-sm font-medium">Loading matches…</p>
+            </div>
+          ) : matches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+                <UserCheck className="h-7 w-7 text-slate-400" />
+              </div>
+              <h3 className="font-display text-lg font-semibold text-slate-900">No candidates yet</h3>
+              <p className="mt-1 max-w-sm text-sm text-slate-500">
+                When patients apply to your trials, they will appear here by protocol.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-10">
+              {groupedEntries.map(([trialId, group]) => (
+                <div key={trialId} className="space-y-4">
+                  <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 ring-1 ring-slate-200/80">
+                        <ShieldCheck className="h-5 w-5 text-[#1D2634]" />
+                      </div>
+                      <div>
+                        <h3 className="font-display text-lg font-semibold text-slate-900">{group.trialName}</h3>
+                        <p className="font-mono text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                          Protocol {trialId}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className="w-fit border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700">
+                      {group.matches.length} {group.matches.length === 1 ? "candidate" : "candidates"}
+                    </Badge>
+                  </div>
+
+                  <div className="hidden min-w-0 md:block">
+                    <div className="mb-2 grid min-w-[720px] grid-cols-[1.5fr_1fr_1fr_1fr_120px] gap-4 px-5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 md:px-6">
+                      <span>Identity</span>
+                      <span>Match</span>
+                      <span>Status</span>
+                      <span>Time</span>
+                      <span className="text-right">Action</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 overflow-x-auto pb-1">
+                    {group.matches.map((match) => (
+                      <MatchRow
+                        key={match.id}
+                        match={match}
+                        trialId={trialId}
+                        onSelect={setSelectedMatch}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <AnimatePresence>
         {selectedMatch && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
+            <motion.button
+              type="button"
+              aria-label="Close"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => !updatingId && setSelectedMatch(null)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+              className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
             />
 
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 30 }}
+              initial={{ scale: 0.96, opacity: 0, y: 12 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 30 }}
-              className="relative w-full max-w-xl rounded-[40px] bg-[#050b14] border border-white/10 shadow-[0_0_80px_rgba(20,184,166,0.1)] overflow-hidden flex flex-col pt-10"
+              exit={{ scale: 0.96, opacity: 0, y: 12 }}
+              className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
             >
-              {/* Animated Mesh Backround inside Modal */}
-              <div className="absolute inset-0 pointer-events-none opacity-20">
-                <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/30 blur-[100px] rounded-full animate-pulse" />
-                <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-500/20 blur-[100px] rounded-full animate-pulse delay-700" />
+              <div className="border-b border-slate-100 px-6 py-5 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1D2634]/10 ring-1 ring-[#1D2634]/15">
+                  <UserCheck className="h-6 w-6 text-[#1D2634]" />
+                </div>
+                <h3 className="font-display text-xl font-semibold text-slate-900">Protocol review</h3>
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  ID {selectedMatch.patientId?.slice(0, 18)}…
+                </p>
               </div>
 
-              <div className="px-10 pb-8 relative z-10 text-center">
-                <div className="mx-auto w-16 h-16 rounded-3xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 shadow-2xl">
-                  <UserCheck className="h-7 w-7 text-blue-400" />
-                </div>
-                <h3 className="text-3xl font-black text-white tracking-tighter mb-2">
-                  Protocol Review
-                </h3>
-                <p className="text-slate-400 font-mono text-xs uppercase tracking-[0.2em] mb-8">
-                  Patient ID: <span className="text-blue-400">{selectedMatch.patientId.slice(0, 16)}...</span>
-                </p>
-
-                <div className="space-y-6 text-left">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-end">
-                      <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
-                        Secure Cryptographic Response
-                      </label>
-                      <ShieldCheck className="h-4 w-4 text-blue-500/50" />
-                    </div>
+              <div className="space-y-5 px-6 py-5">
+                {!selectedMatch.isAnonymous && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-600">Message to applicant (optional)</label>
                     <textarea
-                      placeholder="Enter contact instructions or match feedback. This message will be FHE-encrypted..."
-                      className="w-full h-40 p-6 rounded-3xl border border-white/10 bg-white/5 text-slate-200 text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/30 outline-none transition-all resize-none shadow-inner"
+                      placeholder="Instructions or feedback…"
+                      className="h-32 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-[#1D2634]/40 focus:ring-2 focus:ring-[#1D2634]/15"
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                     />
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 gap-5">
-                    <Button
-                      variant="outline"
-                      className="h-16 rounded-3xl bg-white/5 border border-white/10 hover:bg-rose-500/10 hover:border-rose-500/30 text-slate-400 hover:text-rose-400 font-black text-xs uppercase tracking-[0.2em] transition-all group"
-                      onClick={() => handleUpdateStatus(selectedMatch.trialId, selectedMatch.patientAddress, 3)}
-                      disabled={!!updatingId}
-                    >
-                      {updatingId ? <Loader2 className="h-5 w-5 animate-spin" /> : "Decline Protocol"}
-                    </Button>
-                    <Button
-                      className="h-16 rounded-3xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-[0.2em] transition-all shadow-[0_20px_40px_-10px_rgba(20,184,166,0.3)]"
-                      onClick={() => handleUpdateStatus(selectedMatch.trialId, selectedMatch.patientAddress, 2)}
-                      disabled={!!updatingId}
-                    >
-                      {updatingId ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify & Accept"}
-                    </Button>
-                  </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    className="h-12 rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800"
+                    onClick={() => {
+                      if (selectedMatch.isAnonymous) {
+                        handleUpdateAnonymousStatus(selectedMatch.trialId, selectedMatch.nullifier, 3);
+                      } else {
+                        handleUpdateStatus(selectedMatch.trialId, selectedMatch.patientAddress, 3);
+                      }
+                    }}
+                    disabled={!!updatingId}
+                  >
+                    {updatingId ? <Loader2 className="h-5 w-5 animate-spin" /> : "Decline"}
+                  </Button>
+                  <Button
+                    className="h-12 rounded-xl border border-[#1D2634] bg-[#1D2634] text-sm font-semibold text-white shadow-none hover:bg-[#151c28]"
+                    onClick={() => {
+                      if (selectedMatch.isAnonymous) {
+                        handleUpdateAnonymousStatus(selectedMatch.trialId, selectedMatch.nullifier, 2);
+                      } else {
+                        handleUpdateStatus(selectedMatch.trialId, selectedMatch.patientAddress, 2);
+                      }
+                    }}
+                    disabled={!!updatingId}
+                  >
+                    {updatingId ? <Loader2 className="h-5 w-5 animate-spin" /> : "Accept"}
+                  </Button>
                 </div>
               </div>
 
-              <div className="px-10 py-5 bg-white/5 border-t border-white/5 flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(20,184,166,1)]" />
-                  <span className="font-mono text-[9px] uppercase tracking-widest text-slate-500 font-black">FHE Coprocessor Optimized</span>
-                </div>
+              <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-6 py-3">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  Encrypted workflow
+                </span>
                 <button
+                  type="button"
                   onClick={() => !updatingId && setSelectedMatch(null)}
-                  className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors"
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900"
                 >
-                  Cancel Review
+                  Cancel
                 </button>
               </div>
             </motion.div>
@@ -348,4 +443,3 @@ export function SponsorMatchesPage() {
     </div>
   );
 }
-

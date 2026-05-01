@@ -7,7 +7,7 @@ import {
   Entity,
   Bytes,
   Address,
-  BigInt
+  BigInt,
 } from "@graphprotocol/graph-ts";
 
 export class ActionLogged extends ethereum.Event {
@@ -33,6 +33,98 @@ export class ActionLogged__Params {
 
   get patientHash(): Bytes {
     return this._event.parameters[2].value.toBytes();
+  }
+}
+
+export class DetailedActionLogged extends ethereum.Event {
+  get params(): DetailedActionLogged__Params {
+    return new DetailedActionLogged__Params(this);
+  }
+}
+
+export class DetailedActionLogged__Params {
+  _event: DetailedActionLogged;
+
+  constructor(event: DetailedActionLogged) {
+    this._event = event;
+  }
+
+  get action(): i32 {
+    return this._event.parameters[0].value.toI32();
+  }
+
+  get trialId(): BigInt {
+    return this._event.parameters[1].value.toBigInt();
+  }
+
+  get patientHash(): Bytes {
+    return this._event.parameters[2].value.toBytes();
+  }
+
+  get timestamp(): BigInt {
+    return this._event.parameters[3].value.toBigInt();
+  }
+
+  get performer(): Address {
+    return this._event.parameters[4].value.toAddress();
+  }
+
+  get logHeadPosition(): BigInt {
+    return this._event.parameters[5].value.toBigInt();
+  }
+}
+
+export class LogBufferWrapped extends ethereum.Event {
+  get params(): LogBufferWrapped__Params {
+    return new LogBufferWrapped__Params(this);
+  }
+}
+
+export class LogBufferWrapped__Params {
+  _event: LogBufferWrapped;
+
+  constructor(event: LogBufferWrapped) {
+    this._event = event;
+  }
+
+  get logHead(): BigInt {
+    return this._event.parameters[0].value.toBigInt();
+  }
+}
+
+export class OwnershipAccepted extends ethereum.Event {
+  get params(): OwnershipAccepted__Params {
+    return new OwnershipAccepted__Params(this);
+  }
+}
+
+export class OwnershipAccepted__Params {
+  _event: OwnershipAccepted;
+
+  constructor(event: OwnershipAccepted) {
+    this._event = event;
+  }
+
+  get newOwner(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+}
+
+export class OwnershipProposed extends ethereum.Event {
+  get params(): OwnershipProposed__Params {
+    return new OwnershipProposed__Params(this);
+  }
+}
+
+export class OwnershipProposed__Params {
+  _event: OwnershipProposed;
+
+  constructor(event: OwnershipProposed) {
+    this._event = event;
+  }
+
+  get proposedOwner(): Address {
+    return this._event.parameters[0].value.toAddress();
   }
 }
 
@@ -70,7 +162,7 @@ export class DataAccessLog__logsResult {
     value1: BigInt,
     value2: Bytes,
     value3: BigInt,
-    value4: Address
+    value4: Address,
   ) {
     this.value0 = value0;
     this.value1 = value1;
@@ -83,7 +175,7 @@ export class DataAccessLog__logsResult {
     let map = new TypedMap<string, ethereum.Value>();
     map.set(
       "value0",
-      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value0))
+      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value0)),
     );
     map.set("value1", ethereum.Value.fromUnsignedBigInt(this.value1));
     map.set("value2", ethereum.Value.fromFixedBytes(this.value2));
@@ -118,32 +210,55 @@ export class DataAccessLog extends ethereum.SmartContract {
     return new DataAccessLog("DataAccessLog", address);
   }
 
+  MAX_LOG_ENTRIES(): BigInt {
+    let result = super.call(
+      "MAX_LOG_ENTRIES",
+      "MAX_LOG_ENTRIES():(uint256)",
+      [],
+    );
+
+    return result[0].toBigInt();
+  }
+
+  try_MAX_LOG_ENTRIES(): ethereum.CallResult<BigInt> {
+    let result = super.tryCall(
+      "MAX_LOG_ENTRIES",
+      "MAX_LOG_ENTRIES():(uint256)",
+      [],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBigInt());
+  }
+
   getLog(_index: BigInt): DataAccessLog__getLogResultValue0Struct {
     let result = super.call(
       "getLog",
       "getLog(uint256):((uint8,uint256,bytes32,uint256,address))",
-      [ethereum.Value.fromUnsignedBigInt(_index)]
+      [ethereum.Value.fromUnsignedBigInt(_index)],
     );
 
     return changetype<DataAccessLog__getLogResultValue0Struct>(
-      result[0].toTuple()
+      result[0].toTuple(),
     );
   }
 
   try_getLog(
-    _index: BigInt
+    _index: BigInt,
   ): ethereum.CallResult<DataAccessLog__getLogResultValue0Struct> {
     let result = super.tryCall(
       "getLog",
       "getLog(uint256):((uint8,uint256,bytes32,uint256,address))",
-      [ethereum.Value.fromUnsignedBigInt(_index)]
+      [ethereum.Value.fromUnsignedBigInt(_index)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
     }
     let value = result.value;
     return ethereum.CallResult.fromValue(
-      changetype<DataAccessLog__getLogResultValue0Struct>(value[0].toTuple())
+      changetype<DataAccessLog__getLogResultValue0Struct>(value[0].toTuple()),
     );
   }
 
@@ -166,7 +281,7 @@ export class DataAccessLog extends ethereum.SmartContract {
     let result = super.call(
       "isAuthorizedLogger",
       "isAuthorizedLogger(address):(bool)",
-      [ethereum.Value.fromAddress(param0)]
+      [ethereum.Value.fromAddress(param0)],
     );
 
     return result[0].toBoolean();
@@ -176,7 +291,7 @@ export class DataAccessLog extends ethereum.SmartContract {
     let result = super.tryCall(
       "isAuthorizedLogger",
       "isAuthorizedLogger(address):(bool)",
-      [ethereum.Value.fromAddress(param0)]
+      [ethereum.Value.fromAddress(param0)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -189,7 +304,7 @@ export class DataAccessLog extends ethereum.SmartContract {
     let result = super.call(
       "logs",
       "logs(uint256):(uint8,uint256,bytes32,uint256,address)",
-      [ethereum.Value.fromUnsignedBigInt(param0)]
+      [ethereum.Value.fromUnsignedBigInt(param0)],
     );
 
     return new DataAccessLog__logsResult(
@@ -197,7 +312,7 @@ export class DataAccessLog extends ethereum.SmartContract {
       result[1].toBigInt(),
       result[2].toBytes(),
       result[3].toBigInt(),
-      result[4].toAddress()
+      result[4].toAddress(),
     );
   }
 
@@ -205,7 +320,7 @@ export class DataAccessLog extends ethereum.SmartContract {
     let result = super.tryCall(
       "logs",
       "logs(uint256):(uint8,uint256,bytes32,uint256,address)",
-      [ethereum.Value.fromUnsignedBigInt(param0)]
+      [ethereum.Value.fromUnsignedBigInt(param0)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -217,8 +332,8 @@ export class DataAccessLog extends ethereum.SmartContract {
         value[1].toBigInt(),
         value[2].toBytes(),
         value[3].toBigInt(),
-        value[4].toAddress()
-      )
+        value[4].toAddress(),
+      ),
     );
   }
 
@@ -230,6 +345,21 @@ export class DataAccessLog extends ethereum.SmartContract {
 
   try_owner(): ethereum.CallResult<Address> {
     let result = super.tryCall("owner", "owner():(address)", []);
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toAddress());
+  }
+
+  pendingOwner(): Address {
+    let result = super.call("pendingOwner", "pendingOwner():(address)", []);
+
+    return result[0].toAddress();
+  }
+
+  try_pendingOwner(): ethereum.CallResult<Address> {
+    let result = super.tryCall("pendingOwner", "pendingOwner():(address)", []);
     if (result.reverted) {
       return new ethereum.CallResult();
     }
@@ -260,6 +390,32 @@ export class ConstructorCall__Outputs {
   _call: ConstructorCall;
 
   constructor(call: ConstructorCall) {
+    this._call = call;
+  }
+}
+
+export class AcceptOwnershipCall extends ethereum.Call {
+  get inputs(): AcceptOwnershipCall__Inputs {
+    return new AcceptOwnershipCall__Inputs(this);
+  }
+
+  get outputs(): AcceptOwnershipCall__Outputs {
+    return new AcceptOwnershipCall__Outputs(this);
+  }
+}
+
+export class AcceptOwnershipCall__Inputs {
+  _call: AcceptOwnershipCall;
+
+  constructor(call: AcceptOwnershipCall) {
+    this._call = call;
+  }
+}
+
+export class AcceptOwnershipCall__Outputs {
+  _call: AcceptOwnershipCall;
+
+  constructor(call: AcceptOwnershipCall) {
     this._call = call;
   }
 }
@@ -298,6 +454,36 @@ export class LogActionCall__Outputs {
   _call: LogActionCall;
 
   constructor(call: LogActionCall) {
+    this._call = call;
+  }
+}
+
+export class ProposeOwnershipCall extends ethereum.Call {
+  get inputs(): ProposeOwnershipCall__Inputs {
+    return new ProposeOwnershipCall__Inputs(this);
+  }
+
+  get outputs(): ProposeOwnershipCall__Outputs {
+    return new ProposeOwnershipCall__Outputs(this);
+  }
+}
+
+export class ProposeOwnershipCall__Inputs {
+  _call: ProposeOwnershipCall;
+
+  constructor(call: ProposeOwnershipCall) {
+    this._call = call;
+  }
+
+  get _newOwner(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+}
+
+export class ProposeOwnershipCall__Outputs {
+  _call: ProposeOwnershipCall;
+
+  constructor(call: ProposeOwnershipCall) {
     this._call = call;
   }
 }

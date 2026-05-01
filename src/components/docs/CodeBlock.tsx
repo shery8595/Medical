@@ -20,7 +20,7 @@ export function CodeBlock({ code, language = "solidity", filename, className }: 
     };
 
     return (
-        <div className={cn("my-6 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-950 shadow-xl", className)}>
+        <div className={cn("my-6 overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-xl", className)}>
             {/* Header */}
             <div className="flex items-center justify-between bg-slate-900 px-4 py-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">

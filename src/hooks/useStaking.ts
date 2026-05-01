@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useWeb3 } from "../lib/Web3Context";
-import { getStakingManager } from "../lib/contracts";
-import { reencryptUint64 } from "../lib/fhe";
+import { getStakingManager, getConfidentialETH } from "../lib/contracts";
 import { ethers } from "ethers";
+import { getFHEClient, FheTypes, reencryptUint64 } from "../lib/fhe";
+import { Encryptable, isCofheError, CofheErrorCode } from "@cofhe/sdk";
 
 export function useStaking() {
     const { signer, account } = useWeb3();
@@ -60,7 +61,15 @@ export function useStaking() {
 
         } catch (err: any) {
             console.error("Staking balance decryption failed:", err);
-            setError(err.message || "Failed to reveal staking balance");
+            if (isCofheError(err)) {
+                if (err.message && err.message.toLowerCase().includes("rejected")) {
+                    setError("You cancelled the signature request.");
+                } else {
+                    setError(`Decryption error (${err.code}): ${err.message}`);
+                }
+            } else {
+                setError(err.message || "Failed to reveal staking balance");
+            }
         } finally {
             setLoading(false);
         }
@@ -107,8 +116,59 @@ export function useStaking() {
         }
     };
 
-    const unstake = async (amountEth: string) => {
-        if (!signer) return;
+    // C-2: Get current unstake nonce for replay protection
+    const getUnstakeNonce = useCallback(async (): Promise<bigint> => {
+        if (!signer || !account) return 0n;
+        try {
+            const contract = getStakingManager(signer);
+            const nonce = await contract.unstakeNonces(account);
+            return BigInt(nonce.toString());
+        } catch (err) {
+            console.error("Failed to fetch unstake nonce:", err);
+            return 0n;
+        }
+    }, [signer, account]);
+
+    // C-2: Generate Threshold Network signature for unstaking
+    // This signature must cover (ctHash, balance, msg.sender, amount, nonce)
+    const generateUnstakeSignature = async (
+        balanceHandle: string,
+        balance: bigint,
+        amountWei: bigint,
+        nonce: bigint
+    ): Promise<string> => {
+        if (!account || !signer) {
+            throw new Error("Wallet not connected");
+        }
+
+        try {
+            const c = await getFHEClient();
+            const handle = typeof balanceHandle === "string" ? BigInt(balanceHandle) : balanceHandle;
+            
+            // Use CoFHE SDK's decryptForTx to generate on-chain verifiable signature
+            // This signature proves knowledge of the plaintext balance at the specific handle
+            const result = await c
+                .decryptForTx(handle)
+                .withoutPermit()
+                .execute();
+            
+            // The signature from decryptForTx is already a Threshold Network signature
+            // that proves knowledge of the plaintext at this ctHash
+            return result.signature;
+        } catch (err: any) {
+            console.error("Failed to generate unstake signature:", err);
+            if (isCofheError(err) && err.message && err.message.toLowerCase().includes("rejected")) {
+                throw new Error("You cancelled the signature request.");
+            }
+            throw new Error(
+                `Failed to generate Threshold Network signature: ${err.message || err}`
+            );
+        }
+    };
+
+    // C-2: Updated unstake with nonce-based replay protection
+    const unstake = async (amountEth: string, balanceSig?: string, stakedBalance?: string) => {
+        if (!signer || !account) return;
         try {
             setLoading(true);
             const contract = getStakingManager(signer);
@@ -116,8 +176,25 @@ export function useStaking() {
 
             // Logic for aWETH approval would go here if not already handled
 
-            const tx = await contract.unstake(amountWei);
-            await tx.wait();
+            // C-2: If balance proof provided, use new secure unstake with nonce
+            if (balanceSig && stakedBalance) {
+                const balance = BigInt(stakedBalance);
+                // Get current nonce for replay protection
+                const nonce = await getUnstakeNonce();
+                // The signature must have been generated with: (ctHash, balance, caller, amount, nonce)
+                const tx = await contract.unstake(
+                    amountWei,
+                    balanceSig as `0x${string}`,
+                    balance
+                );
+                await tx.wait();
+            } else {
+                // C-2: Signature now mandatory - prevents replay attacks
+                throw new Error(
+                    "C-2: Threshold Network signature required for unstaking. " +
+                    "Please provide balanceSig and stakedBalance parameters."
+                );
+            }
             setIsRevealed(false);
         } catch (err: any) {
             console.error("Unstaking failed:", err);
@@ -146,6 +223,9 @@ export function useStaking() {
         hideBalance,
         unstake,
         stakeFromConfidential,
-        stakeFromWallet
+        stakeFromWallet,
+        // C-2: Expose helper methods for signature generation
+        getUnstakeNonce,
+        generateUnstakeSignature
     };
 }

@@ -7,8 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
-import { getSponsorIncentiveVault, getEligibilityEngine, getTrialMilestoneManager } from "../lib/contracts";
-import { ethers } from "ethers";
 import { useState, useEffect } from "react";
 import { CriteriaBuilder } from "../components/dashboard/CriteriaBuilder";
 import { AutomationHeartbeat } from "../components/dashboard/AutomationHeartbeat";
@@ -33,6 +31,15 @@ import {
     ShieldAlert
 } from "lucide-react";
 import { motion } from "framer-motion";
+import {
+    distributePartialMilestone,
+    fundTrialPool,
+    getTrialPoolAndMilestones,
+    promoteParticipantAndDistribute,
+    resetMilestonePagination,
+    setTrialMilestones,
+    updateTrialApplicationStatus,
+} from "../lib/contracts/sponsorAdapters";
 
 export function SponsorTrialDetailsPage() {
     const { id } = useParams();
@@ -41,7 +48,8 @@ export function SponsorTrialDetailsPage() {
     const { matches, loading: matchesLoading } = useMatches(account || undefined);
 
     const trial = trials.find(t => t.id === id);
-    const trialMatches = matches.filter(m => m.trialId === id);
+    const trialMatches = matches.filter(m => m.trialId === id && !m.isAnonymous);
+    const anonymousMatchCount = matches.filter(m => m.trialId === id && m.isAnonymous).length;
 
     const [fundingAmount, setFundingAmount] = useState("");
     const [fundingStatus, setFundingStatus] = useState<string | null>(null);
@@ -65,32 +73,13 @@ export function SponsorTrialDetailsPage() {
         const fetchProtocolData = async () => {
             if (!signer || !id) return;
             try {
-                // Fetch Pool Info
-                const vault = getSponsorIncentiveVault(signer);
-                const funded = await vault.getTotalDeposited(id);
-                const distributed = await vault.isDistributed(id);
+                const protocolData = await getTrialPoolAndMilestones(signer, id);
                 setPoolInfo({
-                    totalFunded: ethers.formatEther(funded),
-                    distributed
+                    totalFunded: protocolData.totalFunded,
+                    distributed: protocolData.distributed,
                 });
-
-                // Fetch Milestones
-                const mm = getTrialMilestoneManager(signer);
-                const rawMilestones = await mm.getMilestones(id);
-                if (rawMilestones && rawMilestones.length > 0) {
-                    const formatted = rawMilestones.map((m: any, idx: number) => ({
-                        name: m.name,
-                        weightBps: Number(m.weightBps),
-                        deadline: Number(m.deadline),
-                        distributed: false // We should fetch this from vault
-                    }));
-
-                    // Check distribution status for each milestone
-                    const updated = await Promise.all(formatted.map(async (m: any, idx: number) => {
-                        const isDist = await vault.milestoneDistributed(id, idx);
-                        return { ...m, distributed: isDist };
-                    }));
-                    setMilestones(updated);
+                if (protocolData.milestones.length > 0) {
+                    setMilestones(protocolData.milestones);
                 }
                 setMilestonesLoading(false);
             } catch (err) {
@@ -105,27 +94,7 @@ export function SponsorTrialDetailsPage() {
         if (!signer || !id) return;
         setDecisionStatus("Broadcasting decision to network...");
         try {
-            const engine = getEligibilityEngine(signer);
-
-            // Hex encode the message (public for now, but stored in the contract's message field)
-            const hexMessage = ethers.hexlify(ethers.toUtf8Bytes(decisionMessage || "No message provided"));
-
-            const tx = await engine.updateApplicationStatus(
-                id,
-                patientAddress,
-                newStatus, // 2 = Accepted, 3 = Rejected
-                hexMessage
-            );
-
-            await tx.wait();
-
-            // V1.2.3: Automatic Registration for Reward Pool on Approval
-            if (newStatus === 2) {
-                setDecisionStatus("Onboarding to incentive pool...");
-                const vault = getSponsorIncentiveVault(signer);
-                const txReg = await vault.registerParticipant(BigInt(id), patientAddress);
-                await txReg.wait();
-            }
+            await updateTrialApplicationStatus(signer, id, patientAddress, newStatus, decisionMessage);
 
             setDecisionStatus("Success! Status updated and enrolled.");
             setSelectedMatch(null);
@@ -141,14 +110,10 @@ export function SponsorTrialDetailsPage() {
         if (!signer || !id || !fundingAmount) return;
         setFundingStatus("Processing deposit...");
         try {
-            const vault = getSponsorIncentiveVault(signer);
-            const tx = await vault.fundTrial(id, { value: ethers.parseEther(fundingAmount) });
-            await tx.wait();
+            const totalFunded = await fundTrialPool(signer, id, fundingAmount);
             setFundingStatus("Success! Pool funded.");
             setFundingAmount("");
-            // Refresh pool info
-            const funded = await vault.getTotalDeposited(id);
-            setPoolInfo(prev => ({ ...prev, totalFunded: ethers.formatEther(funded) }));
+            setPoolInfo(prev => ({ ...prev, totalFunded }));
         } catch (err: any) {
             console.error(err);
             setFundingStatus(`Error: ${err.reason || err.message || "Failed to fund"}`);
@@ -159,18 +124,10 @@ export function SponsorTrialDetailsPage() {
         if (!signer || !id) return;
         setMilestoneStatus("Defining trial phases...");
         try {
-            const mm = getTrialMilestoneManager(signer);
-            const names = newMilestones.map(m => m.name);
-            const weights = newMilestones.map(m => m.weight);
-            const deadlines = newMilestones.map(m => m.deadline);
-
-            const tx = await mm.setMilestones(id, names, weights, deadlines);
-            await tx.wait();
+            const updatedMilestones = await setTrialMilestones(signer, id, newMilestones);
             setMilestoneStatus("Success! Milestones established.");
             setIsDefiningMilestones(false);
-            // Refresh
-            const raw = await mm.getMilestones(id);
-            setMilestones(raw.map((r: any) => ({ name: r.name, weightBps: Number(r.weightBps), deadline: Number(r.deadline), distributed: false })));
+            setMilestones(updatedMilestones);
         } catch (err: any) {
             console.error(err);
             setMilestoneStatus(`Error: ${err.reason || err.message || "Failed to set milestones"}`);
@@ -181,9 +138,7 @@ export function SponsorTrialDetailsPage() {
         if (!signer || !id) return;
         setMilestoneStatus(`Initiating payout for Phase ${index + 1}...`);
         try {
-            const vault = getSponsorIncentiveVault(signer);
-            const tx = await vault.distributePartial(id, index);
-            await tx.wait();
+            await distributePartialMilestone(signer, id, index);
             setMilestoneStatus(`Success! Phase ${index + 1} rewards distributed.`);
             // Update local state
             setMilestones(prev => prev.map((m, i) => i === index ? { ...m, distributed: true } : m));
@@ -193,13 +148,26 @@ export function SponsorTrialDetailsPage() {
         }
     };
 
+    // HIGH-3: Handler to reset stuck pagination state
+    const handleResetPagination = async (index: number) => {
+        if (!signer || !id) return;
+        setMilestoneStatus(`Resetting pagination for Phase ${index + 1}...`);
+        try {
+            await resetMilestonePagination(signer, id, index);
+            setMilestoneStatus(`Success! Pagination state reset.`);
+        } catch (err: any) {
+            console.error(err);
+            setMilestoneStatus(`Error: ${err.reason || err.message || "Reset failed"}`);
+        }
+    };
+
     const fadeIn = {
         initial: { opacity: 0, y: 10 },
         animate: { opacity: 1, y: 0 },
         transition: { duration: 0.4 }
     };
 
-    if (trialsLoading || !trial) {
+    if (trialsLoading) {
         return (
             <div className="py-32 flex flex-col items-center justify-center gap-4">
                 <Sparkles className="h-8 w-8 text-accent animate-pulse" />
@@ -208,11 +176,28 @@ export function SponsorTrialDetailsPage() {
         );
     }
 
+    if (!trial) {
+        return (
+            <div className="py-32 flex flex-col items-center justify-center gap-4 text-center">
+                <Sparkles className="h-8 w-8 text-slate-300" />
+                <div>
+                    <p className="font-mono text-xs uppercase tracking-widest text-slate-500">Protocol not found</p>
+                    <p className="mt-2 text-sm text-slate-500 max-w-md">
+                        This trial is not available from the current subgraph/deployment. Check that the subgraph is synced to the latest contracts.
+                    </p>
+                </div>
+                <Link to="/sponsor/active-trials" className="text-sm font-semibold text-accent hover:text-accent/80">
+                    Back to active trials
+                </Link>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8 pb-12">
             {/* ─── Header Section ─── */}
             <div className="flex flex-col gap-4">
-                <Link to="/sponsor/trials" className="group flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-accent transition-colors">
+                <Link to="/sponsor/active-trials" className="group flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-accent transition-colors">
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
                     Back to Trials
                 </Link>
@@ -234,6 +219,15 @@ export function SponsorTrialDetailsPage() {
                                 <Calendar className="h-3 w-3" /> Ends on {new Date(parseInt(trial.endTime) * 1000).toLocaleString()}
                             </p>
                         )}
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
+                            <Link to="/sponsor/patient-matches" className="text-accent hover:text-accent/80 transition-colors">
+                                Candidate Queue
+                            </Link>
+                            <span className="text-slate-300 dark:text-slate-700">|</span>
+                            <Link to="/sponsor/analytics" className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                                Analytics
+                            </Link>
+                        </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <Button variant="outline" size="sm" className="gap-2">
@@ -415,12 +409,14 @@ export function SponsorTrialDetailsPage() {
                                                     </div>
                                                     <Button
                                                         size="sm"
-                                                        variant={m.distributed ? "outline" : "outline"}
+                                                        variant="outline"
                                                         disabled={m.distributed || poolInfo.distributed}
                                                         onClick={() => handleDistributePartial(idx)}
                                                         className={cn(
-                                                            "h-8 text-[10px] font-bold uppercase",
-                                                            !m.distributed && "bg-slate-100 dark:bg-slate-800"
+                                                            "h-8 min-w-[7.5rem] text-[10px] font-bold uppercase disabled:opacity-100",
+                                                            m.distributed
+                                                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                                                : "bg-slate-100 text-slate-800",
                                                         )}
                                                     >
                                                         {m.distributed ? "Distributed" : "Release Funds"}
@@ -454,7 +450,7 @@ export function SponsorTrialDetailsPage() {
                                                 <Button
                                                     onClick={handleFundTrial}
                                                     disabled={!fundingAmount || poolInfo.distributed}
-                                                    className="bg-amber-500 hover:bg-amber-600 text-white px-6 rounded-xl font-bold shadow-lg shadow-amber-500/20"
+                                                    className="bg-amber-500 hover:bg-amber-600 text-white px-6 rounded-xl font-bold shadow-lg shadow-amber-500/20 disabled:opacity-100 disabled:bg-amber-400/40 disabled:text-white/90 disabled:shadow-none"
                                                 >
                                                     Deposit
                                                 </Button>
@@ -496,6 +492,12 @@ export function SponsorTrialDetailsPage() {
                 <div className="xl:col-span-5 space-y-6">
                     <section className="space-y-4">
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Recent Matches</h3>
+                        {anonymousMatchCount > 0 && (
+                            <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-300 text-xs font-medium">
+                                {anonymousMatchCount} anonymous application{anonymousMatchCount > 1 ? "s are" : " is"} pending/managed via nullifier flow.
+                                Use the Sponsor Matches page to review anonymous candidates.
+                            </div>
+                        )}
                         <div className="space-y-3">
                             {matchesLoading ? (
                                 <p className="text-sm text-slate-500 italic">Syncing matches...</p>
@@ -610,25 +612,17 @@ export function SponsorTrialDetailsPage() {
                                                                                 if (!signer || !id) return;
                                                                                 setDecisionStatus(`Promoting to ${m.name}...`);
                                                                                 try {
-                                                                                    const vault = getSponsorIncentiveVault(signer);
-                                                                                    
-                                                                                    // 0. V1.2.4: Check if already paid to avoid CALL_EXCEPTION (auto-distribution fallback)
-                                                                                    const isPaid = await vault.participantMilestonePaid(id, match.patientAddress, mIdx);
-                                                                                    if (isPaid) {
+                                                                                    const result = await promoteParticipantAndDistribute(
+                                                                                        signer,
+                                                                                        id,
+                                                                                        match.patientAddress,
+                                                                                        mIdx
+                                                                                    );
+                                                                                    if (result.alreadyPaid) {
                                                                                         setDecisionStatus(`Success! Reward for ${m.name} was already distributed.`);
                                                                                         return;
                                                                                     }
-
-                                                                                    // 1. Mark Milestone as Complete
-                                                                                    const mm = getTrialMilestoneManager(signer);
-                                                                                    const tx1 = await mm.completeMilestone(id, match.patientAddress, mIdx);
-                                                                                    await tx1.wait();
- 
-                                                                                    // 2. Trigger Individual Payout
                                                                                     setDecisionStatus(`Success! Promoted to ${m.name}. Processing reward...`);
-                                                                                    const tx2 = await vault.distributeMilestoneToParticipant(id, match.patientAddress, mIdx);
-                                                                                    await tx2.wait();
- 
                                                                                     setDecisionStatus(`Success! Promoted & Reward Sent for ${m.name}.`);
                                                                                 } catch (err: any) {
                                                                                     console.error("Promotion Error:", err);
@@ -714,7 +708,7 @@ export function SponsorTrialDetailsPage() {
                                 ))
                             )}
                             {trialMatches.length > 0 && (
-                                <Link to="/sponsor/matches" className="flex items-center justify-center gap-2 p-3 text-sm font-bold text-slate-500 hover:text-accent transition-colors">
+                                <Link to="/sponsor/patient-matches" className="flex items-center justify-center gap-2 p-3 text-sm font-bold text-slate-500 hover:text-accent transition-colors">
                                     View All Matches <ChevronRight className="h-4 w-4" />
                                 </Link>
                             )}

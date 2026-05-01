@@ -1,24 +1,24 @@
 import { Link } from "react-router-dom";
-import { AnalyticsCard } from "../components/dashboard/AnalyticsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import {
   Plus,
   ArrowRight,
-  Sparkles,
-  ShieldCheck,
   Users,
   Activity,
   CheckCircle2,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Wallet,
+  MoreHorizontal,
+  LayoutList,
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { useWeb3 } from "../lib/Web3Context";
 import { useSponsorDashboard } from "../hooks/useSponsorDashboard";
 import { useTrials } from "../hooks/useTrials";
 import { Trial } from "../types";
+import { SectionTopBar } from "../components/layout/SectionTopBar";
 
 interface RecentActivity {
   id: string;
@@ -28,307 +28,307 @@ interface RecentActivity {
   trialName: string;
 }
 
+const cardShell =
+  "rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_12px_-2px_rgba(15,23,42,0.05)]";
+
 export function SponsorDashboard() {
-  const { account } = useWeb3();
+  const { account, connect, isConnecting, error: connectError } = useWeb3();
   const { stats, statusDistribution, recentActivity, loading: statsLoading } = useSponsorDashboard();
   const { trials, loading: trialsLoading } = useTrials(undefined, account || undefined);
 
   const loading = statsLoading || trialsLoading;
+  const tableTrials = trials.slice(0, 6);
+  const recruitmentTrials = trials.slice(0, 4);
+
+  const statusByName = Object.fromEntries(statusDistribution.map((s) => [s.name, s.value])) as Record<string, number>;
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight">
-            Sponsor Portal
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
-            Real-time trial performance and participant recruitment analytics.
-          </p>
+      <SectionTopBar
+        title="MedVault"
+        rightContent={(
+          <div className="flex items-center gap-3 md:gap-4">
+            {account ? (
+              <div className="hidden md:flex items-center gap-2.5 rounded-full bg-white px-4 py-2 border border-slate-200/90 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-slate-100">
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-slate-100 to-slate-200/90 flex items-center justify-center ring-1 ring-white shadow-sm">
+                  <Wallet className="h-3.5 w-3.5 text-slate-600" />
+                </div>
+                <span className="font-mono text-xs font-medium text-slate-700 tracking-tight">
+                  {`${account.slice(0, 4)}…${account.slice(-4)}`}
+                </span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void connect()}
+                disabled={isConnecting}
+                title={connectError ?? "Log in"}
+                className="hidden md:inline-flex items-center gap-2.5 rounded-full bg-white px-4 py-2 border border-slate-200/90 font-mono text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:pointer-events-none shadow-sm"
+              >
+                <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0 ring-1 ring-slate-200/60">
+                  <Wallet className="h-3.5 w-3.5 text-slate-600" />
+                </div>
+                {isConnecting ? "Connecting…" : "Log in"}
+              </button>
+            )}
+          </div>
+        )}
+      />
+
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white via-white to-slate-50/40 px-6 py-8 md:px-10 md:py-9 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/50">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-teal-500/[0.06] blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-slate-400/[0.07] blur-3xl" />
+
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Sponsor console
+            </p>
+            <h2 className="font-display text-3xl font-semibold tracking-tight text-slate-900 md:text-[2rem] md:leading-tight">
+              Sponsor Dashboard
+            </h2>
+            <p className="max-w-lg text-sm leading-relaxed text-slate-600">
+              Overview of trials, applications, and recruitment — all in one place.
+            </p>
+          </div>
+          <Link to="/sponsor/trials/create" className="shrink-0">
+            <Button
+              size="lg"
+              className="gap-2 rounded-xl border border-slate-800 bg-slate-900 px-6 text-white shadow-none hover:bg-slate-800"
+            >
+              <Plus className="h-5 w-5" strokeWidth={2.25} />
+              Create trial
+            </Button>
+          </Link>
         </div>
-        <Link to="/sponsor/trials/create">
-          <Button size="lg" className="gap-2 shadow-xl shadow-blue-500/20 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl px-6">
-            <Plus className="h-5 w-5" /> Create New Trial
-          </Button>
-        </Link>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         <MetricCard
-          title="Active Trials"
+          title="Active trials"
           value={stats.activeTrials}
-          icon={<Activity className="h-5 w-5 text-blue-500" />}
-          description="Live recruitment"
+          tint="blue"
+          icon={<Activity className="h-5 w-5" />}
         />
         <MetricCard
-          title="Total Applications"
+          title="Applications"
           value={stats.totalApplications}
-          icon={<Users className="h-5 w-5 text-indigo-500" />}
-          description="All-time matched"
+          tint="indigo"
+          icon={<Users className="h-5 w-5" />}
         />
         <MetricCard
           title="Accepted"
           value={stats.acceptedApplications}
-          icon={<CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-          description="Ready for screening"
+          tint="emerald"
+          icon={<CheckCircle2 className="h-5 w-5" />}
         />
         <MetricCard
-          title="Match Rate"
+          title="Match rate"
           value={`${stats.avgMatchRate}%`}
-          icon={<TrendingUp className="h-5 w-5 text-amber-500" />}
-          description="Avg. eligibility"
+          tint="amber"
+          icon={<TrendingUp className="h-5 w-5" />}
         />
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Analytics Section */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Activity className="h-5 w-5 text-blue-600" /> Enrollment Hub
-            </h3>
-            <Link to="/sponsor/analytics" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1">
-              Deep Dive <ArrowRight className="h-4 w-4" />
-            </Link>
+      <section className={`${cardShell} overflow-hidden`}>
+        <div className="flex flex-col gap-1 border-b border-slate-100 bg-slate-50/70 px-6 py-5 md:flex-row md:items-center md:justify-between md:px-8 md:py-6">
+          <div>
+            <h3 className="font-display text-lg font-semibold tracking-tight text-slate-900">Protocols</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Active and draft trials linked to your sponsor account.</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="pb-2 border-b border-slate-100/50 dark:border-slate-800/50">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-bold tracking-tight">Application Pipeline</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="flex flex-col h-full">
-                  <AnalyticsCard
-                    title=""
-                    type="pie"
-                    data={statusDistribution}
-                    centerLabel={{ value: stats.totalApplications, label: 'Applicants' }}
-                  />
-                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    {statusDistribution.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                        <div
-                          className="h-2 w-2 rounded-full shadow-[0_0_8px_rgba(var(--color))] "
-                          style={{ backgroundColor: ['#14B8A6', '#6366F1', '#F43F5E'][idx % 3] }}
-                        />
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.name}</span>
-                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{item.value}</span>
-                        </div>
+          <Link
+            to="/sponsor/active-trials"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 md:mt-0"
+          >
+            View all
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100 bg-white">
+                <th className="px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:px-8">Trial</th>
+                <th className="px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Phase</th>
+                <th className="px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Applicants</th>
+                <th className="px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                <th className="px-6 py-3.5 md:px-8" aria-hidden />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-14 text-center text-sm text-slate-500 md:px-8">
+                    Loading protocols…
+                  </td>
+                </tr>
+              ) : tableTrials.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-0">
+                    <div className="flex flex-col items-center px-6 py-14 text-center md:px-8">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 ring-1 ring-slate-200/80">
+                        <LayoutList className="h-7 w-7 text-slate-400" strokeWidth={1.5} />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                      <p className="font-display text-base font-semibold text-slate-900">No protocols yet</p>
+                      <p className="mt-1 max-w-sm text-sm text-slate-500">
+                        Create a trial to start recruiting and tracking applicants here.
+                      </p>
+                      <Link
+                        to="/sponsor/trials/create"
+                        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-none transition-colors hover:bg-slate-800"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create trial
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                tableTrials.map((trial: Trial) => (
+                  <tr key={trial.id} className="transition-colors hover:bg-slate-50/90">
+                    <td className="px-6 py-4 md:px-8 md:py-5">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium text-slate-900">{trial.name}</span>
+                        <span className="font-mono text-[11px] text-slate-500">#{trial.id.slice(-6).toUpperCase()}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600 md:py-5">{trial.phase || "—"}</td>
+                    <td className="px-6 py-4 text-sm tabular-nums text-slate-700 md:py-5">{trial.matchCount || 0}</td>
+                    <td className="px-6 py-4 md:py-5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                          trial.active
+                            ? "border-emerald-200/80 bg-emerald-50 text-emerald-800"
+                            : "border-slate-200 bg-slate-50 text-slate-600"
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${trial.active ? "bg-emerald-500" : "bg-slate-400"}`} />
+                        {trial.active ? "Active" : "Draft"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right md:px-8 md:py-5">
+                      <Link
+                        to={`/sponsor/trials/${trial.id}`}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 ring-1 ring-slate-200/80 transition-colors hover:bg-white hover:text-slate-700 hover:ring-slate-300"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-            <Card className="border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-              <CardHeader className="pb-2 border-b border-slate-100/50 dark:border-slate-800/50 flex flex-row items-center justify-between">
-                <CardTitle className="text-lg font-bold tracking-tight">Active Recruitment</CardTitle>
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 ">
-                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">Real-time</span>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                  {trials.length > 0 ? trials.slice(0, 4).map((trial) => (
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2 grid grid-cols-1 gap-5 md:grid-cols-2">
+          <Card className={`${cardShell} overflow-hidden border-0`}>
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 border-b border-slate-100 bg-slate-50/40 px-5 py-4">
+              <div>
+                <CardTitle className="font-display text-base font-semibold text-slate-900">Applications</CardTitle>
+                <p className="mt-0.5 text-xs text-slate-500">By review status</p>
+              </div>
+              <Link
+                to="/sponsor/analytics"
+                className="text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800"
+              >
+                Analytics →
+              </Link>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="grid grid-cols-3 gap-3">
+                <StatusMini label="Pending" value={statusByName.Pending ?? 0} className="bg-amber-50/90 ring-amber-200/60 text-amber-900" />
+                <StatusMini label="Accepted" value={statusByName.Accepted ?? 0} className="bg-emerald-50/90 ring-emerald-200/60 text-emerald-900" />
+                <StatusMini label="Rejected" value={statusByName.Rejected ?? 0} className="bg-rose-50/90 ring-rose-200/50 text-rose-900" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`${cardShell} overflow-hidden border-0`}>
+            <CardHeader className="border-b border-slate-100 bg-slate-50/40 px-5 py-4">
+              <CardTitle className="font-display text-base font-semibold text-slate-900">Recruitment</CardTitle>
+              <p className="mt-0.5 text-xs text-slate-500">Recent trial activity</p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-slate-100">
+                {recruitmentTrials.length > 0 ? (
+                  recruitmentTrials.map((trial) => (
                     <Link
                       key={trial.id}
                       to={`/sponsor/trials/${trial.id}`}
-                      className="group block p-5 hover:bg-white/50 dark:hover:bg-slate-800/30 transition-all duration-500 relative overflow-hidden"
+                      className="flex items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-slate-50/90"
                     >
-                      <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="space-y-1.5">
-                            <span className="text-sm font-black text-slate-900 dark:text-slate-50 group-hover:text-blue-600 transition-colors tracking-tight block">
-                              {trial.name}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[9px] h-4.5 px-2 uppercase font-black tracking-widest text-blue-600 border-blue-500/20 bg-blue-500/5 dark:text-blue-400">
-                                {trial.phase}
-                              </Badge>
-                              <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
-                              <span className="text-[9px] font-mono font-bold text-slate-400 tracking-wider">#{trial.id.slice(-4).toUpperCase()}</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end">
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-xl font-black text-slate-900 dark:text-slate-50 tracking-tighter transition-transform group-hover:scale-110 origin-right">
-                                {(trial.matchCount || 0)}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-400">/ 50</span>
-                            </div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mt-0.5">Matched</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="relative h-2 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden p-[1px]">
-                            {/* Inner background glow */}
-                            <div className="absolute inset-x-0 h-full bg-blue-500/5 animate-pulse" />
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(((trial.matchCount || 0) / 50) * 100, 100)}%` }}
-                              transition={{ duration: 1.5, ease: "easeOut" }}
-                              className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full shadow-[0_0_8px_rgba(20,184,166,0.5)] relative overflow-hidden"
-                            >
-                              {/* Shimmer effect */}
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                            </motion.div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-1.5">
-                              <Users className="h-3 w-3 text-slate-300" />
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Protocol Capacity</span>
-                            </div>
-                            <div className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-black tracking-tighter">
-                              {Math.round(Math.min(((trial.matchCount || 0) / 50) * 100, 100))}% REACHED
-                            </div>
-                          </div>
-                        </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{trial.name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{trial.phase || "—"}</p>
                       </div>
-
-                      {/* Interactive background highlight */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/[0.02] to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                      <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200/80">
+                        {trial.matchCount ?? 0}
+                      </span>
                     </Link>
-                  )) : (
-                    <div className="py-20 text-center space-y-3">
-                      <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-700">
-                        <Activity className="h-6 w-6" />
-                      </div>
-                      <p className="text-sm font-medium text-slate-400 italic">No recruitment trails active</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-              <div className="p-4 border-t border-slate-100/50 dark:border-slate-800/50 bg-slate-50/30 dark:bg-transparent">
-                <Button variant="ghost" size="sm" className="w-full text-xs font-bold text-slate-500 hover:text-blue-600 gap-2 rounded-xl group/btn">
-                  Manage Pipeline <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        {/* Side Section: Recent Activity & Info */}
-        <div className="space-y-8">
-          <div>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-indigo-600" /> Recent Activity
-              </h3>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20">
-                <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Live</span>
-              </div>
-            </div>
-            <Card className="border-slate-200/60 dark:border-slate-800/60 shadow-sm bg-white/50 dark:bg-slate-900/40 backdrop-blur-sm overflow-hidden">
-              <CardContent className="p-0">
-                {(recentActivity as RecentActivity[]).length > 0 ? (
-                  <div className="relative">
-                    {/* Timeline Spine */}
-                    <div className="absolute left-[29px] top-0 bottom-0 w-px bg-gradient-to-b from-indigo-500/30 via-slate-200 dark:via-slate-700 to-transparent" />
-
-                    {(recentActivity as RecentActivity[]).map((activity, i) => {
-                      const isAccepted = activity.status === 'Accepted';
-                      const isRejected = activity.status === 'Rejected';
-
-                      const statusClasses = isAccepted
-                        ? { bg: 'bg-emerald-500', ring: 'ring-emerald-500/20', icon: 'bg-emerald-500 text-white', text: 'text-emerald-500', bgLight: 'bg-emerald-50 dark:bg-emerald-950/30' }
-                        : isRejected
-                          ? { bg: 'bg-rose-500', ring: 'ring-rose-500/20', icon: 'bg-rose-500 text-white', text: 'text-rose-500', bgLight: 'bg-rose-50 dark:bg-rose-950/30' }
-                          : { bg: 'bg-indigo-500', ring: 'ring-indigo-500/20', icon: 'bg-indigo-500 text-white', text: 'text-indigo-500', bgLight: 'bg-indigo-50 dark:bg-indigo-950/30' };
-
-                      // Relative time
-                      const timeAgo = (() => {
-                        const diff = Math.floor((Date.now() - activity.timestamp) / 1000);
-                        if (diff < 60) return 'Just now';
-                        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-                        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-                        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-                        return new Date(activity.timestamp).toLocaleDateString();
-                      })();
-
-                      return (
-                        <div
-                          key={activity.id}
-                          className="group relative flex gap-4 p-5 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-all duration-300 cursor-default"
-                        >
-                          {/* Timeline node */}
-                          <div className="relative z-10 flex-shrink-0">
-                            <div className={`h-[18px] w-[18px] rounded-full ${statusClasses.icon} ring-4 ${statusClasses.ring} flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-125`}>
-                              {isAccepted ? (
-                                <CheckCircle2 className="h-2.5 w-2.5" />
-                              ) : isRejected ? (
-                                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                              ) : (
-                                <Clock className="h-2.5 w-2.5" />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0 -mt-0.5">
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <Badge variant="outline" className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0 h-5 border ${isAccepted ? 'text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/30 dark:border-emerald-800' : isRejected ? 'text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-900/30 dark:border-rose-800' : 'text-indigo-600 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-800'}`}>
-                                {activity.status}
-                              </Badge>
-                              <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{timeAgo}</span>
-                            </div>
-
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug mb-2 truncate">
-                              {activity.trialName}
-                            </p>
-
-                            <div className="flex items-center gap-2">
-                              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700/50">
-                                <div className="h-2 w-2 rounded-full bg-slate-400/30" />
-                                <code className="text-[9px] font-mono font-bold text-slate-500 dark:text-slate-400">
-                                  {activity.patientId.slice(0, 6)}···{activity.patientId.slice(-4)}
-                                </code>
-                              </div>
-                              <span className="text-[8px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-[0.15em]">Patient</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  ))
                 ) : (
-                  <div className="py-16 text-center">
-                    <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 mb-3">
-                      <Clock className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <p className="text-sm font-medium text-slate-400">No recent applications</p>
+                  <div className="px-5 py-12 text-center">
+                    <p className="text-sm font-medium text-slate-700">No trials to show</p>
+                    <p className="mt-1 text-xs text-slate-500">Create a trial to see recruitment here.</p>
+                    <Link
+                      to="/sponsor/trials/create"
+                      className="mt-4 inline-flex text-sm font-semibold text-teal-700 hover:text-teal-800"
+                    >
+                      Create trial →
+                    </Link>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white border-none p-6 relative overflow-hidden rounded-3xl group">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-[80px] rounded-full group-hover:bg-blue-500/20 transition-all duration-700" />
-            <div className="relative z-10">
-              <div className="p-2 bg-white/10 w-fit rounded-xl mb-4 backdrop-blur-md">
-                <ShieldCheck className="h-6 w-6 text-blue-400" />
               </div>
-              <h4 className="text-blue-400 font-bold uppercase tracking-widest text-[10px] mb-2">FHE Infrastructure Active</h4>
-              <p className="text-xl font-bold mb-3 leading-tight tracking-tight">Enterprise Grade Privacy Protection</p>
-              <p className="text-slate-400 text-xs leading-relaxed mb-6">
-                MedVault employs Fully Homomorphic Encryption. Patient identities remain shielded until you both securely establish contact.
-              </p>
-              <Button size="sm" variant="outline" className="text-white border-white/20 hover:bg-white/10 rounded-xl px-4 text-xs font-bold transition-all">
-                Security Audit Logs
-              </Button>
-            </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-0.5">
+            <Clock className="h-4 w-4 text-slate-400" strokeWidth={2} />
+            <h3 className="font-display text-base font-semibold text-slate-900">Recent activity</h3>
+          </div>
+          <Card className={`${cardShell} overflow-hidden border-0`}>
+            <CardContent className="p-0">
+              {(recentActivity as RecentActivity[]).length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {(recentActivity as RecentActivity[]).map((activity) => {
+                    const isAccepted = activity.status === "Accepted";
+                    const isRejected = activity.status === "Rejected";
+                    return (
+                      <div key={activity.id} className="px-4 py-3.5 transition-colors hover:bg-slate-50/80">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-semibold px-2 py-0 h-5 border ${
+                              isAccepted
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : isRejected
+                                  ? "border-rose-200 bg-rose-50 text-rose-800"
+                                  : "border-slate-200 bg-slate-50 text-slate-700"
+                            }`}
+                          >
+                            {activity.status}
+                          </Badge>
+                          <span className="text-[10px] font-medium tabular-nums text-slate-400">
+                            {formatTimeAgo(activity.timestamp)}
+                          </span>
+                        </div>
+                        <p className="truncate text-sm font-medium text-slate-800">{activity.trialName}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-12 text-center">
+                  <p className="text-sm text-slate-600">No application updates yet.</p>
+                  <p className="mt-1 text-xs text-slate-500">Activity will show as candidates apply.</p>
+                </div>
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>
@@ -336,62 +336,60 @@ export function SponsorDashboard() {
   );
 }
 
-function MetricCard({ title, value, icon, description }: { title: string, value: string | number, icon: React.ReactNode, description: string }) {
-  // Determine color theme based on icon/title to match the "Liquid Glass" style
-  const isTeal = title.toLowerCase().includes('active');
-  const isIndigo = title.toLowerCase().includes('total');
-  const isEmerald = title.toLowerCase().includes('accepted');
-  const isAmber = title.toLowerCase().includes('rate');
+const tintStyles = {
+  blue: "from-blue-500/12 to-blue-600/5 text-blue-600 ring-blue-200/50",
+  indigo: "from-indigo-500/12 to-indigo-600/5 text-indigo-600 ring-indigo-200/50",
+  emerald: "from-emerald-500/12 to-emerald-600/5 text-emerald-600 ring-emerald-200/50",
+  amber: "from-amber-500/15 to-amber-600/5 text-amber-600 ring-amber-200/50",
+} as const;
 
-  const glowColor = isTeal ? 'rgba(20, 184, 166, 0.15)' :
-    isIndigo ? 'rgba(79, 70, 229, 0.15)' :
-      isEmerald ? 'rgba(16, 185, 129, 0.15)' :
-        'rgba(245, 158, 11, 0.15)';
-
-  const accentColor = isTeal ? 'bg-blue-500' :
-    isIndigo ? 'bg-indigo-500' :
-      isEmerald ? 'bg-emerald-500' :
-        'bg-amber-500';
-
+function MetricCard({
+  title,
+  value,
+  icon,
+  tint,
+}: {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  tint: keyof typeof tintStyles;
+}) {
   return (
-    <Card className="group relative overflow-hidden border-slate-200/40 dark:border-white/10 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl transition-all duration-500 ease-out hover:shadow-2xl hover:shadow-slate-200/20 dark:hover:shadow-black/40 hover:-translate-y-1">
-      {/* Morphing Background Layer */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-in-out pointer-events-none">
-        <div className={`absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[80px] animate-pulse ${accentColor} opacity-20`} />
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-slate-200/5 dark:to-white/5" />
-      </div>
-
-      <CardContent className="p-6 relative z-10">
-        <div className="flex items-center justify-between mb-5">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">
-              {title}
-            </span>
-          </div>
-          <div className="relative">
-            <div
-              className="absolute inset-0 blur-xl opacity-40 group-hover:opacity-80 transition-opacity duration-500"
-              style={{ backgroundColor: glowColor.replace('0.15', '0.6') }}
-            />
-            <div className="relative p-2.5 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-sm transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3">
-              {icon}
-            </div>
+    <Card
+      className={`${cardShell} group overflow-hidden border-0 transition-shadow duration-200 hover:shadow-[0_8px_24px_-6px_rgba(15,23,42,0.1)]`}
+    >
+      <CardContent className="relative p-5 md:p-6">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/80 to-transparent" />
+        <div className="flex items-start justify-between gap-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{title}</span>
+          <div
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${tintStyles[tint]} ring-1 shadow-sm`}
+          >
+            {icon}
           </div>
         </div>
-
-        <div className="flex flex-col">
-          <span className="text-4xl font-black text-slate-900 dark:text-slate-50 tracking-tighter mb-1.5 transition-all duration-500 group-hover:scale-[1.02] origin-left">
-            {value}
-          </span>
-          <div className="flex items-center gap-2">
-            <div className={`h-1 w-1 rounded-full ${accentColor} animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.6)]`} />
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{description}</p>
-          </div>
-        </div>
+        <p className="font-display mt-4 text-3xl font-semibold tracking-tight text-slate-900 tabular-nums md:text-[2rem]">
+          {value}
+        </p>
       </CardContent>
-
-      {/* "Inner Glow" border effect */}
-      <div className="absolute inset-[1px] rounded-[inherit] pointer-events-none border border-white/10 dark:border-white/5 opacity-50 group-hover:opacity-100 transition-opacity" />
     </Card>
   );
+}
+
+function StatusMini({ label, value, className }: { label: string; value: number; className: string }) {
+  return (
+    <div className={`rounded-xl px-2 py-3 text-center ring-1 shadow-sm ${className}`}>
+      <p className="text-xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">{label}</p>
+    </div>
+  );
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const diff = Math.floor((Date.now() - timestamp) / 1000);
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(timestamp).toLocaleDateString();
 }

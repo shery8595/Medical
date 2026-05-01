@@ -7,7 +7,7 @@ import {
   Entity,
   Bytes,
   Address,
-  BigInt
+  BigInt,
 } from "@graphprotocol/graph-ts";
 
 export class MilestoneCompleted extends ethereum.Event {
@@ -58,6 +58,42 @@ export class MilestonesSet__Params {
   }
 }
 
+export class OwnershipAccepted extends ethereum.Event {
+  get params(): OwnershipAccepted__Params {
+    return new OwnershipAccepted__Params(this);
+  }
+}
+
+export class OwnershipAccepted__Params {
+  _event: OwnershipAccepted;
+
+  constructor(event: OwnershipAccepted) {
+    this._event = event;
+  }
+
+  get newOwner(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+}
+
+export class OwnershipProposed extends ethereum.Event {
+  get params(): OwnershipProposed__Params {
+    return new OwnershipProposed__Params(this);
+  }
+}
+
+export class OwnershipProposed__Params {
+  _event: OwnershipProposed;
+
+  constructor(event: OwnershipProposed) {
+    this._event = event;
+  }
+
+  get proposedOwner(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+}
+
 export class TrialManagerUpdated extends ethereum.Event {
   get params(): TrialManagerUpdated__Params {
     return new TrialManagerUpdated__Params(this);
@@ -100,37 +136,33 @@ export class TrialMilestoneManager extends ethereum.SmartContract {
   }
 
   getMilestones(
-    _trialId: BigInt
+    _trialId: BigInt,
   ): Array<TrialMilestoneManager__getMilestonesResultValue0Struct> {
     let result = super.call(
       "getMilestones",
       "getMilestones(uint256):((string,uint16,uint256)[])",
-      [ethereum.Value.fromUnsignedBigInt(_trialId)]
+      [ethereum.Value.fromUnsignedBigInt(_trialId)],
     );
 
-    return result[0].toTupleArray<
-      TrialMilestoneManager__getMilestonesResultValue0Struct
-    >();
+    return result[0].toTupleArray<TrialMilestoneManager__getMilestonesResultValue0Struct>();
   }
 
   try_getMilestones(
-    _trialId: BigInt
+    _trialId: BigInt,
   ): ethereum.CallResult<
     Array<TrialMilestoneManager__getMilestonesResultValue0Struct>
   > {
     let result = super.tryCall(
       "getMilestones",
       "getMilestones(uint256):((string,uint16,uint256)[])",
-      [ethereum.Value.fromUnsignedBigInt(_trialId)]
+      [ethereum.Value.fromUnsignedBigInt(_trialId)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
     }
     let value = result.value;
     return ethereum.CallResult.fromValue(
-      value[0].toTupleArray<
-        TrialMilestoneManager__getMilestonesResultValue0Struct
-      >()
+      value[0].toTupleArray<TrialMilestoneManager__getMilestonesResultValue0Struct>(),
     );
   }
 
@@ -140,8 +172,8 @@ export class TrialMilestoneManager extends ethereum.SmartContract {
       "getParticipantProgress(uint256,address):(uint256)",
       [
         ethereum.Value.fromUnsignedBigInt(_trialId),
-        ethereum.Value.fromAddress(_patient)
-      ]
+        ethereum.Value.fromAddress(_patient),
+      ],
     );
 
     return result[0].toBigInt();
@@ -149,15 +181,15 @@ export class TrialMilestoneManager extends ethereum.SmartContract {
 
   try_getParticipantProgress(
     _trialId: BigInt,
-    _patient: Address
+    _patient: Address,
   ): ethereum.CallResult<BigInt> {
     let result = super.tryCall(
       "getParticipantProgress",
       "getParticipantProgress(uint256,address):(uint256)",
       [
         ethereum.Value.fromUnsignedBigInt(_trialId),
-        ethereum.Value.fromAddress(_patient)
-      ]
+        ethereum.Value.fromAddress(_patient),
+      ],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -187,8 +219,8 @@ export class TrialMilestoneManager extends ethereum.SmartContract {
       "participantProgress(uint256,address):(uint256)",
       [
         ethereum.Value.fromUnsignedBigInt(param0),
-        ethereum.Value.fromAddress(param1)
-      ]
+        ethereum.Value.fromAddress(param1),
+      ],
     );
 
     return result[0].toBigInt();
@@ -196,21 +228,36 @@ export class TrialMilestoneManager extends ethereum.SmartContract {
 
   try_participantProgress(
     param0: BigInt,
-    param1: Address
+    param1: Address,
   ): ethereum.CallResult<BigInt> {
     let result = super.tryCall(
       "participantProgress",
       "participantProgress(uint256,address):(uint256)",
       [
         ethereum.Value.fromUnsignedBigInt(param0),
-        ethereum.Value.fromAddress(param1)
-      ]
+        ethereum.Value.fromAddress(param1),
+      ],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
     }
     let value = result.value;
     return ethereum.CallResult.fromValue(value[0].toBigInt());
+  }
+
+  pendingOwner(): Address {
+    let result = super.call("pendingOwner", "pendingOwner():(address)", []);
+
+    return result[0].toAddress();
+  }
+
+  try_pendingOwner(): ethereum.CallResult<Address> {
+    let result = super.tryCall("pendingOwner", "pendingOwner():(address)", []);
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toAddress());
   }
 
   trialManager(): Address {
@@ -221,6 +268,21 @@ export class TrialMilestoneManager extends ethereum.SmartContract {
 
   try_trialManager(): ethereum.CallResult<Address> {
     let result = super.tryCall("trialManager", "trialManager():(address)", []);
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toAddress());
+  }
+
+  vault(): Address {
+    let result = super.call("vault", "vault():(address)", []);
+
+    return result[0].toAddress();
+  }
+
+  try_vault(): ethereum.CallResult<Address> {
+    let result = super.tryCall("vault", "vault():(address)", []);
     if (result.reverted) {
       return new ethereum.CallResult();
     }
@@ -259,6 +321,32 @@ export class ConstructorCall__Outputs {
   }
 }
 
+export class AcceptOwnershipCall extends ethereum.Call {
+  get inputs(): AcceptOwnershipCall__Inputs {
+    return new AcceptOwnershipCall__Inputs(this);
+  }
+
+  get outputs(): AcceptOwnershipCall__Outputs {
+    return new AcceptOwnershipCall__Outputs(this);
+  }
+}
+
+export class AcceptOwnershipCall__Inputs {
+  _call: AcceptOwnershipCall;
+
+  constructor(call: AcceptOwnershipCall) {
+    this._call = call;
+  }
+}
+
+export class AcceptOwnershipCall__Outputs {
+  _call: AcceptOwnershipCall;
+
+  constructor(call: AcceptOwnershipCall) {
+    this._call = call;
+  }
+}
+
 export class CompleteMilestoneCall extends ethereum.Call {
   get inputs(): CompleteMilestoneCall__Inputs {
     return new CompleteMilestoneCall__Inputs(this);
@@ -293,6 +381,36 @@ export class CompleteMilestoneCall__Outputs {
   _call: CompleteMilestoneCall;
 
   constructor(call: CompleteMilestoneCall) {
+    this._call = call;
+  }
+}
+
+export class ProposeOwnershipCall extends ethereum.Call {
+  get inputs(): ProposeOwnershipCall__Inputs {
+    return new ProposeOwnershipCall__Inputs(this);
+  }
+
+  get outputs(): ProposeOwnershipCall__Outputs {
+    return new ProposeOwnershipCall__Outputs(this);
+  }
+}
+
+export class ProposeOwnershipCall__Inputs {
+  _call: ProposeOwnershipCall;
+
+  constructor(call: ProposeOwnershipCall) {
+    this._call = call;
+  }
+
+  get _newOwner(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+}
+
+export class ProposeOwnershipCall__Outputs {
+  _call: ProposeOwnershipCall;
+
+  constructor(call: ProposeOwnershipCall) {
     this._call = call;
   }
 }
@@ -365,6 +483,36 @@ export class SetTrialManagerCall__Outputs {
   _call: SetTrialManagerCall;
 
   constructor(call: SetTrialManagerCall) {
+    this._call = call;
+  }
+}
+
+export class SetVaultCall extends ethereum.Call {
+  get inputs(): SetVaultCall__Inputs {
+    return new SetVaultCall__Inputs(this);
+  }
+
+  get outputs(): SetVaultCall__Outputs {
+    return new SetVaultCall__Outputs(this);
+  }
+}
+
+export class SetVaultCall__Inputs {
+  _call: SetVaultCall;
+
+  constructor(call: SetVaultCall) {
+    this._call = call;
+  }
+
+  get _vault(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+}
+
+export class SetVaultCall__Outputs {
+  _call: SetVaultCall;
+
+  constructor(call: SetVaultCall) {
     this._call = call;
   }
 }

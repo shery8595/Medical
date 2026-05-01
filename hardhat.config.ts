@@ -15,16 +15,37 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
 const config: HardhatUserConfig = {
     defaultNetwork: "hardhat",
     solidity: {
-        version: "0.8.27",
-        settings: {
-            viaIR: true,
-            optimizer: {
-                enabled: true,
-                runs: 1,
+        compilers: [
+            {
+                version: "0.8.27",
+                settings: {
+                    viaIR: true,
+                    optimizer: {
+                        enabled: true,
+                        runs: 1,
+                    },
+                    evmVersion: "cancun",
+                    metadata: {
+                        bytecodeHash: "none",
+                    },
+                },
             },
-            evmVersion: "cancun",
-            metadata: {
-                bytecodeHash: "none",
+        ],
+        // HonkVerifier uses raw EVM assembly that is not annotated with
+        // "memory-safe", so the Yul optimizer (viaIR) rejects it.
+        // Compile it without viaIR so assembly goes through the classic
+        // EVM code-gen path instead.
+        overrides: {
+            "contracts/HonkVerifier.sol": {
+                version: "0.8.27",
+                settings: {
+                    viaIR: false,
+                    optimizer: {
+                        enabled: true,
+                        runs: 1,
+                    },
+                    evmVersion: "cancun",
+                },
             },
         },
     },

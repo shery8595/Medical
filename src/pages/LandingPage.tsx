@@ -1,744 +1,1652 @@
-import React, { useState, useEffect } from "react";
-import { Button } from "../components/ui/Button";
+﻿import { Fragment, useEffect, useId, useRef, useState, type ComponentType, type SVGProps } from "react";
 import { Link } from "react-router-dom";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import {
-  ShieldCheck,
+  Activity,
+  ArrowUp,
   ArrowRight,
-  Sparkles,
-  Globe,
-  Lock,
-  Unlock,
+  BadgeCheck,
+  Check,
   CheckCircle2,
   ChevronRight,
+  ClipboardList,
   Cpu,
-  Key,
+  Database,
+  Dna,
+  ExternalLink,
+  Eye,
+  MessageCircle,
+  FileCheck,
+  FileText,
+  Fingerprint,
+  FlaskConical,
+  Globe,
+  ImageIcon,
+  KeyRound,
+  Lock,
+  Minus,
+  Pill,
+  Server,
   Shield,
+  UserCheck,
+  UserRound,
   Zap,
-  Terminal,
-  Building2,
 } from "lucide-react";
-import { motion } from "framer-motion";
-import { HeartbeatBackground } from "../components/ui/HeartbeatBackground";
-import { AuraBackground } from "../components/landing/AuraBackground";
-import { StartBuildingButton } from "../components/landing/StartBuildingButton";
-import { ScrollStory } from "../components/landing/ScrollStory";
+import { cn } from "../lib/utils";
 
-/* ─── Typewriter Hook ─────────────────────────────────────────────────────── */
-function useTypewriter(words: string[], speed = 80, pause = 1800) {
-  const [displayed, setDisplayed] = useState("");
-  const [wordIdx, setWordIdx] = useState(0);
-  const [charIdx, setCharIdx] = useState(0);
-  const [deleting, setDeleting] = useState(false);
+/* ─── shared animation config ─────────────────────────────────────────────── */
 
-  useEffect(() => {
-    const current = words[wordIdx];
-    const delay = deleting ? speed / 2 : charIdx === current.length ? pause : speed;
+const viewportBase = { once: true as const, amount: 0.25 as const };
 
-    const timer = setTimeout(() => {
-      if (!deleting && charIdx < current.length) {
-        setDisplayed(current.slice(0, charIdx + 1));
-        setCharIdx((c) => c + 1);
-      } else if (!deleting && charIdx === current.length) {
-        if (words.length > 1) setDeleting(true);
-      } else if (deleting && charIdx > 0) {
-        setDisplayed(current.slice(0, charIdx - 1));
-        setCharIdx((c) => c - 1);
-      } else {
-        setDeleting(false);
-        setWordIdx((i) => (i + 1) % words.length);
-      }
-    }, delay);
+const transition = {
+  duration: 0.45,
+  ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+};
 
-    return () => clearTimeout(timer);
-  }, [charIdx, deleting, wordIdx, words, speed, pause]);
+const fhenixSpringSoft = { type: "spring" as const, stiffness: 280, damping: 32 };
 
-  return { displayed, wordIdx, isFinished: !deleting && charIdx === words[wordIdx].length };
+/* ─── data ─────────────────────────────────────────────────────────────────── */
+
+const pillars = [
+  {
+    icon: UserCheck,
+    title: "Anonymous matching",
+    text: "Semaphore-style proofs let you prove eligibility without exposing wallet-linked identity.",
+  },
+  {
+    icon: Lock,
+    title: "Encrypted in use",
+    text: "FHE-friendly flows keep sensitive signals in ciphertext while policies run on-chain.",
+  },
+  {
+    icon: Shield,
+    title: "Auditable consent",
+    text: "Grant and revoke sponsor access with cryptographic trails you can review anytime.",
+  },
+];
+
+const steps = [
+  { step: "01", title: "Connect & vault", body: "Link your wallet and register your health profile on-chain." },
+  { step: "02", title: "Match privately", body: "Run encrypted checks against trials that fit your criteria." },
+  { step: "03", title: "Apply with ZK", body: "Submit anonymous applications when you choose — sponsors see proofs, not raw IDs." },
+];
+
+const trustSignals = [
+  "HIPAA Compliant",
+  "Zero-Knowledge Proofs",
+  "Patient-Owned Keys",
+  "256-bit Encryption",
+  "Open Source",
+];
+
+const stats = [
+  { label: "Patient Records Protected", value: 12400, suffix: "+" },
+  { label: "Healthcare Providers", value: 340, suffix: "+" },
+  { label: "Data Breaches", value: 0, suffix: "" },
+  { label: "Uptime", value: 99.97, suffix: "%", decimals: 2 },
+];
+
+const infraLayers = [
+  {
+    icon: Shield,
+    title: "Identity & Consent Layer",
+    body: "Wallet auth, role checks, and revocable consent policies gate every read path before data access.",
+    tone: "from-[#89f5e7]/35 to-[#6bd8cb]/20",
+    accentHex: "#6bd8cb",
+  },
+  {
+    icon: Database,
+    title: "Encrypted Data Layer",
+    body: "Records stay encrypted at rest and in transit with tamper-evident logs for every sponsor interaction.",
+    tone: "from-[#8792fe]/25 to-[#89f5e7]/15",
+    accentHex: "#8792fe",
+  },
+  {
+    icon: Server,
+    title: "Proof & Compute Layer",
+    body: "Eligibility runs through ZK/FHE-compatible workflows so sponsors see proofs, not patient identifiers.",
+    tone: "from-[#c5cae9]/35 to-[#8792fe]/15",
+    accentHex: "#c5cae9",
+  },
+];
+
+const infraFlow = ["Wallet Auth", "Consent Policy", "Encrypted Match", "ZK Proof", "Audit Log"];
+
+const trustItems = [
+  { label: "HIPAA Compliant", Icon: Shield },
+  { label: "Zero-Knowledge Proofs", Icon: Eye },
+  { label: "Patient-Owned Keys", Icon: KeyRound },
+  { label: "256-bit Encryption", Icon: Lock },
+  { label: "Open Source", Icon: Globe },
+  { label: "Auditable Consent", Icon: BadgeCheck },
+  { label: "Privacy-First", Icon: Fingerprint },
+  { label: "FHE-Ready", Icon: Cpu },
+];
+
+/**
+ * Real Reddit threads (public links). Headlines shortened from post titles; blurbs summarize the topic — not verbatim quotes.
+ */
+const medicalPrivacyVoices: Array<{
+  id: string;
+  url: string;
+  source: string;
+  /** Subreddit name color (Reddit “new” light UI–style, on glass). */
+  sourceClass: string;
+  /** Ring + 3px left border when the card is selected. */
+  selectionRing: string;
+  headline: string;
+  blurb: string;
+  meta: string;
+}> = [
+  {
+    id: "mp-1",
+    url: "https://www.reddit.com/r/privacy/comments/1fblu6e/each_doctors_visit_sends_your_data_through_a/",
+    source: "r/privacy",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-teal-500/45 border-l-[3px] border-l-teal-500",
+    meta: "Public thread on Reddit",
+    headline: "Each doctor’s visit sends your data through a dozen companies",
+    blurb: "Discussion of billing, vendors, and intermediaries that may handle visit data beyond your clinician.",
+  },
+  {
+    id: "mp-2",
+    url: "https://www.reddit.com/r/privacy/comments/1se8uxf/unknown_to_most_your_health_history_is_not/",
+    source: "r/privacy",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-teal-500/45 border-l-[3px] border-l-teal-500",
+    meta: "Public thread on Reddit",
+    headline: "Your health history is not as private as people assume",
+    blurb: "Thread on what HIPAA does and does not block, and where expectations diverge from practice.",
+  },
+  {
+    id: "mp-3",
+    url: "https://www.reddit.com/r/healthIT/comments/1menyte/ai_hipaa_and_hospital_portals_unified_portal_with/",
+    source: "r/healthIT",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-cyan-500/45 border-l-[3px] border-l-cyan-500",
+    meta: "Public thread on Reddit",
+    headline: "AI, HIPAA, and unified hospital portals",
+    blurb: "Debate on aggregating portal data and using AI on exports — security and policy angles.",
+  },
+  {
+    id: "mp-4",
+    url: "https://www.reddit.com/r/healthcare/comments/1sqb7um/ai_agents_accessing_patient_data_how_are_you/",
+    source: "r/healthcare",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-emerald-500/45 border-l-[3px] border-l-emerald-500",
+    meta: "Public thread on Reddit",
+    headline: "AI agents and patient data — proving authorization",
+    blurb: "Clinicians and builders discuss how to evidence what automated tools were allowed to access.",
+  },
+  {
+    id: "mp-5",
+    url: "https://www.reddit.com/r/healthIT/comments/1q82vbw/how_do_healthcare_orgs_usually_share_sensitive/",
+    source: "r/healthIT",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-cyan-500/45 border-l-[3px] border-l-cyan-500",
+    meta: "Public thread on Reddit",
+    headline: "How orgs share sensitive documents with patients and partners",
+    blurb: "Frustrations and methods around secure exchange of labs, letters, and approvals in 2025.",
+  },
+  {
+    id: "mp-6",
+    url: "https://www.reddit.com/r/hipaa/comments/1n517ad/private_md_how_much_of_my_hipaa_compliance_will/",
+    source: "r/hipaa",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-violet-500/45 border-l-[3px] border-l-violet-500",
+    meta: "Public thread on Reddit",
+    headline: "How much does Epic handle vs. the practice for HIPAA?",
+    blurb: "A new clinic asks what the EHR covers versus policies, training, and BAAs they still need.",
+  },
+  {
+    id: "mp-7",
+    url: "https://www.reddit.com/r/23andme/comments/1ayw9y3/what_specific_privacy_concerns_do_you_have_about/",
+    source: "r/23andme",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-amber-500/45 border-l-[3px] border-l-amber-500",
+    meta: "Public thread on Reddit",
+    headline: "Privacy concerns about 23andMe and DTC tests",
+    blurb: "Users list worries after breaches and policy changes — typical direct-to-consumer genetics concerns.",
+  },
+  {
+    id: "mp-8",
+    url: "https://www.reddit.com/r/HealthInsurance/comments/1qlap92/how_do_i_avoid_my_parents_seeing_how_i_use_the/",
+    source: "r/HealthInsurance",
+    sourceClass: "text-[#1a1a1b] group-hover:underline",
+    selectionRing: "ring-rose-500/45 border-l-[3px] border-l-rose-500",
+    meta: "Public thread on Reddit",
+    headline: "Avoiding a policyholder seeing dependent care via EOBs",
+    blurb: "Adult dependents and families discuss who receives explanations of benefits and what shows up.",
+  },
+];
+
+const medicalPrivacyTop = medicalPrivacyVoices.slice(0, 4);
+const medicalPrivacyBottom = medicalPrivacyVoices.slice(4, 8);
+
+/* ─── types ─────────────────────────────────────────────────────────────────── */
+
+type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string; strokeWidth?: number | string }>;
+
+type OrbitNode = {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  sub: string;
+  position: { top?: string; bottom?: string; left?: string; right?: string };
+  delay: number;
+  accent: string;
+};
+
+const orbitNodes: OrbitNode[] = [
+  { key: "imaging", icon: ImageIcon,     label: "Imaging", sub: "MRI 2026",     position: { top: "24%",    left: "2%"   }, delay: 0.0, accent: "#00B4D8" },
+  { key: "ehr",     icon: ClipboardList, label: "EHR",     sub: "0x91\u2026a2", position: { top: "30%",    right: "-2%" }, delay: 0.4, accent: "#00B4D8" },
+  { key: "lab",     icon: FlaskConical,  label: "Lab",     sub: "CBC 03/12",    position: { top: "52%",    right: "-6%" }, delay: 0.2, accent: "#06D6A0" },
+  { key: "rx",      icon: Pill,          label: "Rx",      sub: "3 active",     position: { bottom: "14%", right: "20%" }, delay: 0.9, accent: "#00685F" },
+  { key: "gene",    icon: Dna,           label: "Gene",    sub: "AES-256",      position: { bottom: "30%", left: "-2%"  }, delay: 0.6, accent: "#00B4D8" },
+];
+
+/* ─── Hero orbit ───────────────────────────────────────────────────────────── */
+
+/** Seconds for one full orbit (dashed rings + cards); keep slow for a calm hero. */
+const HERO_ORBIT_PERIOD_SEC = 132;
+
+const heroOrbitTransition = {
+  duration: HERO_ORBIT_PERIOD_SEC,
+  repeat: Infinity,
+  ease: "linear" as const,
+};
+
+/** Outer dashed ring is 92% of box → radius 46% from center; anchor badge centers on that circle. */
+const HERO_OUTER_ORBIT_RADIUS_PCT = 46;
+
+function HeroOrbit({ reduce }: { reduce: boolean }) {
+  return (
+    <div className="pointer-events-none relative mx-auto aspect-square w-full max-w-[560px] select-none" aria-hidden>
+      <motion.div
+        className="absolute inset-[4%] rounded-full blur-3xl"
+        style={{
+          background:
+            "radial-gradient(closest-side, rgba(107,216,203,0.55), rgba(137,245,231,0.30) 55%, rgba(255,255,255,0) 80%)",
+        }}
+        animate={reduce ? undefined : { scale: [1, 1.04, 1], opacity: [0.75, 1, 0.75] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      <motion.div
+        className="absolute inset-0 origin-center"
+        animate={reduce ? { rotate: 0 } : { rotate: 360 }}
+        transition={heroOrbitTransition}
+      >
+        {[92, 72, 52].map((size, i) => (
+          <div
+            key={size}
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed"
+            style={{ width: `${size}%`, height: `${size}%`, borderColor: `rgba(10,37,64,${0.08 + i * 0.04})` }}
+          />
+        ))}
+
+        {/* Top of outer orbit: center = (50%, 50% - r); static translate so counter-rotate pivots on the ring */}
+        <div
+          className="absolute left-1/2 w-max max-w-[min(280px,52vw)] -translate-x-1/2 -translate-y-1/2"
+          style={{ top: `calc(50% - ${HERO_OUTER_ORBIT_RADIUS_PCT}%)` }}
+        >
+          <motion.div
+            className="flex justify-center origin-center"
+            animate={reduce ? { rotate: 0 } : { rotate: -360 }}
+            transition={heroOrbitTransition}
+          >
+            <motion.div
+              className="flex w-full max-w-[280px] items-center gap-2 rounded-full border border-[#bcc9c6]/60 bg-white/95 px-3 py-2 shadow-[0_10px_24px_-12px_rgba(10,37,64,0.35)] backdrop-blur-sm"
+              animate={reduce ? undefined : { y: [0, -6, 0] }}
+              transition={{ duration: 6.2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#06d6a0]">
+                <BadgeCheck className="h-3.5 w-3.5 text-white" strokeWidth={2.4} />
+              </span>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-[11px] font-bold text-[#0a2540]">ZK-Proof Verified</p>
+                <p className="truncate font-mono text-[9px] text-[#5a6a80]">proof 0xa3…c9f · 2s ago</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+
+        {orbitNodes.map((node, i) => (
+          <OrbitNodePill key={node.key} node={node} reduce={reduce} index={i} />
+        ))}
+      </motion.div>
+
+      <motion.div
+        className="absolute left-1/2 top-1/2 z-10 flex aspect-square w-[26%] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0a2540] shadow-[0_14px_30px_-10px_rgba(10,37,64,0.45)] ring-[6px] ring-white"
+        animate={reduce ? undefined : { y: [0, -4, 0] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <UserRound className="h-[48%] w-[48%] text-white" strokeWidth={1.6} />
+        <span className="absolute right-[4%] top-[8%] flex h-[24%] w-[24%] items-center justify-center rounded-full bg-[#06d6a0] ring-[3px] ring-white">
+          <Check className="h-[60%] w-[60%] text-white" strokeWidth={3.2} />
+        </span>
+      </motion.div>
+    </div>
+  );
 }
 
-/* ─── Animation Presets ───────────────────────────────────────────────────── */
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 22 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { duration: 0.6, ease: "easeOut" as any, delay },
-});
-
-const fadeIn = (delay = 0) => ({
-  initial: { opacity: 0 },
-  whileInView: { opacity: 1 },
-  viewport: { once: true },
-  transition: { duration: 0.7, delay },
-});
-
-
-
-/* ─── Bento Card wrapper ──────────────────────────────────────────────────── */
-
-
-function BentoCard({
-  children,
-  className = "",
-  delay = 0,
-  style = {},
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-  style?: React.CSSProperties;
-}) {
+function OrbitNodePill({ node, reduce, index }: { node: OrbitNode; reduce: boolean; index: number }) {
+  const Icon = node.icon;
   return (
     <motion.div
-      {...fadeUp(delay)}
-      className={`rounded-3xl p-6 lg:p-10 ${className} relative overflow-hidden group`}
-      style={{
-        background: "rgba(10, 22, 40, 0.45)",
-        backdropFilter: "blur(20px)",
-        border: "1px solid rgba(59, 130, 246, 0.15)",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-        ...style,
-      }}
+      className="absolute origin-center"
+      style={node.position}
+      animate={reduce ? { rotate: 0 } : { rotate: -360 }}
+      transition={heroOrbitTransition}
     >
-      {/* Internal subtle glow */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-      <div className="relative z-10">{children}</div>
+      <motion.div
+        className="flex min-w-[120px] max-w-[46%] items-center gap-2 rounded-2xl border border-[#bcc9c6]/60 bg-white/95 px-2.5 py-2 shadow-[0_10px_24px_-12px_rgba(10,37,64,0.25)] backdrop-blur-sm"
+        animate={reduce ? undefined : { y: [0, -6, 0] }}
+        transition={{ duration: 5.4, repeat: Infinity, ease: "easeInOut", delay: node.delay }}
+      >
+        <span
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+          style={{ backgroundColor: `${node.accent}1A`, color: node.accent }}
+        >
+          <Icon className="h-4 w-4" strokeWidth={1.8} />
+          {!reduce && (
+            <motion.span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-lg"
+              style={{ border: `2px solid ${node.accent}` }}
+              animate={{ scale: [1, 1.8, 2.2], opacity: [0.55, 0.08, 0] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeOut", delay: index * 0.35 }}
+            />
+          )}
+        </span>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-[13px] font-bold text-[#0a2540]">{node.label}</p>
+          <p className="truncate font-mono text-[10px] text-[#5a6a80]">{node.sub}</p>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
 
-function BentoLabel({ children }: { children: React.ReactNode }) {
+/* ─── Medical privacy “voices” — dual marquee + pause on card select ─────── */
+
+type MedicalVoice = (typeof medicalPrivacyVoices)[number];
+type MarqueeRowId = "top" | "bottom";
+
+/** Minimal Snoo-style avatar (evokes Reddit; not official branding). */
+function RedditSnooAvatar({ className }: { className?: string }) {
   return (
-    <p className="font-mono text-[11px] tracking-widest mb-1" style={{ color: "#3b82f6" }}>
-      {children}
-    </p>
+    <svg className={cn("h-9 w-9 shrink-0 drop-shadow-sm", className)} viewBox="0 0 40 40" fill="none" aria-hidden>
+      <circle cx="20" cy="22" r="14" fill="#FF4500" />
+      <circle cx="20" cy="18" r="11" fill="white" />
+      <path d="M10 28c2-4 6-6 10-6s8 2 10 6" stroke="#FF4500" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+      <circle cx="14" cy="17" r="2" fill="#1a1a1b" />
+      <circle cx="26" cy="17" r="2" fill="#1a1a1b" />
+      <circle cx="20" cy="6" r="3" fill="white" stroke="#FF4500" strokeWidth="1.2" />
+      <rect x="19" y="8" width="2" height="5" rx="1" fill="white" />
+      <ellipse cx="20" cy="32" rx="9" ry="5" fill="#3DDC84" />
+    </svg>
   );
 }
 
-function BentoTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-lg font-bold text-white mb-5">{children}</h3>;
+/** Reddit orange mark (right side of header, like native post UI). */
+function RedditHeaderMark({ className }: { className?: string }) {
+  return (
+    <svg className={cn("h-7 w-7 shrink-0 drop-shadow-sm", className)} viewBox="0 0 32 32" fill="none" aria-hidden>
+      <circle cx="16" cy="16" r="15" fill="#FF4500" />
+      <ellipse cx="16" cy="19" rx="8" ry="7" fill="white" />
+      <circle cx="12" cy="17" r="1.6" fill="#FF4500" />
+      <circle cx="20" cy="17" r="1.6" fill="#FF4500" />
+      <path d="M11 22c2.2 2.2 5.3 3.5 5 3.5s2.8-1.3 5-3.5" stroke="#FF4500" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+      <circle cx="16" cy="5" r="2.5" fill="white" />
+      <rect x="15" y="5" width="2" height="4" rx="0.5" fill="white" />
+    </svg>
+  );
 }
 
-/* ─── Hero Heading with Typewriter ────────────────────────────────────────── */
-const TYPEWRITER_WORDS = ["Zero Exposure.", "Full Privacy.", "Your Rules.", "Encrypted. Always."];
-
-function HeroHeading() {
-  const { displayed, wordIdx, isFinished } = useTypewriter(TYPEWRITER_WORDS, 95, 2300);
-  const currentWord = TYPEWRITER_WORDS[wordIdx];
-
-  // Map phrases to their colored segments (only applied when isFinished is true)
-  const segmentsMap: Record<string, { text: string; isRed: boolean }[]> = {
-    "Zero Exposure.": [
-      { text: "Zero", isRed: true },
-      { text: " Exposure.", isRed: false },
-    ],
-    "Full Privacy.": [
-      { text: "Full ", isRed: false },
-      { text: "Privacy.", isRed: true },
-    ],
-    "Your Rules.": [
-      { text: "Your Rules.", isRed: true },
-    ],
-    "Encrypted. Always.": [
-      { text: "Encrypted.", isRed: true },
-      { text: " Always.", isRed: false },
-    ],
-  };
-
-  const currentSegments = segmentsMap[currentWord] || [{ text: currentWord, isRed: false }];
-
-  const renderContent = () => {
-    let charOffsetCount = 0;
-    return (
-      <>
-        {currentSegments.map((segment, idx) => {
-          const startIdx = charOffsetCount;
-          const endIdx = startIdx + segment.text.length;
-          charOffsetCount = endIdx;
-
-          if (displayed.length <= startIdx) return null;
-
-          // Slice the segment text based on how much has been typed
-          const segmentVisiblePart = segment.text.slice(0, Math.max(0, displayed.length - startIdx));
-
-          return (
-            <motion.span
-              key={`${wordIdx}-${idx}`}
-              className={segment.isRed ? "font-serif italic" : ""}
-              initial={{ color: "#3b82f6" }}
-              animate={{ 
-                color: (segment.isRed && isFinished) ? "#ef4444" : "#3b82f6" 
-              }}
-              transition={{ 
-                duration: 0.7, 
-                delay: segment.isRed ? 0.2 : 0,
-                ease: "easeInOut" 
-              }}
-            >
-              {segmentVisiblePart}
-            </motion.span>
-          );
-        })}
-      </>
-    );
-  };
-
+function MedicalPrivacyPostCard({
+  v,
+  selected,
+  onPick,
+}: {
+  v: MedicalVoice;
+  selected: boolean;
+  onPick: () => void;
+}) {
   return (
-    <motion.h1
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
-      className="text-5xl md:text-[4.5rem] lg:text-[6.5rem] font-extrabold tracking-tighter text-slate-950 dark:text-white leading-[1.0] mb-8"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onPick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick();
+        }
+      }}
+      className={cn(
+        "group relative flex shrink-0 cursor-pointer flex-col overflow-hidden text-left font-sans transition duration-200 will-change-transform",
+        "w-[calc((100vw-1.5rem-2.25rem)/1.2)] min-[400px]:w-[calc((100vw-2rem-2rem)/2.1)] min-[640px]:w-[calc((100vw-3rem)/3.5)]",
+        /* Frosted glass panel (reference: ~80% white + blur) */
+        "rounded-2xl border border-white/55 bg-white/80 shadow-[0_4px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl backdrop-saturate-150",
+        "hover:border-white/70 hover:bg-white/85",
+        selected && [
+          "z-10 scale-[1.02] border-white/80 bg-white/90 shadow-[0_12px_40px_rgba(15,23,42,0.12)] ring-2 backdrop-blur-2xl",
+          v.selectionRing,
+        ]
+      )}
+      style={{ fontFamily: 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+      aria-pressed={selected}
     >
-      Medical Trials. <br />
-      <span className="relative">
-        {renderContent()}
-        <motion.span
-          className="inline-block w-[3px] h-[0.85em] ml-1 align-middle rounded-sm"
-          initial={{ background: "#3b82f6" }}
-          animate={{
-            background: (isFinished && currentSegments.slice(-1)[0]?.isRed) ? "#ef4444" : "#3b82f6",
-          }}
-          transition={{
-            duration: 0.7,
-            delay: 0.2,
-            ease: "easeInOut"
-          }}
-          style={{
-            animation: "heroCursorBlink 1s step-start infinite",
-          }}
-        />
-      </span>
-    </motion.h1>
+      <div className="flex min-w-0 flex-col px-4 py-4 sm:px-5 sm:py-[1.125rem]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <RedditSnooAvatar />
+            <div className="min-w-0">
+              <a
+                href={v.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={cn("block truncate text-[14px] font-bold leading-tight text-[#1a1a1b] sm:text-[15px]", v.sourceClass)}
+              >
+                {v.source}
+              </a>
+              <p className="mt-0.5 text-[11px] leading-tight text-[#787c7e] sm:text-xs">{v.meta}</p>
+            </div>
+          </div>
+          <a href={v.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} aria-label="Reddit">
+            <RedditHeaderMark />
+          </a>
+        </div>
+
+        <div className="space-y-2 text-[14px] leading-relaxed text-[#333] sm:text-[15px]">
+          <a
+            href={v.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="block font-medium text-[#1a1a1b] [text-wrap:pretty] hover:underline"
+          >
+            {v.headline}
+          </a>
+          <p className="line-clamp-3 text-[13px] font-normal leading-relaxed text-[#5c5c5c] sm:text-sm">{v.blurb}</p>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-black/[0.06] pt-3 text-[11px] text-[#787c7e] sm:text-xs">
+          <span className="inline-flex items-center gap-1 text-[#ff4500]" aria-hidden>
+            <ArrowUp className="h-4 w-4" strokeWidth={2.2} />
+          </span>
+          <span className="inline-flex items-center gap-1" aria-hidden>
+            <MessageCircle className="h-3.5 w-3.5 text-[#878a8c]" strokeWidth={2} />
+          </span>
+          <span className="ml-auto font-normal tabular-nums text-[#878a8c]">Public thread · Reddit</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-/* ─── Main Component ──────────────────────────────────────────────────────── */
-export function LandingPage() {
+function MedicalPrivacyMarqueeRow({
+  items,
+  direction,
+  reduce,
+  selectedId,
+  onCardClick,
+}: {
+  items: MedicalVoice[];
+  direction: "left" | "right";
+  reduce: boolean;
+  selectedId: string | null;
+  onCardClick: (row: MarqueeRowId, v: MedicalVoice) => void;
+}) {
+  const [isHoveringRow, setIsHoveringRow] = useState(false);
+  const rowId: MarqueeRowId = direction === "left" ? "top" : "bottom";
+
+  const card = (v: MedicalVoice, keySuffix: string) => (
+    <MedicalPrivacyPostCard
+      key={`${v.id}${keySuffix}`}
+      v={v}
+      selected={selectedId === v.id}
+      onPick={() => onCardClick(rowId, v)}
+    />
+  );
+
+  if (reduce) {
+    return (
+      <div className="flex flex-wrap justify-center gap-4 px-4">
+        {items.map((v) => card(v, ""))}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col">
+    <div
+      className="relative overflow-hidden py-1"
+      role="region"
+      aria-label={direction === "left" ? "Scrolling community concerns, left" : "Scrolling community concerns, right"}
+      onMouseEnter={() => setIsHoveringRow(true)}
+      onMouseLeave={() => setIsHoveringRow(false)}
+    >
+      {/* Edge fade — match peach/rose strip behind cards */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 z-20 w-8 bg-gradient-to-r from-[#ffe8ea] from-15% to-transparent sm:w-10"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 z-20 w-8 bg-gradient-to-l from-[#fff0e5] from-15% to-transparent sm:w-10"
+      />
+      <div
+        className={cn(
+          "flex w-max gap-4",
+          direction === "left" ? "mv-marq-track-left" : "mv-marq-track-right",
+          isHoveringRow && "mv-marq-paused"
+        )}
+      >
+        <div className="flex gap-4">{items.map((v) => card(v, ""))}</div>
+        <div className="flex gap-4" aria-hidden>
+          {items.map((v) => card(v, "-loop"))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* ════════════════ HERO ════════════════ */}
-      <section className="relative min-h-screen flex items-center py-12 overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-          <AuraBackground />
-          <HeartbeatBackground />
-          
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[600px] rounded-full bg-blue-500/5 blur-[160px]" />
-          
-          <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: "radial-gradient(circle, #3b82f6 1px, transparent 1px)",
-              backgroundSize: "32px 32px",
-            }}
+function MedicalPrivacyVoicesBento() {
+  const reduce = useReducedMotion();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  /** Click toggles which card is highlighted; marquee pause is hover-only (see row onMouseEnter/Leave). */
+  const onCardClick = (_row: MarqueeRowId, v: MedicalVoice) => {
+    setSelectedId((prev) => (prev === v.id ? null : v.id));
+  };
+
+  return (
+    <section
+      className="relative border-b border-[#bcc9c6]/35 bg-white px-0 py-20 sm:px-0"
+      id="medical-privacy-risks"
+      aria-labelledby="medical-privacy-risks-heading"
+    >
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+        <div className="absolute left-1/2 top-0 h-72 w-[min(100%,52rem)] -translate-x-1/2 rounded-full bg-[#89f5e7]/[0.16] blur-3xl" />
+        <div className="absolute -left-1/4 top-1/3 h-48 w-72 rounded-full bg-[#00685f]/[0.06] blur-3xl" />
+      </div>
+
+      <div className="mx-auto max-w-screen-lg px-4 sm:px-8">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportBase}
+          variants={reduce ? { hidden: { opacity: 0 }, visible: { opacity: 1 } } : { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }}
+          transition={transition}
+          className="mx-auto max-w-2xl text-center"
+        >
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">Real questions people ask</p>
+          <h2
+            id="medical-privacy-risks-heading"
+            className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl"
+          >
+            Medical data doesn’t stay in one place —{" "}
+            <span className="text-[#008378]">it spreads.</span>
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-[#5a6a80] sm:text-lg">
+            Portals, payers, vendors, and wearables can each surface more than you expect. MedVault is built for a
+            world where you choose what gets shared — with proofs, not open-ended exposure.
+          </p>
+        </motion.div>
+      </div>
+
+      <p className="mx-auto mt-8 max-w-screen-lg px-4 text-center text-xs text-[#5a6a80] sm:px-8">
+        Top row scrolls left · bottom row scrolls right. Hover a row to pause; move the pointer away to resume. Click a card to highlight it.
+      </p>
+
+      <div className="relative mx-3 mt-5 overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-rose-100/95 via-orange-50/90 to-amber-100/[0.93] py-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] sm:mx-8 sm:rounded-[2rem] sm:py-8">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(255,255,255,0.5),transparent)]" aria-hidden />
+        <div className="relative space-y-3 sm:space-y-4">
+          <MedicalPrivacyMarqueeRow
+            items={medicalPrivacyTop}
+            direction="left"
+            reduce={!!reduce}
+            selectedId={selectedId}
+            onCardClick={onCardClick}
+          />
+          <MedicalPrivacyMarqueeRow
+            items={medicalPrivacyBottom}
+            direction="right"
+            reduce={!!reduce}
+            selectedId={selectedId}
+            onCardClick={onCardClick}
           />
         </div>
+      </div>
 
-        <div className="relative z-10 max-w-[1000px] mx-auto px-6 lg:px-14 w-full text-center">
-          <div className="flex flex-col items-center">
+      <p className="mx-auto mt-8 max-w-xl px-4 text-center text-xs text-[#5a6a80] sm:px-6">
+        Real public threads on Reddit — opens in a new tab. Headlines follow each post title; blurbs summarize the discussion, not verbatim comments. Not medical or legal advice.
+      </p>
+    </section>
+  );
+}
 
-            {/* ── Text content ── */}
-            <div className="flex flex-col items-center text-center">
-              {/* Badge */}
-              <motion.div {...fadeIn(0)} className="flex mb-10">
-              </motion.div>
+/* ─── Trust marquee ──────────────────────────────────────────────────────────── */
 
-              {/* Heading */}
-              <HeroHeading />
+function TrustMarquee() {
+  const reduce = useReducedMotion();
+  const doubled = [...trustItems, ...trustItems];
+  return (
+    <div className="relative overflow-hidden border-y border-[#bcc9c6]/40 bg-white py-[18px]">
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-gradient-to-r from-white to-transparent" />
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-gradient-to-l from-white to-transparent" />
+      <motion.div
+        className="flex w-max items-center"
+        animate={reduce ? undefined : { x: ["0%", "-50%"] }}
+        transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
+      >
+        {doubled.map((item, i) => (
+          <Fragment key={i}>
+            <span className="flex shrink-0 items-center gap-2 px-5 text-sm font-medium text-[#3d4947]">
+              <item.Icon className="h-3.5 w-3.5 text-[#00685f]" strokeWidth={1.8} />
+              {item.label}
+            </span>
+            <span aria-hidden className="shrink-0 text-[#bcc9c6] text-lg select-none">·</span>
+          </Fragment>
+        ))}
+      </motion.div>
+    </div>
+  );
+}
 
-              {/* Sub-copy */}
-              <motion.p
-                {...fadeUp(0.2)}
-                className="text-xl md:text-2xl text-slate-500 dark:text-slate-400 leading-relaxed mb-12 max-w-2xl"
-              >
-                Match with clinical trials. Earn ETH rewards.{" "}
-                <br className="hidden md:block" />
-                <em className="not-italic font-semibold text-slate-700 dark:text-slate-200">
-                  Your data stays encrypted — always.
-                </em>
-              </motion.p>
+/* ─── Step mini-illustrations ────────────────────────────────────────────────── */
 
-              {/* CTAs */}
-              <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row gap-5 mb-16 z-20 relative">
-                <Link to="/patient" className="z-20">
-                  <StartBuildingButton />
-                </Link>
-                <Link to="/sponsor">
-                  <Button variant="outline" size="lg" className="h-14 px-10 rounded-2xl text-base border-slate-200 dark:border-slate-700 font-semibold gap-2.5 transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
-                    For Trial Sponsors
-                    <Building2 className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </motion.div>
+function VaultIllus({ reduce }: { reduce: boolean }) {
+  return (
+    <div className="flex items-center justify-center gap-3 px-5 py-5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e8f4fd]">
+        <UserRound className="h-5 w-5 text-[#0a2540]" strokeWidth={1.7} />
+      </div>
+      <div className="flex flex-1 flex-col gap-[5px]">
+        {([80, 55, 70] as number[]).map((w, i) => (
+          <motion.div
+            key={i}
+            className="h-[3px] rounded-full bg-gradient-to-r from-[#6bd8cb] to-[#89f5e7]"
+            style={{ width: `${w}%` }}
+            animate={reduce ? undefined : { scaleX: [0.5, 1, 0.5], opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.28, ease: "easeInOut" }}
+          />
+        ))}
+      </div>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00685f]/10">
+        <Database className="h-5 w-5 text-[#00685f]" strokeWidth={1.7} />
+      </div>
+    </div>
+  );
+}
+
+function MatchIllus({ reduce: _reduce }: { reduce: boolean }) {
+  const rows: { label: string; match: boolean }[] = [
+    { label: "CBC · recent", match: true },
+    { label: "Age 31–55", match: true },
+    { label: "Cardiac Rx", match: false },
+  ];
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-4">
+      {rows.map((row, i) => (
+        <motion.div
+          key={i}
+          className="flex items-center justify-between rounded-lg border border-[#bcc9c6]/50 bg-white px-3 py-2"
+          initial={{ opacity: 0, x: -8 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.3, delay: i * 0.1 + 0.15 }}
+        >
+          <span className="font-mono text-[10px] text-[#5a6a80]">{row.label}</span>
+          <span
+            className={cn(
+              "flex h-4 w-4 items-center justify-center rounded-full",
+              row.match ? "bg-[#06d6a0]/20" : "bg-[#bcc9c6]/30",
+            )}
+          >
+            {row.match
+              ? <Check className="h-2.5 w-2.5 text-[#00685f]" strokeWidth={3} />
+              : <Minus className="h-2.5 w-2.5 text-[#5a6a80]" strokeWidth={3} />}
+          </span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function ProofIllus({ reduce }: { reduce: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-5">
+      <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#06d6a0]/15">
+        <BadgeCheck className="h-6 w-6 text-[#00685f]" strokeWidth={1.8} />
+        {!reduce && (
+          <motion.span
+            aria-hidden
+            className="absolute inset-0 rounded-full ring-2 ring-[#06d6a0]/40"
+            animate={{ scale: [1, 1.7], opacity: [0.7, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+          />
+        )}
+      </div>
+      <div className="text-center">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#00685f]">ZK Proof Valid</p>
+        <p className="mt-0.5 font-mono text-[9px] text-[#5a6a80]">identity: anonymous · proof 0xa3…f2</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Powered by Fhenix (distinct from generic “chain partner” promos) ───── */
+
+type FhenixRow = { Icon: React.ElementType; title: string; body: string };
+
+const fhenixHighlights: FhenixRow[] = [
+  {
+    Icon: Lock,
+    title: "Ciphertexts on-chain",
+    body: "Trial logic reads encrypted state. Eligibility and scoring run as homomorphic programs, not clear-text database queries.",
+  },
+  {
+    Icon: Cpu,
+    title: "FHE you can deploy",
+    body: "Solidity with Fhenix FHE opcodes for comparisons, boolean mux, and score accumulation - values stay sealed mid-execution.",
+  },
+  {
+    Icon: Shield,
+    title: "Sealed at the client",
+    body: "Wallets encrypt inputs before broadcast. Peers see handles and ZK-backed proofs of inputs, not raw lab or chart numbers.",
+  },
+  {
+    Icon: KeyRound,
+    title: "Keys meet consent",
+    body: "Decryption and sponsor access follow wallet-scoped policy on the same surface that gates trial enrollment and audit logs.",
+  },
+];
+
+const CIPHER_ROWS = [
+  { input: "0x4a2f", field: "age_score", op: "cmux", handle: "0xe3f1a2" },
+  { input: "0x7bc1", field: "bmi_class", op: "add",  handle: "0x92c28d" },
+  { input: "0x1d88", field: "diag_flag", op: "cmp",  handle: "pending"  },
+  { input: "0x5f3c", field: "rx_index",  op: "mul",  handle: "0xa7d4e0" },
+] as const;
+
+function FhenixCipherTerminal({ reduce }: { reduce: boolean }) {
+  const [activeRow, setActiveRow] = useState(2);
+
+  useEffect(() => {
+    if (reduce) return;
+    const id = setInterval(() => setActiveRow((p) => (p + 1) % 4), 2200);
+    return () => clearInterval(id);
+  }, [reduce]);
+
+  return (
+    <div className="w-full max-w-[19.5rem] sm:max-w-[20.5rem] lg:max-w-none" aria-hidden>
+      <div className="rounded-xl bg-white/[0.025] p-px ring-1 ring-white/[0.09] [box-shadow:inset_0_1px_0_rgba(255,255,255,0.05)] sm:rounded-[1.25rem]">
+        <div className="overflow-hidden rounded-[calc(1.25rem-1px)] border border-white/[0.05] bg-[#06080c] [box-shadow:inset_0_1px_0_rgba(255,255,255,0.04)] sm:rounded-[calc(1.5rem-1px)]">
+          {/* terminal header */}
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-1.5 sm:px-4 sm:py-2.5">
+            <div className="flex items-center gap-1.5 sm:gap-2.5">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-teal-500/10 text-[#7dd3c0] ring-1 ring-white/[0.08] sm:h-7 sm:w-7">
+                <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={1.6} />
+              </div>
+              <span className="font-mono text-[10px] font-medium text-slate-300 sm:text-[11px]">fhEVM</span>
+              <span className="font-mono text-[9px] text-slate-600 sm:text-[10px]">Fhenix Helium</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {!reduce && (
+                <motion.span
+                  className="h-1.5 w-1.5 rounded-full bg-teal-400"
+                  animate={{ opacity: [1, 0.3, 1] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+              <span className="font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-slate-500">live</span>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* ════════════════ SCROLL STORY SECTION ════════════════ */}
-      <ScrollStory />
-
-      {/* ════════════════ SECTION 1 — INSTITUTIONAL INFRASTRUCTURE ════════════════ */}
-      <section
-        id="security"
-        className="relative py-28 lg:py-36 overflow-hidden bg-black"
-      >
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-black" />
-          <div className="absolute top-0 left-1/4 w-[800px] h-[800px] rounded-full bg-blue-500/5 blur-[140px]" />
-          <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] rounded-full bg-blue-500/5 blur-[120px]" />
-          
-          <div
-            className="absolute inset-0 opacity-[0.02] mix-blend-overlay"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(59,130,246,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.3) 1px, transparent 1px)",
-              backgroundSize: "80px 80px",
-            }}
-          />
-        </div>
-
-        <div className="relative z-10 max-w-[1220px] mx-auto px-6 lg:px-14">
-
-          {/* Header */}
-          <div className="text-center max-w-2xl mx-auto mb-14">
-            <motion.p {...fadeUp(0)} className="font-mono text-xs tracking-widest mb-5" style={{ color: "#3b82f6" }}>
-              ◈ TRIAL COMMAND GRID
-            </motion.p>
-            <motion.h2
-              {...fadeUp(0.1)}
-              className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.1]"
-            >
-              Institutional Infrastructure
-            </motion.h2>
-          </div>
-
-          {/* Bento Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-            {/* Card 1: Private Trial Creation (col-span-2) */}
-            <BentoCard delay={0.1} className="md:col-span-2">
-              <BentoLabel>TRIAL.CREATE</BentoLabel>
-              <BentoTitle>Private Trial Creation</BentoTitle>
-              <div className="space-y-3 mb-5">
-                {[
-                  { label: "Min Age", value: "18", unit: "years" },
-                  { label: "Requires Diabetes", value: "true", unit: "bool" },
-                  { label: "HbA1c Threshold", value: "≥ 7.0", unit: "%" },
-                ].map((row) => (
-                  <div
-                    key={row.label}
-                    className="flex items-center justify-between rounded-xl px-5 py-3.5 transition-colors hover:bg-white/5 group/row border border-white/5 active:scale-[0.98]"
-                    style={{ background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500 group-hover/row:text-blue-400 transition-colors">{row.label}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm text-white font-bold">{row.value}</span>
-                      <span className="font-mono text-[10px] text-slate-600 group-hover/row:text-slate-400 transition-colors uppercase">{row.unit}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                className="w-full rounded-2xl py-4 font-mono text-xs tracking-[0.2em] font-bold text-white uppercase transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 border border-blue-400/30"
-                style={{ background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)" }}
-              >
-                ⬡ Lock Criteria to Chain
-              </button>
-            </BentoCard>
-
-            {/* Card 2: Consent Authority */}
-            <BentoCard delay={0.15}>
-              <BentoLabel>CONSENT.AUTH</BentoLabel>
-              <h3 className="text-lg font-bold text-white mb-6">Consent Authority</h3>
-              <div className="space-y-4">
-                {[
-                  { label: "Grant Access", active: true },
-                  { label: "Revoke Access", active: false },
-                  { label: "Delegate Auth", active: true },
-                  { label: "Emergency Override", active: false },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between group/toggle py-1 border-b border-white/5 last:border-0 pb-3">
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500 group-hover/toggle:text-slate-300 transition-colors">{item.label}</span>
-                    <div
-                      className="relative w-11 h-[22px] rounded-full flex items-center px-[3px] transition-all cursor-pointer shadow-inner active:scale-95"
-                      style={{ background: item.active ? "linear-gradient(90deg, #3b82f6, #2563eb)" : "rgba(255,255,255,0.06)" }}
-                    >
-                      <motion.div
-                        layout
-                        className="w-4 h-4 rounded-full bg-white shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                        initial={false}
-                        animate={{ x: item.active ? 22 : 0 }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </BentoCard>
-
-            {/* Card 3: Encrypted Storage */}
-            <BentoCard delay={0.2} className="overflow-hidden">
-              <BentoLabel>STORAGE.FHE</BentoLabel>
-              <BentoTitle>Encrypted Storage</BentoTitle>
-              <div
-                className="relative rounded-2xl overflow-hidden mb-6"
-                style={{
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(59, 130, 246, 0.15)",
-                  height: "140px",
-                }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#020617] opacity-60 pointer-events-none" />
-                <div
-                  className="font-mono text-[9px] leading-[2] text-blue-400/30 whitespace-pre p-4"
-                  style={{ animation: "infraHexScroll 20s linear infinite" }}
-                >
-                  {`0x4a2c f891 0e3d 7b56 ff12 d4a8\n3c7e 91b0 f5d2 6a83 e4c1 08b7\n7d9f 2e46 b3a1 c058 14d6 8f23\ne6b4 5c09 a217 f38d 6e4b d0c5\n92a8 1f73 d6e0 4b5c 87f2 3a9d\nc4e7 58b1 2d0f a396 6fc8 1e4a\n0b5d 8a2e f7c3 49d1 e685 3b07\na4f2 c891 0e3d 7b56 ff12 d4a8\n3c7e 91b0 f5d2 6a83 e4c1 08b7`}
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span
-                    className="absolute inline-flex h-full w-full rounded-full opacity-75"
-                    style={{ background: "#3b82f6", animation: "infraPulse 2s ease-in-out infinite" }}
-                  />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: "#3b82f6" }} />
-                </span>
-                <span className="font-mono text-xs font-medium" style={{ color: "#3b82f6" }}>On-Chain Active</span>
-              </div>
-            </BentoCard>
-
-            {/* Card 4: Selective Decryption (col-span-2) */}
-            <BentoCard delay={0.25} className="md:col-span-2">
-              <BentoLabel>DECRYPT.GATE</BentoLabel>
-              <BentoTitle>Selective Decryption</BentoTitle>
-              <div className="space-y-4">
-                {[
-                  { entity: "0xSponsor…3f8a", permission: "AUTHORIZED", color: "#3b82f6", bg: "rgba(59,130,246,0.08)" },
-                  { entity: "0xPatient…7b2c", permission: "AUTHORIZED", color: "#3b82f6", bg: "rgba(59,130,246,0.08)" },
-                  { entity: "0x3rdParty…****", permission: "RESTRICTED", color: "#ef4444", bg: "rgba(239,68,68,0.08)" },
-                ].map((row) => (
-                  <div
-                    key={row.entity}
-                    className="flex items-center justify-between rounded-2xl px-5 py-4 transition-all hover:bg-white/5 group/access border border-white/5"
-                    style={{ background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-slate-500">{row.entity}</span>
-                        <div className="flex items-center gap-2">
-                          <div className={`h-1.5 w-1.5 rounded-full ${row.permission === 'AUTHORIZED' ? 'bg-blue-400' : 'bg-red-500'} shadow-[0_0_8px_currentColor]`} />
-                          <span className="font-mono text-[11px] font-bold tracking-tight" style={{ color: row.color }}>{row.permission}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <Lock className={`h-4 w-4 ${row.permission === 'AUTHORIZED' ? 'text-blue-400/50' : 'text-red-500/50'} transition-colors group-hover/access:text-white`} />
-                  </div>
-                ))}
-              </div>
-            </BentoCard>
-
-
-          </div>
-        </div>
-
-        <style>{`
-          @keyframes infraHexScroll {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(-50%); }
-          }
-          @keyframes infraPulse {
-            0%, 100% { transform: scale(1); opacity: 0.75; }
-            50% { transform: scale(1.8); opacity: 0; }
-          }
-          @keyframes engineCursorBlink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-          }
-          @keyframes logLinePulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
-          }
-        `}</style>
-      </section>
-
-      {/* ════════════════ SECTION 2 — THE ENGINE ════════════════ */}
-      <section
-        id="engine"
-        className="relative py-28 lg:py-36 overflow-hidden bg-black"
-      >
-        {/* Ambient glow */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full blur-[120px] opacity-10"
-            style={{ background: "radial-gradient(ellipse, rgba(59, 130, 246, 0.4), transparent 70%)" }}
-          />
-        </div>
-
-        <div className="relative z-10 max-w-[1220px] mx-auto px-6 lg:px-14">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
-
-            {/* Left: copy + stats */}
-            <div>
-              <motion.p {...fadeUp(0)} className="font-mono text-xs tracking-widest mb-6" style={{ color: "#3b82f6" }}>
-                ◈ LIVE ELIGIBILITY ENGINE
-              </motion.p>
-              <motion.h2
-                {...fadeUp(0.1)}
-                className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.1] mb-6"
-              >
-                The Engine
-              </motion.h2>
-              <motion.p
-                {...fadeUp(0.2)}
-                className="text-slate-400 text-[17px] leading-relaxed mb-12 max-w-md"
-              >
-                Homomorphic gates compute patient eligibility without ever reading patient data.
-                Every operation is sealed, auditable, and provably private.
-              </motion.p>
-
-              {/* Stats */}
-              <motion.div {...fadeUp(0.3)} className="grid grid-cols-3 gap-6">
-                {[
-                  { value: "99.97%", label: "Uptime" },
-                  { value: "< 2s", label: "Compute Time" },
-                  { value: "0", label: "Data Exposed" },
-                ].map(({ value, label }) => (
-                  <div key={label} className="flex flex-col gap-2">
-                    <div
-                      className="text-3xl font-bold tracking-tight"
-                      style={{ color: "#3b82f6" }}
-                    >
-                      {value}
-                    </div>
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-slate-500">{label}</div>
-                  </div>
-                ))}
-              </motion.div>
-            </div>
-
-            {/* Right: Terminal */}
-            <motion.div {...fadeUp(0.15)}>
-              <div
-                className="rounded-2xl overflow-hidden"
-                style={{
-                  background: "#060e18",
-                  border: "1px solid rgba(59, 130, 246, 0.25)",
-                  boxShadow: "0 0 60px rgba(59, 130, 246, 0.08), inset 0 1px 0 rgba(255,255,255,0.03)",
-                }}
-              >
-                {/* Terminal titlebar */}
-                <div
-                  className="flex items-center gap-2 px-5 py-4"
-                  style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.3)" }}
-                >
-                  <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-                  <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-                  <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-                  <span className="font-mono text-[11px] text-slate-600 ml-3">medvault_kernel.log</span>
-                </div>
-
-                {/* Log lines */}
-                <div className="p-6 space-y-3">
-                  {[
-                    { time: "12:00:01", msg: "SCANNING PROFILE...", active: false, done: true },
-                    { time: "12:00:02", msg: "LOADING FHE KEYS", active: false, done: true },
-                    { time: "12:00:03", msg: "RUNNING ENCRYPTED GT", active: true, done: false },
-                    { time: "12:00:04", msg: "AND OPERATION SUCCESS", active: true, done: false },
-                    { time: "12:00:05", msg: "RESULT SEALED — ELIGIBLE", active: false, done: true },
-                    { time: "12:00:06", msg: "TRANSMITTING SIGNAL...", active: false, done: false },
-                  ].map(({ time, msg, active, done }) => (
-                    <div
-                      key={time}
-                      className="flex items-center gap-4 py-1.5"
-                      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
-                    >
-                      <span className="font-mono text-[11px] text-slate-700 shrink-0 w-16">{time}</span>
-                      <span
-                        className="font-mono text-[13px] font-medium"
-                        style={{
-                          color: active ? "#3b82f6" : done ? "#64748b" : "#94a3b8",
-                          animation: active ? "logLinePulse 1.8s ease-in-out infinite" : "none",
-                        }}
-                      >
-                        {active && <span style={{ color: "#3b82f6", marginRight: 6 }}>▶</span>}
-                        {msg}
-                      </span>
-                    </div>
-                  ))}
-
-                  {/* Cursor line */}
-                  <div className="flex items-center gap-3 pt-2">
-                    <span className="font-mono text-[13px]" style={{ color: "#3b82f6" }}>$</span>
-                    <div
-                      className="w-[9px] h-[16px] rounded-sm"
-                      style={{
-                        background: "#3b82f6",
-                        animation: "engineCursorBlink 1.1s step-start infinite",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* ════════════════ SECTION 3 — SYSTEM LAYERS ════════════════ */}
-      <section
-        id="architecture"
-        className="relative py-28 lg:py-36 overflow-hidden bg-black"
-      >
-        <div className="relative z-10 max-w-[1220px] mx-auto px-6 lg:px-14">
-
-          {/* Header */}
-          <div className="text-center max-w-2xl mx-auto mb-20">
-            <motion.p {...fadeUp(0)} className="font-mono text-xs tracking-widest mb-5" style={{ color: "#3b82f6" }}>
-              ◈ ARCHITECTURE BLUEPRINT
-            </motion.p>
-            <motion.h2
-              {...fadeUp(0.1)}
-              className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.1]"
-            >
-              System Layers
-            </motion.h2>
-          </div>
-
-          {/* 4-column architecture layout */}
-          <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">
-
-            {/* Horizontal connector line (desktop only) */}
-            <div
-              className="hidden lg:block absolute top-[52px] left-[calc(12.5%+4px)] right-[calc(12.5%+4px)] h-px pointer-events-none"
-              style={{
-                background: "linear-gradient(to right, transparent, rgba(59, 130, 246, 0.4) 15%, rgba(59, 130, 246, 0.4) 85%, transparent)",
-              }}
-            />
-
-            {[
-              {
-                icon: Lock,
-                title: "Client Encryption",
-                desc: "AES-256 + FHE key generation. Data never leaves device unencrypted.",
-                ref: "0xA91F3E",
-                delay: 0.1,
-              },
-              {
-                icon: Cpu,
-                title: "FHE Smart Contracts",
-                desc: "On-chain homomorphic computation. FHE gates for boolean logic.",
-                ref: "0xB82C9D",
-                delay: 0.2,
-              },
-              {
-                icon: Shield,
-                title: "Permission Layer",
-                desc: "RBAC + patient consent authority. Cryptographic access control.",
-                ref: "0xC73E8A",
-                delay: 0.3,
-              },
-              {
-                icon: Key,
-                title: "Selective Decryption",
-                desc: "Threshold decryption. Sponsor + patient keys required.",
-                ref: "0xD64F2B",
-                delay: 0.4,
-              },
-            ].map(({ icon: Icon, title, desc, ref, delay }) => (
-              <motion.div
-                key={title}
-                {...fadeUp(delay)}
-                className="group flex flex-col items-center text-center relative"
-              >
-                {/* Icon container */}
-                <div
-                  className="relative z-10 flex items-center justify-center w-[56px] h-[56px] rounded-2xl mb-6 transition-all duration-300 group-hover:scale-110"
-                  style={{
-                    background: "rgba(10,22,40,0.9)",
-                    border: "1px solid rgba(59, 130, 246, 0.2)",
-                    boxShadow: "0 0 0 0 rgba(59, 130, 246, 0)",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.boxShadow = "0 0 20px rgba(59, 130, 246, 0.25)";
-                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(59, 130, 246, 0.55)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 0 rgba(59, 130, 246, 0)";
-                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(59, 130, 246, 0.2)";
-                  }}
-                >
-                  <Icon className="h-5 w-5" style={{ color: "#3b82f6" }} strokeWidth={1.5} />
-                </div>
-
-                {/* Hover REF_ID */}
-                <div
-                  className="font-mono text-[9px] tracking-widest mb-3 transition-all duration-300 opacity-0 group-hover:opacity-100 -translate-y-1 group-hover:translate-y-0"
-                  style={{ color: "#3b82f6" }}
-                >
-                  REF_ID: {ref}…
-                </div>
-
-                <h4 className="text-[15px] font-bold text-white mb-3 tracking-tight">{title}</h4>
-                <p className="text-[13px] text-slate-500 leading-relaxed max-w-[200px]">{desc}</p>
-              </motion.div>
+          {/* column headers */}
+          <div className="grid grid-cols-[3.25rem_1fr_2.25rem_4.5rem] gap-x-2 border-b border-white/[0.04] px-3 py-1 sm:grid-cols-[3.5rem_1fr_2.5rem_5rem] sm:gap-x-3 sm:px-4 sm:py-1.5">
+            {["input", "field", "op", "handle"].map((h) => (
+              <span key={h} className="font-mono text-[7px] font-medium uppercase tracking-[0.16em] text-slate-600 sm:text-[8px] sm:tracking-[0.18em]">{h}</span>
             ))}
           </div>
 
-          {/* Bottom divider — subtle teal line */}
+          {/* op rows */}
+          <div className="divide-y divide-white/[0.03] px-3 sm:px-4">
+            {CIPHER_ROWS.map((row, i) => {
+              const isActive = i === activeRow;
+              return (
+                <div
+                  key={row.input}
+                  className={cn(
+                    "grid grid-cols-[3.25rem_1fr_2.25rem_4.5rem] items-center gap-x-2 py-1.5 transition-colors duration-500 sm:grid-cols-[3.5rem_1fr_2.5rem_5rem] sm:gap-x-3 sm:py-2.5",
+                    isActive ? "bg-teal-500/[0.04]" : ""
+                  )}
+                >
+                  <span className="font-mono text-[9px] text-slate-600 sm:text-[10px]">{row.input}</span>
+                  <span className={cn("font-mono text-[9px] truncate sm:text-[10px]", isActive ? "text-teal-300" : "text-slate-400")}>{row.field}</span>
+                  <span className="font-mono text-[9px] text-slate-600 sm:text-[10px]">{row.op}</span>
+                  <span className={cn("font-mono text-[9px] tabular-nums sm:text-[10px]", isActive ? "text-[#5eead4]" : "text-slate-500")}>
+                    {isActive && !reduce ? (
+                      <>
+                        {"comp"}
+                        <span className="mv-cursor-blink inline-block">{"\u258B"}</span>
+                      </>
+                    ) : row.handle}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* footer */}
+          <div className="flex items-center justify-between border-t border-white/[0.04] px-3 py-1.5 sm:px-4 sm:py-2">
+            <span className="font-mono text-[8px] text-slate-600 sm:text-[9px]">4 ops</span>
+            <span className="font-mono text-[8px] text-slate-600 sm:text-[9px]">sealed</span>
+            <span className="font-mono text-[8px] tabular-nums text-slate-600 sm:text-[9px]">~11ms</span>
+          </div>
+        </div>
+      </div>
+      {!reduce && (
+        <motion.div
+          className="pointer-events-none absolute -right-6 top-0 h-40 w-40 rounded-full bg-teal-400/[0.07] blur-3xl"
+          animate={{ opacity: [0.5, 0.9, 0.5], scale: [1, 1.1, 1] }}
+          transition={{ duration: 6, repeat: Infinity, ease: [0.4, 0, 0.2, 1] }}
+          aria-hidden
+        />
+      )}
+    </div>
+  );
+}
+
+function PoweredByFhenixSection() {
+  const reduce = useReducedMotion();
+
+  const fadeLift = reduce
+    ? { hidden: { opacity: 0 }, visible: { opacity: 1, transition } }
+    : { hidden: { opacity: 0, y: 22 }, visible: { opacity: 1, y: 0, transition } };
+
+  const rowParent = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: reduce ? 0.04 : 0.1, delayChildren: 0.1 } },
+  };
+  const rowChild = reduce
+    ? { hidden: { opacity: 0 }, visible: { opacity: 1, transition } }
+    : { hidden: { opacity: 0, x: -12 }, visible: { opacity: 1, x: 0, transition } };
+
+  return (
+    <section
+      className="relative overflow-hidden border-y border-white/[0.05] bg-[#07090c] px-4 py-10 text-slate-200 sm:px-6 md:py-12"
+      id="fhenix"
+      aria-labelledby="fhenix-heading"
+    >
+      {/* ambient mesh gradients */}
+      <div
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 52% at 4% 0%, rgba(20,184,166,0.10) 0%, transparent 45%)," +
+            "radial-gradient(ellipse 60% 42% at 96% 100%, rgba(8,120,110,0.13) 0%, transparent 44%)",
+        }}
+        aria-hidden
+      />
+
+      <div className="mx-auto max-w-6xl">
+
+        {/* header zone - full width, editorial scale */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportBase}
+          variants={fadeLift}
+          className="mb-6 max-w-3xl sm:mb-7"
+        >
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/25 bg-teal-500/[0.07] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.22em] text-[#8fd4c8] [box-shadow:inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <Server className="h-2.5 w-2.5" strokeWidth={1.5} />
+            Confidential compute layer
+          </span>
+          <h2
+            id="fhenix-heading"
+            className="font-display mt-3 text-2xl font-bold tracking-tight text-white sm:mt-3.5 sm:text-3xl sm:leading-[1.1] md:text-4xl"
+          >
+            Health data stays sealed.
+            <br className="hidden sm:inline" />
+            <span className="text-[#5eead4]"> Powered by Fhenix.</span>
+          </h2>
+          <p className="mt-2.5 max-w-[56ch] text-pretty text-sm leading-relaxed text-slate-400 sm:mt-3">
+            MedVault runs trial policy on{" "}
+            <strong className="font-semibold text-slate-200">Fhenix fhEVM</strong> - a co-processor where health metrics stay
+            ciphertext on-chain while smart contracts compute eligibility. No plaintext leaves the wallet.
+          </p>
+          <a
+            href="https://fhenix.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group mt-4 inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] pl-3.5 pr-1.5 py-1 text-xs font-medium text-slate-100 transition duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [box-shadow:inset_0_1px_0_rgba(255,255,255,0.06)] hover:border-teal-500/25 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40 active:scale-[0.985] sm:mt-3.5"
+          >
+            <span className="pr-0.5">Fhenix documentation</span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 transition duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:-translate-y-px group-hover:translate-x-0.5 group-hover:bg-white/[0.15]">
+              <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
+            </span>
+          </a>
+        </motion.div>
+
+        {/* feature rows + cipher terminal */}
+        <div className="grid items-start gap-5 sm:gap-6 lg:grid-cols-[1fr_minmax(0,19rem)] lg:gap-8 lg:items-center">
+
+          {/* feature strips */}
           <motion.div
-            {...fadeIn(0.5)}
-            className="mt-24 h-px w-full"
-            style={{ background: "linear-gradient(to right, transparent, rgba(59, 130, 246, 0.15), transparent)" }}
-          />
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+            variants={rowParent}
+            className="flex flex-col divide-y divide-white/[0.05]"
+          >
+            {fhenixHighlights.map(({ Icon, title, body }) => (
+              <motion.div
+                key={title}
+                variants={rowChild}
+                whileHover={reduce ? undefined : { x: 4 }}
+                transition={fhenixSpringSoft}
+                className="group flex items-start gap-3 py-2.5 first:pt-0 last:pb-0 sm:gap-3.5 sm:py-3"
+              >
+                <div className="flex shrink-0 flex-col items-center gap-1 self-stretch">
+                  <span className="mt-0.5 block w-0.5 flex-1 rounded-full bg-white/[0.08] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:bg-teal-500/55" style={{ minHeight: "0.5rem" }} />
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/[0.07] bg-white/[0.03] text-[#7dd3c0] transition duration-300 group-hover:border-teal-500/20 group-hover:bg-teal-500/[0.08] group-hover:text-[#5eead4] sm:h-8 sm:w-8 sm:rounded-[0.55rem]">
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-display text-sm font-semibold leading-snug text-slate-100 sm:text-[0.9rem]">
+                    {title}
+                  </h3>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-500 sm:mt-1 sm:text-[0.8125rem] sm:leading-snug">{body}</p>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* cipher terminal */}
+          <motion.div
+            initial={reduce ? false : { opacity: 0, y: 20 }}
+            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
+            viewport={viewportBase}
+            transition={transition}
+            className="relative flex justify-center self-center lg:sticky lg:top-16 lg:justify-end"
+          >
+            <FhenixCipherTerminal reduce={!!reduce} />
+          </motion.div>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+/* ─── Stat card ──────────────────────────────────────────────────────────────── */
+
+function StatCard({ value, label, suffix, decimals = 0 }: { value: number; label: string; suffix: string; decimals?: number }) {
+  const [count, setCount] = useState(0);
+  const statRef = useRef<HTMLDivElement | null>(null);
+  const inView = useInView(statRef, { once: true, amount: 0.5 });
+
+  useEffect(() => {
+    if (!inView) return;
+    const duration = 1400;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setCount(value * eased);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [inView, value]);
+
+  const shown = decimals > 0 ? count.toFixed(decimals) : Math.round(count).toLocaleString();
+
+  return (
+    <motion.div
+      ref={statRef}
+      initial={{ opacity: 0, y: 12 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.4 }}
+      transition={{ duration: 0.4 }}
+      className="flex flex-col items-center justify-center py-10 px-6 text-center"
+    >
+      <p className="font-mono text-4xl font-black tracking-tight text-[#191c1e] tabular-nums sm:text-5xl">
+        {shown}
+        <span className="text-[#00685f]">{suffix}</span>
+      </p>
+      <p className="mt-3 text-sm font-medium text-[#5a6a80]">{label}</p>
+    </motion.div>
+  );
+}
+
+/* ─── Main page ──────────────────────────────────────────────────────────────── */
+
+export function LandingPage() {
+  const reduce = useReducedMotion();
+
+  const fadeUp = reduce
+    ? { hidden: { opacity: 0 }, visible: { opacity: 1 } }
+    : { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } };
+
+  const staggerParent = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: reduce ? 0.04 : 0.09,
+        delayChildren: 0.06,
+      },
+    },
+  };
+
+  const staggerItem = reduce
+    ? { hidden: { opacity: 0 }, visible: { opacity: 1, transition } }
+    : { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition } };
+
+  return (
+    <div className="relative w-full overflow-x-clip">
+
+      {/* ── Hero (UNCHANGED) ──────────────────────────────────────────────── */}
+      <section className="relative" aria-labelledby="hero-heading">
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+          <div className="absolute -top-24 right-0 h-72 w-72 rounded-full bg-[#6bd8cb]/35 blur-3xl" />
+          <div className="absolute top-32 -left-16 h-64 w-64 rounded-full bg-[#8792fe]/20 blur-3xl" />
+          <div className="absolute bottom-0 left-1/2 h-40 w-[60%] -translate-x-1/2 rounded-full bg-[#89f5e7]/25 blur-3xl" />
+        </div>
+
+        <div className="mx-auto w-full max-w-[1500px] px-4 pb-16 pt-10 sm:px-8 md:pb-24 md:pt-16 lg:px-14 xl:px-20">
+          <motion.div
+            className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16 xl:gap-20"
+            initial={false}
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: {
+                opacity: 1,
+                transition: { staggerChildren: reduce ? 0.05 : 0.1, delayChildren: 0.05 },
+              },
+            }}
+          >
+            <div className="relative z-10 flex flex-col">
+              <motion.p
+                variants={fadeUp}
+                transition={transition}
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-[#bcc9c6]/50 bg-white/70 px-3 py-1 text-[11px] font-medium tracking-[0.18em] text-[#3d4947]"
+              >
+                <span className="h-2 w-2 rounded-full bg-[#6bd8cb]" />
+                ENCRYPTED • HIPAA-READY • PATIENT-OWNED
+              </motion.p>
+
+              <motion.h1
+                id="hero-heading"
+                variants={fadeUp}
+                transition={transition}
+                className="mt-5 text-4xl font-bold tracking-tight text-[#191c1e] sm:text-5xl md:text-6xl lg:text-[64px] lg:leading-[1.05]"
+              >
+                Your Health Data.
+                <br />
+                Your Keys. Your{" "}
+                <span className="text-[#008378]">Control.</span>
+              </motion.h1>
+
+              <motion.p
+                variants={fadeUp}
+                transition={transition}
+                className="mt-5 max-w-xl text-lg leading-relaxed text-[#3d4947]"
+              >
+                A decentralized medical record system where patients own their data, doctors access what you approve, and nothing is stored without your consent.
+              </motion.p>
+
+              <motion.div
+                variants={fadeUp}
+                transition={transition}
+                className="mt-8 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4"
+              >
+                <motion.div
+                  whileHover={reduce ? undefined : { y: -2, scale: 1.02 }}
+                  whileTap={reduce ? undefined : { scale: 0.98 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                >
+                  <Link
+                    to="/patient/dashboard"
+                    className="relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-[#00685f] px-8 py-4 text-base font-semibold text-white shadow-[0_10px_24px_-10px_rgba(0,104,95,0.55)] transition hover:bg-[#008378] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#00685f]/30"
+                  >
+                    Try Demo
+                    <ArrowRight className="h-4 w-4" strokeWidth={2.2} />
+                    {!reduce && (
+                      <motion.span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 left-0 w-1/3"
+                        style={{
+                          background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%)",
+                          mixBlendMode: "overlay",
+                        }}
+                        animate={{ x: ["-120%", "380%"] }}
+                        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1.4 }}
+                      />
+                    )}
+                  </Link>
+                </motion.div>
+
+                <motion.div
+                  whileHover={reduce ? undefined : { y: -2, scale: 1.02 }}
+                  whileTap={reduce ? undefined : { scale: 0.98 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                >
+                  <Link
+                    to="/docs/security-model"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[#bcc9c6] bg-white px-8 py-4 text-base font-semibold text-[#191c1e] shadow-sm transition hover:bg-[#f2f4f6] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#00685f]/20"
+                  >
+                    <FileText className="h-4 w-4 text-[#00685f]" strokeWidth={1.8} />
+                    Read Whitepaper
+                  </Link>
+                </motion.div>
+              </motion.div>
+
+              <motion.p
+                variants={fadeUp}
+                transition={transition}
+                className="mt-5 inline-flex items-center gap-2 text-sm text-[#5a6a80]"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-[#06d6a0]" strokeWidth={2.2} />
+                No account needed. Connect any EIP-1193 wallet in 10 seconds.
+              </motion.p>
+            </div>
+
+            <motion.div
+              variants={fadeUp}
+              transition={transition}
+              className="pointer-events-none relative z-10 mx-auto w-full max-w-[520px] lg:max-w-[560px]"
+            >
+              <HeroOrbit reduce={!!reduce} />
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ════════════════ FINAL CTA ════════════════ */}
-      <section className="py-32 relative overflow-hidden bg-black">
-        {/* Ambient background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[400px] rounded-full bg-blue-500/5 blur-[160px] pointer-events-none" />
-        
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-14 relative z-10">
+      {/* ── Trust marquee ─────────────────────────────────────────────────── */}
+      <TrustMarquee />
+
+      {/* ── Community-style medical privacy “pain points” bento ────────────── */}
+      <MedicalPrivacyVoicesBento />
+
+      {/* ── Pillars — asymmetric bento ────────────────────────────────────── */}
+      <section className="relative bg-[#f7f9fb] px-4 py-20 sm:px-8" id="privacy">
+        {/* Soft ambient glows */}
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+          <div className="absolute -left-24 top-12 h-80 w-80 rounded-full bg-[#89f5e7]/18 blur-3xl" />
+          <div className="absolute -right-16 bottom-8 h-64 w-64 rounded-full bg-[#8792fe]/12 blur-3xl" />
+        </div>
+
+        <div className="mx-auto max-w-screen-lg">
+          {/* Left-aligned header */}
           <motion.div
-            {...fadeIn(0)}
-            className="relative overflow-hidden rounded-[3rem] bg-slate-900/40 backdrop-blur-2xl border border-white/10 px-8 py-24 md:px-24 text-center flex flex-col items-center shadow-[0_0_80px_rgba(0,0,0,0.4)] transition-all hover:border-blue-500/20 group/ctacard"
+            className="max-w-xl"
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+            variants={fadeUp}
+            transition={transition}
           >
-            {/* Glossy top highlight */}
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/40 to-transparent opacity-0 group-hover/ctacard:opacity-100 transition-opacity duration-1000" />
-            
-            <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] rounded-full bg-accent/20 blur-[120px] pointer-events-none transition-all duration-1000 group-hover/ctacard:scale-110" />
-            <div className="absolute bottom-0 right-0 h-80 w-80 translate-x-1/4 translate-y-1/4 rounded-full bg-blue-500/10 blur-[100px] pointer-events-none" />
-            
-            <div className="absolute bottom-0 right-12 opacity-[0.03] pointer-events-none transition-all duration-1000 group-hover/ctacard:translate-y-4 group-hover/ctacard:scale-110">
-              <ShieldCheck className="h-80 w-80 text-white" />
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">Why MedVault</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
+              Privacy layers you can reason about
+            </h2>
+            <p className="mt-4 max-w-md leading-relaxed text-[#3d4947]">
+              Built for patients who need transparency on how data flows — without surrendering identity.
+            </p>
+          </motion.div>
+
+          {/* Asymmetric bento: wide card left + stacked pair right */}
+          <div className="mt-12 grid gap-5 md:grid-cols-[3fr_2fr]">
+            {/* First pillar — wide feature card */}
+            {(() => {
+              const FirstIcon = pillars[0].icon;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={viewportBase}
+                  transition={transition}
+                  whileHover={reduce ? undefined : { y: -4 }}
+                  className="relative overflow-hidden rounded-[2rem] border border-[#bcc9c6]/60 bg-white p-8 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)]"
+                >
+                  {/* Gradient mesh glow */}
+                  <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 rounded-full bg-[#89f5e7]/25 blur-3xl" />
+
+                  <div className="relative">
+                    <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#00685f]/10 text-[#00685f] ring-1 ring-[#6bd8cb]/40">
+                      <FirstIcon className="h-6 w-6" strokeWidth={1.7} />
+                    </div>
+                    <h3 className="text-xl font-bold text-[#191c1e]">{pillars[0].title}</h3>
+                    <p className="mt-3 max-w-sm leading-relaxed text-[#3d4947]">{pillars[0].text}</p>
+
+                    {/* Inline ZK-flow diagram */}
+                    <div className="mt-6 rounded-2xl border border-[#bcc9c6]/50 bg-[#f7f9fb] p-4">
+                      <div className="flex items-center gap-2">
+                        {[
+                          { Icon: UserRound, bg: "#e8f4fd", fg: "#0a2540", label: "Identity" },
+                          { Icon: Lock,      bg: "#8792fe18", fg: "#5a6a80", label: "ZK Proof" },
+                          { Icon: BadgeCheck, bg: "#06d6a018", fg: "#00685f", label: "Verified" },
+                        ].map((node, idx) => (
+                          <Fragment key={idx}>
+                            <div className="flex flex-col items-center gap-1.5">
+                              <div
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                                style={{ backgroundColor: node.bg, color: node.fg }}
+                              >
+                                <node.Icon className="h-4 w-4" strokeWidth={1.8} />
+                              </div>
+                              <span className="font-mono text-[9px] font-semibold uppercase tracking-wider text-[#5a6a80]">
+                                {node.label}
+                              </span>
+                            </div>
+                            {idx < 2 && (
+                              <div className="flex flex-1 flex-col gap-1 pb-5">
+                                {[0, 1].map((j) => (
+                                  <motion.div
+                                    key={j}
+                                    className="h-px rounded-full bg-gradient-to-r from-[#6bd8cb] to-[#89f5e7]"
+                                    animate={reduce ? undefined : { scaleX: [0.4, 1, 0.4], opacity: [0.5, 1, 0.5] }}
+                                    transition={{ duration: 2, repeat: Infinity, delay: j * 0.4, ease: "easeInOut" }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {/* Pillars 2 & 3 — double-bezel stacked */}
+            <div className="flex flex-col gap-5">
+              {pillars.slice(1).map((p, idx) => {
+                const PillarIcon = p.icon;
+                return (
+                  <motion.div
+                    key={p.title}
+                    initial={{ opacity: 0, x: 20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={viewportBase}
+                    transition={{ ...transition, delay: 0.08 + idx * 0.1 }}
+                    whileHover={reduce ? undefined : { y: -3 }}
+                    /* Double-bezel outer shell */
+                    className="p-px rounded-[1.8rem] bg-gradient-to-br from-[#6bd8cb]/50 to-[#8792fe]/20 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)]"
+                  >
+                    {/* Inner core */}
+                    <div className="h-full rounded-[calc(1.8rem-1px)] bg-white p-6">
+                      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#89f5e7]/30 text-[#00685f] ring-1 ring-[#6bd8cb]/40">
+                        <PillarIcon className="h-5 w-5" strokeWidth={1.75} />
+                      </div>
+                      <h3 className="text-lg font-bold text-[#191c1e]">{p.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-[#3d4947]">{p.text}</p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── How it works — horizontal timeline ───────────────────────────── */}
+      <section className="relative bg-white px-4 py-20 sm:px-8" id="how-it-works">
+        {/* Subtle ambient */}
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+          <div className="absolute left-1/4 top-0 h-56 w-56 rounded-full bg-[#89f5e7]/12 blur-3xl" />
+          <div className="absolute right-1/4 bottom-0 h-56 w-56 rounded-full bg-[#8792fe]/10 blur-3xl" />
+        </div>
+
+        <div className="mx-auto max-w-screen-lg">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+            variants={fadeUp}
+            transition={transition}
+            className="max-w-xl"
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">How it works</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
+              From vault to trial — with proofs, not exposure
+            </h2>
+          </motion.div>
+
+          {/* Timeline grid */}
+          <div className="relative mt-14">
+            {/* Horizontal connecting line (desktop only) */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute hidden h-px md:block"
+              style={{
+                top: "28px",
+                left: "calc(100% / 6)",
+                right: "calc(100% / 6)",
+                background: "linear-gradient(90deg, transparent, #6bd8cb 20%, #6bd8cb 80%, transparent)",
+              }}
+            />
+
+            <motion.div
+              className="grid gap-6 md:grid-cols-3"
+              variants={staggerParent}
+              initial="hidden"
+              whileInView="visible"
+              viewport={viewportBase}
+            >
+              {steps.map((s, idx) => (
+                <motion.div key={s.step} variants={staggerItem} className="flex flex-col items-center gap-4">
+                  {/* Step node */}
+                  <div className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#0a2540] ring-4 ring-white shadow-[0_8px_24px_-8px_rgba(10,37,64,0.4)]">
+                    <span className="font-mono text-sm font-black text-white">{s.step}</span>
+                    {/* Pulse ring */}
+                    {!reduce && (
+                      <motion.span
+                        aria-hidden
+                        className="absolute inset-0 rounded-full ring-2 ring-[#6bd8cb]/40"
+                        animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
+                        transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut", delay: idx * 0.6 }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Card */}
+                  <motion.div
+                    whileHover={reduce ? undefined : { y: -3, scale: 1.01 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 22 }}
+                    className="w-full overflow-hidden rounded-2xl border border-[#bcc9c6]/60 bg-white shadow-sm"
+                  >
+                    {/* Mini illustration */}
+                    <div className="border-b border-[#bcc9c6]/50 bg-[#f7f9fb]">
+                      {idx === 0 && <VaultIllus reduce={!!reduce} />}
+                      {idx === 1 && <MatchIllus reduce={!!reduce} />}
+                      {idx === 2 && <ProofIllus reduce={!!reduce} />}
+                    </div>
+                    <div className="relative p-5">
+                      {/* Big background numeral */}
+                      <p
+                        aria-hidden
+                        className="pointer-events-none absolute -right-1 -top-2 select-none font-black text-[80px] leading-none text-[#00685f]/5"
+                      >
+                        {s.step}
+                      </p>
+                      <h3 className="relative text-base font-bold text-[#191c1e]">{s.title}</h3>
+                      <p className="relative mt-1.5 text-sm leading-relaxed text-[#3d4947]">{s.body}</p>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      <PoweredByFhenixSection />
+
+      {/* ── Stats — hairline-grid strip ───────────────────────────────────── */}
+      <section className="border-y border-[#bcc9c6]/40 bg-[#f7f9fb] px-4 sm:px-8">
+        <div className="mx-auto max-w-screen-lg">
+          {/* grid gap-px bg-[...] creates hairline dividers without border declarations */}
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#bcc9c6]/40 bg-[#bcc9c6]/40 lg:grid-cols-4">
+            {stats.map((s) => (
+              <div key={s.label} className="bg-[#f7f9fb]">
+                <StatCard value={s.value} suffix={s.suffix} decimals={s.decimals} label={s.label} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Infrastructure ────────────────────────────────────────────────── */}
+      <section className="bg-white px-4 py-20 sm:px-8" id="for-doctors">
+        <div className="mx-auto max-w-screen-xl">
+          <motion.div
+            className="max-w-3xl"
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+            variants={fadeUp}
+            transition={transition}
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">Infrastructure</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
+              Built like clinical infrastructure, not a demo app
+            </h2>
+            <p className="mt-4 max-w-2xl leading-relaxed text-[#3d4947]">
+              Each request moves through layered controls, encrypted processing, and auditability designed for healthcare-grade trust.
+            </p>
+          </motion.div>
+
+          {/* Layer cards — double-bezel with gradient top accent */}
+          <motion.div
+            className="mt-10 grid gap-5 md:grid-cols-3"
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+          >
+            {infraLayers.map((layer) => {
+              const LayerIcon = layer.icon;
+              return (
+                <motion.article
+                  key={layer.title}
+                  variants={staggerItem}
+                  whileHover={reduce ? undefined : { y: -5, scale: 1.01 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
+                  /* outer shell: gradient top-accent fades to transparent */
+                  className="p-px rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.04)]"
+                  style={{
+                    background: `linear-gradient(to bottom, ${layer.accentHex}66 0%, ${layer.accentHex}11 40%, transparent 100%)`,
+                  }}
+                >
+                  {/* inner core */}
+                  <div className="h-full rounded-[calc(2rem-1px)] bg-white p-6 backdrop-blur-sm">
+                    {/* Icon with matching accent ring */}
+                    <div
+                      className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-[#6bd8cb]/30"
+                      style={{
+                        backgroundColor: `${layer.accentHex}18`,
+                        color: layer.accentHex === "#c5cae9" ? "#5a6a80" : layer.accentHex,
+                      }}
+                    >
+                      <LayerIcon className="h-5 w-5" strokeWidth={1.7} />
+                    </div>
+                    <h3 className="text-lg font-bold text-[#191c1e]">{layer.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-[#3d4947]">{layer.body}</p>
+                  </div>
+                </motion.article>
+              );
+            })}
+          </motion.div>
+
+          {/* Animated pipeline */}
+          <motion.div
+            className="relative mt-10 overflow-hidden rounded-2xl border border-[#bcc9c6]/60 bg-white/90 p-5 shadow-sm [container-type:inline-size] sm:p-6"
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+            variants={fadeUp}
+            transition={transition}
+          >
+            {/* Shimmer: CSS `left` sweep spans full parent width. Framer `x` with %/calc targets element box, not track. */}
+            {!reduce && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 w-28 bg-gradient-to-r from-transparent via-[#6bd8cb]/22 to-transparent mv-request-path-sweep"
+              />
+            )}
+
+            {/* Header */}
+            <div className="mb-5 flex items-center gap-2.5">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-[#06d6a0] opacity-75" />
+                {!reduce && (
+                  <motion.span
+                    aria-hidden
+                    className="absolute inline-flex h-full w-full rounded-full bg-[#06d6a0]"
+                    animate={{ scale: [1, 2], opacity: [0.8, 0] }}
+                    transition={{ duration: 1.6, repeat: Infinity }}
+                  />
+                )}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-[#00685f]">
+                <Activity className="h-3.5 w-3.5" strokeWidth={2} />
+                Request Path · Live
+              </span>
             </div>
 
-            <div className="relative z-10 max-w-2xl">
-              <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-accent mb-6">Secured Ecosystem</p>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tighter text-white mb-6 leading-[1.0] font-display">
-                Ready to join the future of Healthcare?
-              </h2>
-              <p className="text-slate-400 text-lg md:text-xl leading-relaxed mb-12 font-sans font-medium">
-                Join <span className="text-white font-bold">1,200+ patients</span> already securing their medical destiny through MedVault's FHE-powered platform.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-5 justify-center">
-                <Link to="/patient">
-                  <Button size="lg" className="bg-white text-slate-950 hover:bg-slate-100 font-extrabold h-14 px-12 rounded-2xl text-base shadow-2xl shadow-white/5 transition-all gap-3 group active:scale-95">
-                    Register your Vault
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </Link>
-                <Link to="/sponsor">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-slate-700 hover:bg-white/5 text-white font-bold h-14 px-12 rounded-2xl text-base transition-all active:scale-95"
+            {/* Flow steps */}
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-0">
+              {infraFlow.map((step, idx) => (
+                <Fragment key={step}>
+                  <motion.div
+                    className="flex-1 cursor-default rounded-xl border border-[#bcc9c6]/60 bg-[#f7f9fb] px-3 py-2.5 text-center text-xs font-semibold text-[#1f2937] transition-colors"
+                    initial={{ opacity: 0, y: 8 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, amount: 0.4 }}
+                    transition={{ duration: 0.35, delay: idx * 0.09 }}
+                    whileHover={reduce ? undefined : { backgroundColor: "#e8f4fd", y: -1 }}
                   >
-                    For Trial Sponsors
-                  </Button>
-                </Link>
+                    {step}
+                  </motion.div>
+                  {idx < infraFlow.length - 1 && (
+                    <ChevronRight
+                      aria-hidden
+                      className="hidden h-4 w-4 shrink-0 text-[#bcc9c6] sm:block"
+                      strokeWidth={2}
+                    />
+                  )}
+                </Fragment>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── CTA — premium gradient card ───────────────────────────────────── */}
+      <section className="relative overflow-hidden px-4 pb-28 pt-6 sm:px-8" id="for-patients">
+        {/* Animated background blobs */}
+        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
+          <motion.div
+            className="absolute -left-24 top-0 h-96 w-96 rounded-full bg-[#89f5e7]/18 blur-3xl"
+            animate={reduce ? undefined : { scale: [1, 1.15, 1], opacity: [0.5, 0.8, 0.5] }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="absolute -right-16 bottom-0 h-72 w-72 rounded-full bg-[#8792fe]/14 blur-3xl"
+            animate={reduce ? undefined : { scale: [1.1, 1, 1.1], opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+
+        <div className="mx-auto max-w-4xl">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={viewportBase}
+            transition={transition}
+            className="overflow-hidden rounded-[2.5rem] border border-[#bcc9c6]/60 bg-gradient-to-br from-[#89f5e7]/15 via-white to-[#8792fe]/10 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.07)]"
+          >
+            <div className="grid md:grid-cols-[3fr_2fr]">
+
+              {/* Left: content */}
+              <div className="px-8 py-12 sm:px-12 sm:py-14">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#bcc9c6]/60 bg-white/80 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#00685f]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#06d6a0]" />
+                  Get started
+                </div>
+                <h2 className="text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
+                  Ready to explore on your terms?
+                </h2>
+                <p className="mt-4 max-w-sm leading-relaxed text-[#3d4947]">
+                  Open the patient console to browse trials, manage consent, and review your encrypted activity.
+                </p>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  {/* Primary — button-in-button pattern */}
+                  <motion.div
+                    whileHover={reduce ? undefined : { scale: 1.02, y: -2 }}
+                    whileTap={reduce ? undefined : { scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                  >
+                    <Link
+                      to="/patient/find-trials"
+                      className={cn(
+                        "inline-flex items-center gap-3 rounded-full px-7 py-4 font-semibold text-white",
+                        "bg-[#0a2540] transition hover:bg-[#163a5f]",
+                        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#00685f]/30",
+                      )}
+                    >
+                      <FlaskConical className="h-4 w-4" strokeWidth={2} />
+                      Find trials
+                      {/* Button-in-button arrow circle */}
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/12">
+                        <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+                      </span>
+                    </Link>
+                  </motion.div>
+
+                  {/* Secondary */}
+                  <motion.div
+                    whileHover={reduce ? undefined : { scale: 1.02, y: -2 }}
+                    whileTap={reduce ? undefined : { scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                  >
+                    <Link
+                      to="/docs"
+                      className="inline-flex items-center gap-2 rounded-full border border-[#bcc9c6] bg-white px-7 py-4 font-semibold text-[#191c1e] shadow-sm transition hover:bg-[#f2f4f6] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#00685f]/20"
+                    >
+                      <FileCheck className="h-4 w-4 text-[#00685f]" strokeWidth={1.8} />
+                      Read the docs
+                    </Link>
+                  </motion.div>
+                </div>
               </div>
+
+              {/* Right: decorative encryption flow panel */}
+              <div className="relative hidden overflow-hidden md:flex md:items-center md:justify-center">
+                <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-[#89f5e7]/15 to-[#8792fe]/15" />
+                <div className="relative w-full px-8 py-10">
+                  <p className="mb-4 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#00685f]">
+                    Data pipeline
+                  </p>
+                  {[
+                    { label: "Patient Data",    Icon: UserRound,  bg: "#e8f4fd",   fg: "#0a2540" },
+                    { label: "FHE Encrypted",   Icon: Lock,       bg: "#8792fe18", fg: "#8792fe" },
+                    { label: "ZK Proof",        Icon: BadgeCheck, bg: "#06d6a018", fg: "#00685f" },
+                    { label: "Sponsor Access",  Icon: CheckCircle2, bg: "#6bd8cb18", fg: "#00685f" },
+                  ].map((node, idx) => (
+                    <motion.div
+                      key={idx}
+                      className="mb-2 flex items-center gap-3 rounded-xl border border-[#bcc9c6]/50 bg-white/85 px-3 py-2.5 backdrop-blur-sm last:mb-0"
+                      initial={{ opacity: 0, x: 16 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.35, delay: idx * 0.12 + 0.3 }}
+                    >
+                      <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: node.bg, color: node.fg }}
+                      >
+                        <node.Icon className="h-4 w-4" strokeWidth={1.8} />
+                      </div>
+                      <span className="text-xs font-semibold text-[#1f2937]">{node.label}</span>
+                      <Check className="ml-auto h-3.5 w-3.5 text-[#06d6a0]" strokeWidth={2.5} />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </motion.div>
         </div>

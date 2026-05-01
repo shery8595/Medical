@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { ethers } from "ethers";
 import { useWeb3 } from "../lib/Web3Context";
 import { getContract } from "../lib/contracts";
+
+/** When not the string "false", any connected wallet can use the Sponsor Portal (testnet / hackathon). Set VITE_SPONSOR_OPEN_ACCESS=false to require on-chain verification. */
+export const SPONSOR_OPEN_ACCESS = import.meta.env.VITE_SPONSOR_OPEN_ACCESS !== "false";
 
 interface UseSponsorVerificationResult {
     isVerified: boolean;
@@ -13,15 +15,25 @@ interface UseSponsorVerificationResult {
 
 export function useSponsorVerification(): UseSponsorVerificationResult {
     const { account, provider, readOnlyProvider } = useWeb3();
-    const [isVerified, setIsVerified] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isVerified, setIsVerified] = useState(SPONSOR_OPEN_ACCESS);
+    const [isAdmin, setIsAdmin] = useState(SPONSOR_OPEN_ACCESS);
+    const [isLoading, setIsLoading] = useState(!SPONSOR_OPEN_ACCESS);
     const [sponsorName, setSponsorName] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (SPONSOR_OPEN_ACCESS) {
+            setIsVerified(true);
+            setIsAdmin(true);
+            setSponsorName(null);
+            setError(null);
+            setIsLoading(false);
+            return;
+        }
+
         if (!account || !readOnlyProvider) {
             setIsVerified(false);
+            setIsAdmin(false);
             setIsLoading(false);
             setSponsorName(null);
             return;
@@ -50,6 +62,7 @@ export function useSponsorVerification(): UseSponsorVerificationResult {
                     console.error("useSponsorVerification error:", err);
                     setError(err.message || "Failed to verify sponsor status");
                     setIsVerified(false);
+                    setIsAdmin(false);
                 }
             } finally {
                 if (!cancelled) {

@@ -1,23 +1,26 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 import { motion } from "framer-motion";
 import { Terminal, Database, Server, CheckCircle2, AlertCircle, KeyRound } from "lucide-react";
 
 const envVars = [
-    { key: "VITE_REGISTRY_ADDRESS", required: true, desc: "PatientRegistry proxy contract address from Hardhat deploy output." },
+    { key: "VITE_PRIVY_APP_ID", required: true, desc: "Privy app ID (dashboard) for sign-in and embedded EOA wallets on Arbitrum Sepolia." },
+    { key: "VITE_REGISTRY_ADDRESS", required: true, desc: "MedVaultRegistry (or related registry) address from deploy output / addresses.json." },
     { key: "VITE_TRIAL_MANAGER_ADDRESS", required: true, desc: "TrialManager proxy contract address." },
     { key: "VITE_ELIGIBILITY_ENGINE_ADDRESS", required: true, desc: "EligibilityEngine contract address." },
     { key: "VITE_SPONSOR_REGISTRY_ADDRESS", required: true, desc: "SponsorRegistry contract address." },
     { key: "VITE_SUBGRAPH_URL", required: true, desc: "The Graph Studio deployment URL for the medvault-subgraph. Found in Studio dashboard after deploy." },
-    { key: "VITE_CHAIN_ID", required: true, desc: "Chain ID for the target Fhenix testnet (e.g., 9001 for Fhenix Sepolia)." },
+    { key: "VITE_CHAIN_ID", required: true, desc: "Chain ID for Arbitrum Sepolia: 421614." },
     { key: "DEPLOY_PRIVATE_KEY", required: true, desc: "Private key of the deployer EOA. Never commit to git. Used only by Hardhat." },
     { key: "GRAPH_STUDIO_DEPLOY_KEY", required: false, desc: "Your Graph Studio API key for `graph deploy`. Found in Studio settings." },
 ];
 
 const depChecklist = [
-    { label: "MetaMask funded with Sepolia ETH", cat: "Pre-deploy" },
-    { label: "Fhenix Sepolia RPC added to MetaMask", cat: "Pre-deploy" },
+    { label: "Privy app ID + login methods enabled in dashboard", cat: "Pre-deploy" },
+    { label: "Testnet: embedded wallet funded with Arbitrum Sepolia ETH (e.g. public faucet) for on-chain actions", cat: "Pre-deploy" },
+    { label: "MetaMask or external wallet (optional) if you link it in Privy", cat: "Pre-deploy" },
     { label: ".env file populated from .env.example", cat: "Pre-deploy" },
     { label: "Node.js ≥ 20 installed", cat: "Pre-deploy" },
     { label: "`npm install` completed", cat: "Contract" },
@@ -32,24 +35,32 @@ const depChecklist = [
     { label: "VITE_SUBGRAPH_URL updated with Studio URL", cat: "Frontend" },
     { label: "`npm run dev` serves on localhost", cat: "Frontend" },
     { label: "App loads and shows FHE Ready indicator", cat: "Frontend" },
+    { label: "HTTP relayer live (RPC, relayer key, REGISTRY_ADDRESS, SEMAPHORE_ADDRESS, FRONTEND_URL / CORS)", cat: "Ops" },
+    { label: "Optional: private faucet (`arb-sepolia-faucet`) + `VITE_TESTNET_FAUCET_URL`", cat: "Ops" },
+    { label: "Optional: `VITE_RELAYER_URL` or Vite `/relay` proxy for local CORS", cat: "Ops" },
+    { label: "Optional: Chainlink Automation upkeep for MedVaultAutomation + `setChainlinkForwarder`", cat: "Ops" },
 ];
 
 const catColorStyles: Record<string, { bg: string; text: string }> = {
     "Pre-deploy": {
-        bg: "bg-slate-100 dark:bg-slate-800",
-        text: "text-slate-700 dark:text-slate-300"
+        bg: "bg-slate-100",
+        text: "text-slate-700"
     },
     "Contract": {
-        bg: "bg-blue-100 dark:bg-blue-900/30",
-        text: "text-blue-700 dark:text-blue-400"
+        bg: "bg-blue-100",
+        text: "text-blue-700"
     },
     "Subgraph": {
-        bg: "bg-blue-100 dark:bg-blue-900/30",
-        text: "text-blue-700 dark:text-blue-400"
+        bg: "bg-blue-100",
+        text: "text-blue-700"
     },
     "Frontend": {
-        bg: "bg-purple-100 dark:bg-purple-900/30",
-        text: "text-purple-700 dark:text-purple-400"
+        bg: "bg-purple-100",
+        text: "text-purple-700"
+    },
+    Ops: {
+        bg: "bg-amber-100",
+        text: "text-amber-800"
     }
 };
 
@@ -57,26 +68,21 @@ export function DeploymentGuideDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-emerald-500 font-bold tracking-widest uppercase text-xs">Operations</span>
-                <h1 className="mt-2 text-5xl">Deployment Guide</h1>
-
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
-                    Deploying MedVault involves three independent but tightly coupled systems: <strong>smart contracts</strong> on the Fhenix Sepolia testnet, a <strong>Subgraph</strong> on The Graph Studio, and the <strong>Vite frontend</strong>. They must be deployed in strict order, with addresses propagated between each step.
-                </p>
+                <DocsPageHeaderForRoute />
 
                 {/* Pre-deploy checklist */}
                 <div className="not-prose my-10">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                         <CheckCircle2 className="w-5 h-5 text-blue-500" />
                         Full Deployment Checklist
                     </h3>
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+                    <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm divide-y divide-slate-100">
                         {depChecklist.map((item, i) => {
                             const styles = catColorStyles[item.cat];
                             return (
-                                <div key={i} className="flex items-center gap-4 px-5 py-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                    <div className="w-4 h-4 rounded border-2 border-slate-300 dark:border-slate-600 shrink-0" />
-                                    <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">{item.label}</span>
+                                <div key={i} className="flex items-center gap-4 px-5 py-3 bg-white hover:bg-slate-50 transition-colors">
+                                    <div className="w-4 h-4 rounded border-2 border-slate-300 shrink-0" />
+                                    <span className="text-sm text-slate-700 flex-1">{item.label}</span>
                                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${styles.bg} ${styles.text}`}>{item.cat}</span>
                                 </div>
                             );
@@ -84,7 +90,7 @@ export function DeploymentGuideDoc() {
                     </div>
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>I. Step 1 — Smart Contract Deployment</h2>
                 <p>
@@ -105,7 +111,7 @@ npx hardhat compile
 
 # Deploy to the Fhenix Sepolia testnet
 # This runs scripts/deploy.js which deploys all contracts in order:
-# 1. SponsorRegistry, 2. PatientRegistry, 3. TrialManager, 4. EligibilityEngine
+# 1. SponsorRegistry, 2. MedVaultRegistry, 3. TrialManager, 4. EligibilityEngine
 npx hardhat deploy --network fhenixSepolia`}
                 />
 
@@ -113,7 +119,7 @@ npx hardhat deploy --network fhenixSepolia`}
                     After a successful deploy, Hardhat will print each contract's address to the console. Copy them now — they are needed for <strong>both</strong> the frontend <code>.env</code> file and the Subgraph's <code>subgraph.yaml</code>. If you lose them, you can re-query them via Hardhat's artifact files in <code>./deployments/fhenixSepolia/</code>.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>II. Step 2 — Subgraph Deployment</h2>
                 <p>
@@ -172,38 +178,38 @@ graph auth --studio <YOUR_DEPLOY_KEY>
 graph deploy --studio medvault-subgraph --version-label v0.1.7`}
                 />
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>III. Step 3 — Frontend Environment Setup</h2>
                 <p>
                     The Vite frontend reads all contract addresses and network configuration from a <code>.env</code> file at the project root. All variables are prefixed with <code>VITE_</code> to be exposed to the browser bundle by Vite's environment system.
                 </p>
 
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
                         <KeyRound className="w-4 h-4 text-slate-500" />
-                        <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Environment Variable Reference</span>
+                        <span className="font-bold text-sm text-slate-700">Environment Variable Reference</span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                                    <th className="text-left px-4 py-2 font-bold text-slate-700 dark:text-slate-300 text-xs">Variable</th>
-                                    <th className="text-left px-4 py-2 font-bold text-slate-700 dark:text-slate-300 text-xs">Required</th>
-                                    <th className="text-left px-4 py-2 font-bold text-slate-700 dark:text-slate-300 text-xs">Description</th>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <th className="text-left px-4 py-2 font-bold text-slate-700 text-xs">Variable</th>
+                                    <th className="text-left px-4 py-2 font-bold text-slate-700 text-xs">Required</th>
+                                    <th className="text-left px-4 py-2 font-bold text-slate-700 text-xs">Description</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {envVars.map((v, i) => (
-                                    <tr key={v.key} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
-                                        <td className="px-4 py-2 font-mono text-blue-600 dark:text-blue-400 text-xs align-top">{v.key}</td>
+                                    <tr key={v.key} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                        <td className="px-4 py-2 font-mono text-blue-600 text-xs align-top">{v.key}</td>
                                         <td className="px-4 py-2 text-xs align-top">
                                             {v.required
-                                                ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400">Required</span>
-                                                : <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">Optional</span>
+                                                ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Required</span>
+                                                : <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">Optional</span>
                                             }
                                         </td>
-                                        <td className="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{v.desc}</td>
+                                        <td className="px-4 py-2 text-xs text-slate-600">{v.desc}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -226,7 +232,7 @@ npm run build && npm run preview`}
                 />
 
                 <Callout type="tip" title="Verify FHE Readiness in the Browser">
-                    After launching, look for the <strong>FHE Ready</strong> green badge in the top-right corner of the Dashboard header. If it shows <strong>FHE Initializing</strong> or an error, the frontend failed to connect to the Fhenix RPC — double-check your MetaMask network configuration and the <code>VITE_CHAIN_ID</code> variable.
+                    After launching, sign in with Privy and ensure the app finishes wallet + FHE setup. If CoFHE stays disconnected, verify <code>VITE_PRIVY_APP_ID</code>, Arbitrum Sepolia as the active chain, and optional <code>VITE_RPC_URL</code> for reads.
                 </Callout>
 
             </Prose>

@@ -31,14 +31,14 @@ type Trial @entity(immutable: false) {
   maxAge: Int!
   requiresDiabetes: Boolean!
   minHb: Int!
-  
+
   # Expanded Criteria
   genderRequirement: Int!              # 0=any, 1=Male, 2=Female
   minHeight: Int!
   maxWeight: Int!
   requiresNonSmoker: Boolean!
   requiresNormalBP: Boolean!
-  
+
   active: Boolean!
   endTime: BigInt!
   createdAt: BigInt!
@@ -48,6 +48,7 @@ type Trial @entity(immutable: false) {
   incentivePool: IncentivePool @derivedFrom(field: "trial")
   milestones: [TrialMilestone!]! @derivedFrom(field: "trial")
   progress: [ParticipantProgress!]! @derivedFrom(field: "trial")
+  anonymousSubmissions: [AnonymousSubmission!]! @derivedFrom(field: "trial")
 }
 
 type TrialMilestone @entity(immutable: false) {
@@ -71,10 +72,14 @@ type ParticipantProgress @entity(immutable: false) {
 type AuditLog @entity(immutable: true) {
   id: ID!                              # incremental or txHash-logIndex
   action: String!                      # ActionType ENUM as string
+  actionType: String!                 # Alias for action
   trialId: BigInt!
   patientHash: Bytes!
+  commitment: BigInt                   # For anonymous operations
   timestamp: BigInt!
   performer: Bytes!
+  actor: Bytes!                        # Alias for performer
+  transactionHash: String!             # Alias for txHash as string
   txHash: Bytes!
 }
 
@@ -127,4 +132,49 @@ type StakingUser @entity(immutable: false) {
   id: ID!                              # user wallet address
   totalStakedWei: BigInt!
   lastUpdatedAt: BigInt!
+}
+
+# ZK Anonymous Application Entities
+type ZKCommitment @entity(immutable: true) {
+  id: ID!                              # commitment hash (bytes32 as hex)
+  commitmentHash: Bytes!               # the actual commitment bytes32
+  registeredAt: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type ZKAnonymousApplication @entity(immutable: true) {
+  id: ID!                              # nullifier-trialId
+  trial: String!                       # trial ID (not a relation since no Trial FK needed)
+  nullifier: Bytes!                    # nullifier hash
+  commitment: Bytes!                   # commitment hash
+  appliedAt: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type ZKProof @entity(immutable: true) {
+  id: ID!                              # txHash
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+# Semaphore-based Anonymous Registration Entities
+type AnonymousPatient @entity(immutable: true) {
+  id: ID!                              # identityCommitment as hex string
+  commitment: BigInt!                  # the Semaphore identity commitment
+  registeredAt: BigInt!
+}
+
+type AnonymousSubmission @entity(immutable: false) {
+  id: ID!                              # nullifier-trialId
+  trial: Trial!
+  trialId: BigInt!
+  nullifier: BigInt!
+  submittedAt: BigInt!
+  status: String!                      # Staged, Pending, Accepted, Rejected
+  statusUpdatedAt: BigInt
+  stagedAt: BigInt                     # set when AnonymousApplyStaged fires
+  finalCt: Bytes                       # ebool ct hash from staging (bytes32)
 }

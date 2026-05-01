@@ -1,9 +1,18 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 import { Zap, Lock, AlertTriangle, GitBranch, ArrowRight, Binary } from "lucide-react";
+import { cn } from "../../lib/utils";
+
+const FHE_STAT_TONE: Record<string, string> = {
+    teal: "bg-teal-100 text-teal-600",
+    purple: "bg-purple-100 text-purple-600",
+    rose: "bg-rose-100 text-rose-600",
+    amber: "bg-amber-100 text-amber-600",
+};
 
 const typeGasChart = `
 xychart-beta
@@ -41,12 +50,7 @@ export function FhePrimitivesDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-blue-500 font-bold tracking-widest uppercase text-xs">Core Concepts</span>
-                <h1 className="mt-2 text-5xl">Fhenix fhEVM Primitives & FHE Operations</h1>
-
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
-                    Fully Homomorphic Encryption demands a fundamental rethinking of how we write smart contracts. Standard Solidity types like <code>uint256</code> and <code>bool</code> cannot safely represent sensitive state. Every piece of health data must instead live inside an encrypted envelope exposed by Fhenix's <code>@fhenixprotocol/cofhe-contracts</code> library.
-                </p>
+                <DocsPageHeaderForRoute />
 
                 {/* Stat Bar */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-10 not-prose">
@@ -56,15 +60,17 @@ export function FhePrimitivesDoc() {
                         { label: "Branching Allowed", value: "None", icon: <GitBranch className="w-5 h-5" />, color: "rose" },
                         { label: "Data Revealed On-Chain", value: "Zero", icon: <Binary className="w-5 h-5" />, color: "amber" },
                     ].map((s) => (
-                        <div key={s.label} className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm text-center">
-                            <div className={`p-2 rounded-xl mb-3 bg-${s.color}-100 dark:bg-${s.color}-900/30 text-${s.color}-600 dark:text-${s.color}-400`}>{s.icon}</div>
-                            <div className="text-3xl font-bold font-display text-slate-900 dark:text-white">{s.value}</div>
+                        <div key={s.label} className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 bg-white shadow-sm text-center">
+                            <div className={cn("p-2 rounded-xl mb-3", FHE_STAT_TONE[s.color] ?? "bg-slate-100 text-slate-600")}>
+                                {s.icon}
+                            </div>
+                            <div className="text-3xl font-bold font-display text-slate-900">{s.value}</div>
                             <div className="text-xs text-slate-500 mt-1">{s.label}</div>
                         </div>
                     ))}
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>I. Encrypted Integer Types (e-Types)</h2>
                 <p>
@@ -75,29 +81,29 @@ export function FhePrimitivesDoc() {
                 </p>
 
                 {/* Type Reference Table */}
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Type</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Bits</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">MedVault Example</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Gas Cost</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Used in App</th>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Type</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Bits</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">MedVault Example</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Gas Cost</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Used in App</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {eTypes.map((t, i) => (
-                                    <tr key={t.type} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
-                                        <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400 font-bold">{t.type}</td>
-                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{t.bits}</td>
-                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{t.example}</td>
-                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{t.gas}</td>
+                                    <tr key={t.type} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                        <td className="px-4 py-3 font-mono text-blue-600 font-bold">{t.type}</td>
+                                        <td className="px-4 py-3 text-slate-600">{t.bits}</td>
+                                        <td className="px-4 py-3 text-slate-600">{t.example}</td>
+                                        <td className="px-4 py-3 text-slate-600">{t.gas}</td>
                                         <td className="px-4 py-3">
                                             {t.used
-                                                ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">✓ Yes</span>
-                                                : <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">– No</span>
+                                                ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">✓ Yes</span>
+                                                : <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">– No</span>
                                             }
                                         </td>
                                     </tr>
@@ -105,23 +111,23 @@ export function FhePrimitivesDoc() {
                             </tbody>
                         </table>
                     </div>
-                    <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 mb-8 mt-6">
-                        <h3 className="text-xl font-semibold text-slate-200 mb-4">Operations vs Gas Cost</h3>
-                        <ul className="text-slate-300 space-y-2 list-disc list-inside">
+                    <div className="not-prose bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8 mt-6">
+                        <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">Operations vs gas cost</h3>
+                        <ul className="text-slate-600 text-sm space-y-2 list-disc list-inside m-0">
                             <li><strong>euint32 Add/Sub:</strong> ~8M Gas (Extremely Fast)</li>
                             <li><strong>euint32 Mul/Div:</strong> ~12M Gas (Fast)</li>
                             <li><strong>euint32 Cmp (lt/gt/eq):</strong> ~15M Gas (Moderate)</li>
                             <li><strong>euint32 Shift (shl/shr):</strong> ~18M Gas (Slow)</li>
                         </ul>
                     </div>
-                    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">Table 1. Encrypted type reference for MedVault contract development.</div>
+                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-xs text-slate-400">Table 1. Encrypted type reference for MedVault contract development.</div>
                 </div>
 
                 <Callout type="warning" title="The Branching Problem — Critical Law of FHE Development">
                     You <strong>cannot</strong> write <code>if (encryptedAge &gt; 18) {"{ ... }"}</code> in FHE. Because the EVM node executing the transaction has no way to evaluate the condition — it sees only undecodable encrypted bytes — the blockchain state machine cannot branch deterministically. Attempting to use encrypted values in standard <code>if</code> statements will either silently produce wrong results or revert entirely.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>II. The FHE.sol Standard Library</h2>
                 <p>
@@ -129,27 +135,27 @@ export function FhePrimitivesDoc() {
                 </p>
 
                 {/* FHE Function Reference Table */}
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div className="px-4 pt-4 pb-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 m-0">FHE.sol Function Reference</h4>
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="px-4 pt-4 pb-2 bg-slate-50 border-b border-slate-200">
+                        <h4 className="text-sm font-bold text-slate-700 m-0">FHE.sol Function Reference</h4>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Function</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Returns</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Replaces</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Notes</th>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Function</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Returns</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Replaces</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Notes</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {fheFunctions.map((f, i) => (
-                                    <tr key={f.fn} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
-                                        <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400 text-xs">{f.fn}</td>
-                                        <td className="px-4 py-3 font-mono text-purple-600 dark:text-purple-400 text-xs">{f.returns}</td>
+                                    <tr key={f.fn} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                        <td className="px-4 py-3 font-mono text-blue-600 text-xs">{f.fn}</td>
+                                        <td className="px-4 py-3 font-mono text-purple-600 text-xs">{f.returns}</td>
                                         <td className="px-4 py-3 font-mono text-slate-500 text-xs">{f.replaces}</td>
-                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{f.note}</td>
+                                        <td className="px-4 py-3 text-slate-600 text-xs">{f.note}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -162,9 +168,9 @@ export function FhePrimitivesDoc() {
                     Since <code>if/else</code> statements are completely forbidden on encrypted data, the <strong>entire conditional logic</strong> in MedVault is implemented via <code>FHE.cmux()</code>. This is the single most important function in FHE smart contract development.
                 </p>
 
-                <div className="not-prose my-8 p-6 rounded-2xl border border-purple-200 dark:border-purple-900/40 bg-purple-50/50 dark:bg-purple-950/10">
-                    <div className="font-mono text-center text-slate-900 dark:text-white text-lg font-bold mb-2">
-                        FHE.cmux(<span className="text-purple-600 dark:text-purple-400">ebool condition</span>, <span className="text-blue-600 dark:text-blue-400">euint trueVal</span>, <span className="text-rose-600 dark:text-rose-400">euint falseVal</span>) → <span className="text-amber-600 dark:text-amber-400">euint</span>
+                <div className="not-prose my-8 p-6 rounded-2xl border border-purple-200 bg-purple-50/50">
+                    <div className="font-mono text-center text-slate-900 text-lg font-bold mb-2">
+                        FHE.cmux(<span className="text-purple-600">ebool condition</span>, <span className="text-blue-600">euint trueVal</span>, <span className="text-rose-600">euint falseVal</span>) → <span className="text-amber-600">euint</span>
                     </div>
                     <div className="flex items-center justify-center gap-6 mt-6 flex-wrap">
                         {[
@@ -172,8 +178,8 @@ export function FhePrimitivesDoc() {
                             { label: "trueVal", desc: "The value selected when condition = true (always computed!)", color: "teal" },
                             { label: "falseVal", desc: "The value selected when condition = false (always computed!)", color: "rose" },
                         ].map(a => (
-                            <div key={a.label} className={`flex-1 min-w-[180px] p-4 rounded-xl border border-${a.color}-200 dark:border-${a.color}-900/40 bg-white dark:bg-slate-900 shadow-sm text-center`}>
-                                <div className={`font-mono font-bold text-${a.color}-600 dark:text-${a.color}-400 mb-2`}>{a.label}</div>
+                            <div key={a.label} className={`flex-1 min-w-[180px] p-4 rounded-xl border border-${a.color}-200 bg-white shadow-sm text-center`}>
+                                <div className={`font-mono font-bold text-${a.color}-600 mb-2`}>{a.label}</div>
                                 <div className="text-xs text-slate-500">{a.desc}</div>
                             </div>
                         ))}
@@ -192,7 +198,7 @@ export function FhePrimitivesDoc() {
                     language="solidity"
                     code={`import "@fhenixprotocol/cofhe-contracts/FHE.sol";
 
-// Patient's encrypted age (stored in PatientRegistry)
+// Patient's encrypted age (stored in MedVaultRegistry)
 euint32 encryptedAge = registry.getPatientAge(patientAddr);
 
 // Trial's encrypted minimum and maximum age bounds
@@ -216,7 +222,7 @@ euint32 agePoints = FHE.cmux(
 );`}
                 />
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>IV. Permission Management (ACL)</h2>
                 <p>

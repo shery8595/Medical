@@ -18,8 +18,9 @@ async function main() {
     console.log(`SponsorRegistry deployed to: ${sponsorRegistryAddress}`);
 
     // 3. Deploy TrialManager
+    // FINDING 3: TrialManager now requires SponsorRegistry address at construction
     const TrialManager = await ethers.getContractFactory("TrialManager");
-    const trialManager = await TrialManager.deploy();
+    const trialManager = await TrialManager.deploy(sponsorRegistryAddress);
     await trialManager.waitForDeployment();
     const trialManagerAddress = await trialManager.getAddress();
     console.log(`TrialManager deployed to: ${trialManagerAddress}`);
@@ -76,8 +77,7 @@ async function main() {
     // Set MedVaultAutomation as authorized for EligibilityEngine
     await (await engine.setAutomationContract(automationAddress)).wait();
 
-    // Set SponsorRegistry for TrialManager
-    await (await trialManager.setSponsorRegistry(sponsorRegistryAddress)).wait();
+    // FINDING 3: SponsorRegistry is now validated at construction, no need to set again
 
     // Link MilestoneManager and DataAccessLog to Vault (using existing ones if available)
     const milestoneManagerAddress = "0xc5283b896100a706fC11113960916e8b67E95b63";

@@ -7,7 +7,7 @@ import {
   Entity,
   Bytes,
   Address,
-  BigInt
+  BigInt,
 } from "@graphprotocol/graph-ts";
 
 export class ConsentGranted extends ethereum.Event {
@@ -52,6 +52,36 @@ export class ConsentRevoked__Params {
   get trialId(): BigInt {
     return this._event.parameters[1].value.toBigInt();
   }
+
+  get oldConsent(): Bytes {
+    return this._event.parameters[2].value.toBytes();
+  }
+}
+
+export class EncryptedConsentGranted extends ethereum.Event {
+  get params(): EncryptedConsentGranted__Params {
+    return new EncryptedConsentGranted__Params(this);
+  }
+}
+
+export class EncryptedConsentGranted__Params {
+  _event: EncryptedConsentGranted;
+
+  constructor(event: EncryptedConsentGranted) {
+    this._event = event;
+  }
+
+  get patient(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+
+  get trialId(): BigInt {
+    return this._event.parameters[1].value.toBigInt();
+  }
+
+  get consent(): Bytes {
+    return this._event.parameters[2].value.toBytes();
+  }
 }
 
 export class ConsentManager extends ethereum.SmartContract {
@@ -59,57 +89,138 @@ export class ConsentManager extends ethereum.SmartContract {
     return new ConsentManager("ConsentManager", address);
   }
 
-  consent(param0: Address, param1: BigInt): boolean {
-    let result = super.call("consent", "consent(address,uint256):(bool)", [
-      ethereum.Value.fromAddress(param0),
-      ethereum.Value.fromUnsignedBigInt(param1)
-    ]);
+  getActiveConsent(_patient: Address, _trialId: BigInt): Bytes {
+    let result = super.call(
+      "getActiveConsent",
+      "getActiveConsent(address,uint256):(bytes32)",
+      [
+        ethereum.Value.fromAddress(_patient),
+        ethereum.Value.fromUnsignedBigInt(_trialId),
+      ],
+    );
 
-    return result[0].toBoolean();
+    return result[0].toBytes();
   }
 
-  try_consent(param0: Address, param1: BigInt): ethereum.CallResult<boolean> {
-    let result = super.tryCall("consent", "consent(address,uint256):(bool)", [
-      ethereum.Value.fromAddress(param0),
-      ethereum.Value.fromUnsignedBigInt(param1)
-    ]);
+  try_getActiveConsent(
+    _patient: Address,
+    _trialId: BigInt,
+  ): ethereum.CallResult<Bytes> {
+    let result = super.tryCall(
+      "getActiveConsent",
+      "getActiveConsent(address,uint256):(bytes32)",
+      [
+        ethereum.Value.fromAddress(_patient),
+        ethereum.Value.fromUnsignedBigInt(_trialId),
+      ],
+    );
     if (result.reverted) {
       return new ethereum.CallResult();
     }
     let value = result.value;
-    return ethereum.CallResult.fromValue(value[0].toBoolean());
+    return ethereum.CallResult.fromValue(value[0].toBytes());
   }
 
-  hasConsent(_patient: Address, _trialId: BigInt): boolean {
+  getEncryptedConsent(_patient: Address, _trialId: BigInt): Bytes {
     let result = super.call(
-      "hasConsent",
-      "hasConsent(address,uint256):(bool)",
+      "getEncryptedConsent",
+      "getEncryptedConsent(address,uint256):(bytes32)",
       [
         ethereum.Value.fromAddress(_patient),
-        ethereum.Value.fromUnsignedBigInt(_trialId)
-      ]
+        ethereum.Value.fromUnsignedBigInt(_trialId),
+      ],
+    );
+
+    return result[0].toBytes();
+  }
+
+  try_getEncryptedConsent(
+    _patient: Address,
+    _trialId: BigInt,
+  ): ethereum.CallResult<Bytes> {
+    let result = super.tryCall(
+      "getEncryptedConsent",
+      "getEncryptedConsent(address,uint256):(bytes32)",
+      [
+        ethereum.Value.fromAddress(_patient),
+        ethereum.Value.fromUnsignedBigInt(_trialId),
+      ],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBytes());
+  }
+
+  hasConsentRecord(_patient: Address, _trialId: BigInt): boolean {
+    let result = super.call(
+      "hasConsentRecord",
+      "hasConsentRecord(address,uint256):(bool)",
+      [
+        ethereum.Value.fromAddress(_patient),
+        ethereum.Value.fromUnsignedBigInt(_trialId),
+      ],
     );
 
     return result[0].toBoolean();
   }
 
-  try_hasConsent(
+  try_hasConsentRecord(
     _patient: Address,
-    _trialId: BigInt
+    _trialId: BigInt,
   ): ethereum.CallResult<boolean> {
     let result = super.tryCall(
-      "hasConsent",
-      "hasConsent(address,uint256):(bool)",
+      "hasConsentRecord",
+      "hasConsentRecord(address,uint256):(bool)",
       [
         ethereum.Value.fromAddress(_patient),
-        ethereum.Value.fromUnsignedBigInt(_trialId)
-      ]
+        ethereum.Value.fromUnsignedBigInt(_trialId),
+      ],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
     }
     let value = result.value;
     return ethereum.CallResult.fromValue(value[0].toBoolean());
+  }
+}
+
+export class GetActiveConsentCall extends ethereum.Call {
+  get inputs(): GetActiveConsentCall__Inputs {
+    return new GetActiveConsentCall__Inputs(this);
+  }
+
+  get outputs(): GetActiveConsentCall__Outputs {
+    return new GetActiveConsentCall__Outputs(this);
+  }
+}
+
+export class GetActiveConsentCall__Inputs {
+  _call: GetActiveConsentCall;
+
+  constructor(call: GetActiveConsentCall) {
+    this._call = call;
+  }
+
+  get _patient(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+
+  get _trialId(): BigInt {
+    return this._call.inputValues[1].value.toBigInt();
+  }
+}
+
+export class GetActiveConsentCall__Outputs {
+  _call: GetActiveConsentCall;
+
+  constructor(call: GetActiveConsentCall) {
+    this._call = call;
+  }
+
+  get value0(): Bytes {
+    return this._call.outputValues[0].value.toBytes();
   }
 }
 
@@ -133,6 +244,12 @@ export class GrantConsentCall__Inputs {
   get _trialId(): BigInt {
     return this._call.inputValues[0].value.toBigInt();
   }
+
+  get _consent(): GrantConsentCall_consentStruct {
+    return changetype<GrantConsentCall_consentStruct>(
+      this._call.inputValues[1].value.toTuple(),
+    );
+  }
 }
 
 export class GrantConsentCall__Outputs {
@@ -140,6 +257,24 @@ export class GrantConsentCall__Outputs {
 
   constructor(call: GrantConsentCall) {
     this._call = call;
+  }
+}
+
+export class GrantConsentCall_consentStruct extends ethereum.Tuple {
+  get ctHash(): BigInt {
+    return this[0].toBigInt();
+  }
+
+  get securityZone(): i32 {
+    return this[1].toI32();
+  }
+
+  get utype(): i32 {
+    return this[2].toI32();
+  }
+
+  get signature(): Bytes {
+    return this[3].toBytes();
   }
 }
 

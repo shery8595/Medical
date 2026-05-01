@@ -8,11 +8,19 @@
   },
   "dependencies": {
     "@chainlink/contracts": "^1.5.0",
-    "@cofhe/sdk": "^0.4.0",
+    "@cofhe/sdk": "^0.5.1",
     "@fhenixprotocol/cofhe-contracts": "^0.1.0",
     "@fhevm/solidity": "^0.9.1",
+    "@noir-lang/backend_barretenberg": "0.36.0",
+    "@noir-lang/noir_js": "0.36.0",
+    "@privy-io/react-auth": "^3.22.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@reclaimprotocol/js-sdk": "^5.2.0",
+    "@semaphore-protocol/contracts": "^4.14.2",
+    "@semaphore-protocol/group": "^4.14.2",
+    "@semaphore-protocol/identity": "^4.14.2",
+    "@semaphore-protocol/proof": "^4.14.2",
     "@tailwindcss/typography": "^0.5.19",
     "@types/three": "^0.183.1",
     "buffer": "^6.0.3",
@@ -39,12 +47,13 @@
     "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",
     "util": "^0.12.5",
+    "viem": "^2.48.4",
     "vite-plugin-node-polyfills": "^0.25.0",
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.5.0"
   },
   "devDependencies": {
-    "@cofhe/hardhat-plugin": "^0.4.0",
+    "@cofhe/hardhat-plugin": "^0.5.1",
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
     "@nomicfoundation/hardhat-ethers": "^3.1.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.1.0",
@@ -85,6 +94,7 @@
     "clean": "rimraf ./fhevmTemp ./artifacts ./cache ./coverage ./types ./coverage.json ./dist && npm run typechain",
     "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
     "test": "hardhat test",
-    "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain"
+    "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
+    "build:circuit": "node scripts/compile-circuit.js"
   }
 }

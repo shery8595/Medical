@@ -10,14 +10,16 @@ export interface AuditLogEntry {
     performer: string;
 }
 
+/** Must match `DataAccessLog.ActionType` enum order (Solidity). */
 const ACTION_TYPES = [
     "PROFILE_SUBMISSION",
     "CONSENT_GRANTED",
     "ELIGIBILITY_CHECKED",
     "APPLICATION_STATUS_CHANGED",
     "MILESTONE_COMPLETED",
-    "REWARDS_DISTRIBUTED"
-];
+    "REWARDS_DISTRIBUTED",
+    "PARTICIPANT_JOINED_POOL",
+] as const;
 
 export function useAuditLogs() {
     const { readOnlyProvider } = useWeb3();
@@ -46,12 +48,20 @@ export function useAuditLogs() {
                 // Fetch in reverse order (newest first)
                 for (let i = Number(count) - 1; i >= 0; i--) {
                     const log = await contract.getLog(i);
+                    const actionIdx = Number(log.action);
+                    const actionType =
+                        Number.isFinite(actionIdx) && actionIdx >= 0 && actionIdx < ACTION_TYPES.length
+                            ? ACTION_TYPES[actionIdx]
+                            : typeof log.action === "string" && log.action.length > 0
+                              ? log.action
+                              : `UNKNOWN_ACTION_${String(log.action)}`;
+
                     fetchedLogs.push({
-                        actionType: ACTION_TYPES[log.action] || `UNKNOWN_ACTION_${log.action}`,
+                        actionType,
                         trialId: log.trialId.toString(),
                         patientHash: log.patientHash,
                         timestamp: new Date(Number(log.timestamp) * 1000),
-                        performer: log.performer
+                        performer: log.performer,
                     });
                 }
 

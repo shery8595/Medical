@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { LandingLayout } from "./components/layout/LandingLayout";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { LandingPage } from "./pages/LandingPage";
@@ -11,6 +11,8 @@ import { PatientDashboard } from "./pages/PatientDashboard";
 import { PatientVaultPage } from "./pages/PatientVaultPage";
 import { PatientTrialsPage } from "./pages/PatientTrialsPage";
 import { PatientAppliedTrialsPage } from "./pages/PatientAppliedTrialsPage";
+import { PatientResultsPage } from "./pages/PatientResultsPage";
+import { PatientIdentityPage } from "./pages/PatientIdentityPage";
 import { SponsorDashboard } from "./pages/SponsorDashboard";
 import { SponsorTrialsPage } from "./pages/SponsorTrialsPage";
 import { SponsorCreateTrialPage } from "./pages/SponsorCreateTrialPage";
@@ -40,12 +42,69 @@ import { PrivateStakingDoc } from "./pages/docs/PrivateStakingDoc";
 import { TestingVerificationDoc } from "./pages/docs/TestingVerificationDoc";
 import { SecurityModelDoc } from "./pages/docs/SecurityModelDoc";
 import { ComplianceDoc } from "./pages/docs/ComplianceDoc";
+import { FaqDoc } from "./pages/docs/FaqDoc";
+import { ChangelogDoc } from "./pages/docs/ChangelogDoc";
+import { IdentityPrivacyDoc } from "./pages/docs/IdentityPrivacyDoc";
+import { ChainlinkAutomationDoc } from "./pages/docs/ChainlinkAutomationDoc";
 
+import { PrivyProvider } from "@privy-io/react-auth";
+import { arbitrumSepolia } from "viem/chains";
 import { Web3Provider } from "./lib/Web3Context";
 import { EncryptedDataProvider } from "./lib/EncryptedDataContext";
 import { ScrollToTop } from "./components/ui/ScrollToTop";
 
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
+
 export default function App() {
+  if (!PRIVY_APP_ID) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-slate-200 p-8">
+        <p className="text-center max-w-md text-sm leading-relaxed">
+          Set <code className="text-teal-400">VITE_PRIVY_APP_ID</code> in <code className="text-slate-400">.env</code> (from
+          the{" "}
+          <a href="https://dashboard.privy.io" className="text-teal-400 underline" target="_blank" rel="noreferrer">
+            Privy dashboard
+          </a>
+          ). The app uses Privy for sign-in and embedded Arbitrum Sepolia wallets.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <PrivyProvider
+      appId={PRIVY_APP_ID}
+      config={{
+        defaultChain: arbitrumSepolia,
+        supportedChains: [arbitrumSepolia],
+        // Nested `ethereum` is required; a top-level `createOnLogin` is ignored and breaks auto-creation.
+        embeddedWallets: {
+          ethereum: {
+            createOnLogin: "all-users",
+          },
+        },
+      }}
+    >
+      <MedVaultRoutes />
+    </PrivyProvider>
+  );
+}
+
+function MedVaultRoutes() {
+  const PatientShell = () => (
+    <DashboardLayout role="patient">
+      <Outlet />
+    </DashboardLayout>
+  );
+
+  const SponsorShell = () => (
+    <SponsorGuard>
+      <DashboardLayout role="sponsor">
+        <Outlet />
+      </DashboardLayout>
+    </SponsorGuard>
+  );
+
   return (
     <Web3Provider>
       <EncryptedDataProvider>
@@ -79,129 +138,42 @@ export default function App() {
               }
             />
 
-            {/* Patient Dashboard Routes */}
-            <Route
-              path="/patient"
-              element={
-                <DashboardLayout role="patient">
-                  <PatientDashboard />
-                </DashboardLayout>
-              }
-            />
-            <Route
-              path="/patient/vault"
-              element={
-                <DashboardLayout role="patient">
-                  <PatientVaultPage />
-                </DashboardLayout>
-              }
-            />
-            <Route
-              path="/patient/trials"
-              element={
-                <DashboardLayout role="patient">
-                  <PatientTrialsPage />
-                </DashboardLayout>
-              }
-            />
-            <Route
-              path="/patient/applied"
-              element={
-                <DashboardLayout role="patient">
-                  <PatientAppliedTrialsPage />
-                </DashboardLayout>
-              }
-            />
-            <Route
-              path="/patient/consent"
-              element={
-                <DashboardLayout role="patient">
-                  <ConsentLogPage />
-                </DashboardLayout>
-              }
-            />
+            {/* Patient Routes (reference-style nested routing + compatibility aliases) */}
+            <Route path="/patient" element={<PatientShell />}>
+              <Route index element={<Navigate to="/patient/dashboard" replace />} />
+              <Route path="dashboard" element={<PatientDashboard />} />
+              <Route path="medical-vault" element={<PatientVaultPage />} />
+              <Route path="find-trials" element={<PatientTrialsPage />} />
+              <Route path="consent-logs" element={<ConsentLogPage />} />
+              <Route path="applications" element={<PatientAppliedTrialsPage />} />
+              <Route path="results" element={<PatientResultsPage />} />
+              <Route path="identity" element={<PatientIdentityPage />} />
+              <Route path="settings" element={<Navigate to="/patient/dashboard" replace />} />
+              {/* Legacy aliases */}
+              <Route path="vault" element={<Navigate to="/patient/medical-vault" replace />} />
+              <Route path="trials" element={<Navigate to="/patient/find-trials" replace />} />
+              <Route path="applied" element={<Navigate to="/patient/applications" replace />} />
+              <Route path="consent" element={<Navigate to="/patient/consent-logs" replace />} />
+            </Route>
 
-            {/* Sponsor Dashboard Routes — all guarded by on-chain SponsorRegistry verification */}
-            <Route
-              path="/sponsor"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorDashboard />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/trials"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorTrialsPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/trials/create"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorCreateTrialPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/trials/:id"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorTrialDetailsPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/matches"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorMatchesPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/analytics"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorAnalyticsPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/audit"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorAuditLogPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
-            <Route
-              path="/sponsor/settings"
-              element={
-                <SponsorGuard>
-                  <DashboardLayout role="sponsor">
-                    <SponsorSettingsPage />
-                  </DashboardLayout>
-                </SponsorGuard>
-              }
-            />
+            {/* Sponsor Routes (reference-style nested routing + compatibility aliases) */}
+            <Route path="/sponsor" element={<SponsorShell />}>
+              <Route index element={<Navigate to="/sponsor/dashboard" replace />} />
+              <Route path="dashboard" element={<SponsorDashboard />} />
+              <Route path="active-trials" element={<SponsorTrialsPage />} />
+              <Route path="patient-matches" element={<SponsorMatchesPage />} />
+              <Route path="analytics" element={<SponsorAnalyticsPage />} />
+              <Route path="audit-logs" element={<SponsorAuditLogPage />} />
+              <Route path="profile-settings" element={<SponsorSettingsPage />} />
+              <Route path="verification" element={<Navigate to="/sponsor/profile-settings" replace />} />
+              <Route path="trials/create" element={<SponsorCreateTrialPage />} />
+              <Route path="trials/:id" element={<SponsorTrialDetailsPage />} />
+              {/* Legacy aliases */}
+              <Route path="trials" element={<Navigate to="/sponsor/active-trials" replace />} />
+              <Route path="matches" element={<Navigate to="/sponsor/patient-matches" replace />} />
+              <Route path="audit" element={<Navigate to="/sponsor/audit-logs" replace />} />
+              <Route path="settings" element={<Navigate to="/sponsor/profile-settings" replace />} />
+            </Route>
             {/* Admin sponsors page intentionally left open — allows unverified wallets to apply */}
             <Route
               path="/admin/sponsors"
@@ -258,6 +230,14 @@ export default function App() {
               element={
                 <DocsLayout>
                   <SponsorSystemDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/automation"
+              element={
+                <DocsLayout>
+                  <ChainlinkAutomationDoc />
                 </DocsLayout>
               }
             />
@@ -333,9 +313,33 @@ export default function App() {
                 </DocsLayout>
               }
             />
+            <Route
+              path="/docs/faq"
+              element={
+                <DocsLayout>
+                  <FaqDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/changelog"
+              element={
+                <DocsLayout>
+                  <ChangelogDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/identity-privacy"
+              element={
+                <DocsLayout>
+                  <IdentityPrivacyDoc />
+                </DocsLayout>
+              }
+            />
 
-            {/* Fallback for old consent route */}
-            <Route path="/consent" element={<Navigate to="/patient/consent" replace />} />
+            {/* Legacy global redirects */}
+            <Route path="/consent" element={<Navigate to="/patient/consent-logs" replace />} />
           </Routes>
         </Router>
       </EncryptedDataProvider>

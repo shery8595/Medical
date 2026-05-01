@@ -26,7 +26,7 @@ export function handleSponsorRemoved(event: SponsorRemoved): void {
 
 export function handleSponsorshipRequested(event: SponsorshipRequested): void {
     let request = new SponsorshipRequest(event.params.applicant);
-    request.encryptedData = event.params.encryptedData;
+    request.encryptedData = event.params.encryptedInstitutionId;
     request.status = "Pending";
     request.requestedAt = event.block.timestamp;
     request.txHash = event.transaction.hash;

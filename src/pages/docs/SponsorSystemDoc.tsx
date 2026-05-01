@@ -1,13 +1,14 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 
 const consentFlowChart = `
 sequenceDiagram
     participant P as Patient Wallet
-    participant D as DApp (fhevmjs)
+    participant D as DApp (@cofhe/sdk)
     participant Z as Fhenix Network
     participant S as Sponsor
 
@@ -32,14 +33,9 @@ export function SponsorSystemDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-emerald-500 font-bold tracking-widest uppercase text-xs">Smart Contracts</span>
-                <h1 className="mt-2 text-5xl">Sponsor Verification Flow</h1>
+                <DocsPageHeaderForRoute />
 
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-12 max-w-prose">
-                    To prevent Sybil attacks and ensure that clinical trials are only published by legally authorized pharmaceutical organizations, MedVault employs a strict, admin-gated `SponsorRegistry`.
-                </p>
-
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>The Sybil Vulnerability in Healthcare</h2>
                 <p>
@@ -51,16 +47,16 @@ export function SponsorSystemDoc() {
                     By default, any wallet connecting to the "Sponsor Portal" on MedVault has strictly read-only access. The "Create Trial" capabilities are entirely locked.
                 </p>
 
-                <ol className="space-y-4 my-8 pb-8 border-b border-slate-200 dark:border-slate-800">
+                <ol className="space-y-4 my-8 pb-8 border-b border-slate-200">
                     <li><strong>Off-Chain KYC:</strong> A research institution submits their organizational details, wallet address, and credentials to the MedVault protocol admins off-chain.</li>
                     <li><strong>On-Chain Authorization:</strong> The protocol owner (typically a Multisig wallet) executes the <code>addSponsor(address, string name)</code> transaction on the <code>SponsorRegistry</code> contract.</li>
                     <li><strong>Indexing:</strong> The Subgraph detects the <code>SponsorAdded</code> event and indexes the mapped address.</li>
                     <li><strong>UI Unlocking:</strong> The frontend DApp reads the user's wallet address against the GraphQL endpoint and dynamically mounts the "Create Trial" and "Analytics" views.</li>
                 </ol>
 
-                <div className="bg-slate-800/50 p-6 mt-6 rounded-xl border border-slate-700/50 mb-8">
-                    <h3 className="text-xl font-semibold text-slate-200 mb-4">Cryptographic Consent & Decryption Flow</h3>
-                    <div className="text-slate-300 space-y-4">
+                <div className="not-prose bg-slate-50 p-6 mt-6 rounded-xl border border-slate-200 mb-8">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">Cryptographic consent & decryption flow</h3>
+                    <div className="text-slate-600 text-sm space-y-4">
                         <p>1. <strong>Sponsor</strong> requests access to patient profile</p>
                         <p>2. <strong>Patient</strong> receives notification and generates re-encryption key via KMS</p>
                         <p>3. <strong>Patient</strong> approves, sending key to KMS with Sponsor's target public key</p>
@@ -104,7 +100,7 @@ contract SponsorRegistry is Ownable {
                     The <code>TrialManager</code> contract holds an interface to the <code>SponsorRegistry</code>. Maintaining these as separate contracts allows MedVault admins to upgrade the Trial Logic independently of the existing list of verified sponsors, preventing the need to re-KYC hundreds of institutions during a V2 migration.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>Consent Architecture Deep Dive</h2>
                 <p>
@@ -113,7 +109,7 @@ contract SponsorRegistry is Ownable {
 
                 <ol className="space-y-4 my-8">
                     <li><strong>Post-Match Notification:</strong> After the <code>EligibilityEngine</code> computes a score, the patient views their result by generating an EIP-712 viewing key. If the score is satisfactory (typically 100 = perfect match), the UI presents a "Grant Access to Sponsor" button.</li>
-                    <li><strong>On-Chain Consent Record:</strong> The patient calls <code>ConsentManager.grantConsent(sponsorAddress, trialId)</code>. This stores a consent record scoped to the specific <code>(patient, sponsor, trialId)</code> tuple and emits a <code>ConsentGranted</code> event for the subgraph to index.</li>
+                    <li><strong>On-Chain Consent Record:</strong> The patient calls <code>ConsentManager.grantConsent(trialId, encryptedConsent)</code> with an encrypted ebool. This stores the consent record scoped to the specific <code>(patient, trialId)</code> tuple and emits an <code>EncryptedConsentGranted</code> event. The consent value itself is encrypted using Fhenix FHE, ensuring even the fact that consent was granted remains private on-chain.</li>
                     <li><strong>Re-Encryption via KMS:</strong> With consent on-chain, the sponsor can request re-encryption of the patient's ciphertext handles through the Fhenix KMS. The KMS verifies: (a) the consent record exists on-chain, (b) the requesting address matches the authorized sponsor, and (c) the consent has not been revoked.</li>
                     <li><strong>Sponsor-Side Decryption:</strong> The KMS re-encrypts the patient's FHE ciphertexts using the sponsor's public key. The sponsor downloads these re-encrypted blobs and decrypts locally. The blockchain never sees the plaintext values.</li>
                     <li><strong>Revocation:</strong> At any time, the patient can call <code>revokeConsent(sponsor, trialId)</code>. This immediately invalidates the consent record on-chain. Future re-encryption requests from that sponsor will be rejected by the KMS. Previously decrypted data cannot be "un-decrypted," but no new data access is possible.</li>
@@ -123,7 +119,7 @@ contract SponsorRegistry is Ownable {
                     Consent is always scoped to a specific <code>(patient, sponsor, trialId)</code> triple. Granting consent for Trial #1 does <strong>not</strong> give the sponsor access to the patient's data for Trial #2 or any other trial. Each consent grant is an independent, auditable on-chain transaction logged in <code>DataAccessLog</code>.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>Emergency Procedures</h2>
                 <p>
@@ -136,7 +132,7 @@ contract SponsorRegistry is Ownable {
                     <li><strong>Consent Auto-Expiry (Planned):</strong> In a future upgrade, consent tokens will include time-locked expiration. After the trial period ends, consent automatically revokes without requiring patient action.</li>
                 </ul>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>Multi-Sponsor Governance Model</h2>
                 <p>

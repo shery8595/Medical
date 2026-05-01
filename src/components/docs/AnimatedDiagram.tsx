@@ -28,19 +28,19 @@ interface AnimatedDiagramProps {
 export function AnimatedDiagram({ nodes, edges, height = 400, className }: AnimatedDiagramProps) {
 
     const colorMap = {
-        teal: "from-blue-500 to-emerald-400 shadow-blue-500/20 text-blue-600 dark:text-blue-400",
-        purple: "from-purple-500 to-fuchsia-400 shadow-purple-500/20 text-purple-600 dark:text-purple-400",
-        blue: "from-blue-500 to-cyan-400 shadow-blue-500/20 text-blue-600 dark:text-blue-400",
-        emerald: "from-emerald-500 to-blue-400 shadow-emerald-500/20 text-emerald-600 dark:text-emerald-400",
-        amber: "from-amber-500 to-orange-400 shadow-amber-500/20 text-amber-600 dark:text-amber-400",
+        teal: "from-blue-500 to-emerald-400 shadow-blue-500/20 text-blue-600",
+        purple: "from-purple-500 to-fuchsia-400 shadow-purple-500/20 text-purple-600",
+        blue: "from-blue-500 to-cyan-400 shadow-blue-500/20 text-blue-600",
+        emerald: "from-emerald-500 to-blue-400 shadow-emerald-500/20 text-emerald-600",
+        amber: "from-amber-500 to-orange-400 shadow-amber-500/20 text-amber-600",
     };
 
     const bgMap = {
-        teal: "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20",
-        purple: "bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/20",
-        blue: "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20",
-        emerald: "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20",
-        amber: "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
+        teal: "bg-blue-50 border-blue-200",
+        purple: "bg-purple-50 border-purple-200",
+        blue: "bg-blue-50 border-blue-200",
+        emerald: "bg-emerald-50 border-emerald-200",
+        amber: "bg-amber-50 border-amber-200",
     }
 
     // Helper to draw curved lines between nodes
@@ -57,7 +57,7 @@ export function AnimatedDiagram({ nodes, edges, height = 400, className }: Anima
 
     return (
         <div
-            className={cn("relative w-full overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl shadow-2xl overflow-hidden", className)}
+            className={cn("relative w-full overflow-x-auto rounded-3xl border border-slate-200 bg-white/50 backdrop-blur-xl shadow-2xl overflow-hidden", className)}
             style={{ height }}
         >
             {/* Background Grid Pattern */}
@@ -79,7 +79,7 @@ export function AnimatedDiagram({ nodes, edges, height = 400, className }: Anima
                             <path
                                 d={pathData}
                                 fill="none"
-                                className="stroke-slate-300 dark:stroke-slate-700"
+                                className="stroke-slate-300"
                                 strokeWidth="2"
                                 strokeLinecap="round"
                             />
@@ -116,14 +116,14 @@ export function AnimatedDiagram({ nodes, edges, height = 400, className }: Anima
                         style={{ left: node.position.x, top: node.position.y }}
                     >
                         <div className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-950 shadow-md",
+                            "flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md",
                             colorMap[node.color || "blue"]
                         )}>
                             {node.icon}
                         </div>
                         <div>
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">{node.title}</h4>
-                            {node.subtitle && <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{node.subtitle}</p>}
+                            <h4 className="text-sm font-bold text-slate-900 tracking-tight">{node.title}</h4>
+                            {node.subtitle && <p className="text-[10px] font-medium text-slate-500 mt-0.5">{node.subtitle}</p>}
                         </div>
                     </motion.div>
                 ))}

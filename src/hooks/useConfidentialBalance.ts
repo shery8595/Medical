@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { useWeb3 } from "../lib/Web3Context";
 import { getConfidentialETH } from "../lib/contracts";
-import { reencryptUint64 } from "../lib/fhe";
 import { ethers } from "ethers";
+import { getFHEClient, FheTypes, reencryptUint64 } from "../lib/fhe";
+import { Encryptable, isCofheError, CofheErrorCode } from "@cofhe/sdk";
 
 export function useConfidentialBalance() {
     const { signer, account } = useWeb3();
@@ -62,7 +63,15 @@ export function useConfidentialBalance() {
 
         } catch (err: any) {
             console.error("Decryption failed:", err);
-            setError(err.message || "Failed to reveal balance");
+            if (isCofheError(err)) {
+                if (err.message && err.message.toLowerCase().includes("rejected")) {
+                    setError("You cancelled the signature request.");
+                } else {
+                    setError(`Decryption error (${err.code}): ${err.message}`);
+                }
+            } else {
+                setError(err.message || "Failed to reveal balance");
+            }
         } finally {
             setLoading(false);
         }
@@ -92,8 +101,61 @@ export function useConfidentialBalance() {
         }
     };
 
-    const withdraw = async (amountEth: string) => {
-        if (!signer) return;
+    // C-2: Get current withdrawal nonce for replay protection
+    const getWithdrawNonce = useCallback(async (): Promise<bigint> => {
+        if (!signer || !account) return 0n;
+        try {
+            const contract = getConfidentialETH(signer);
+            const nonce = await contract.withdrawNonces(account);
+            return BigInt(nonce.toString());
+        } catch (err) {
+            console.error("Failed to fetch withdraw nonce:", err);
+            return 0n;
+        }
+    }, [signer, account]);
+
+    // C-2: Generate Threshold Network signature for withdrawal
+    // This signature must cover (ctHash, balance, msg.sender, units, nonce)
+    const generateWithdrawSignature = async (
+        balanceHandle: string,
+        balance: bigint,
+        units: number,
+        nonce: bigint
+    ): Promise<{ signature: string; balance: bigint }> => {
+        if (!account || !signer) {
+            throw new Error("Wallet not connected");
+        }
+
+        try {
+            const c = await getFHEClient();
+            const handle = typeof balanceHandle === "string" ? BigInt(balanceHandle) : balanceHandle;
+            
+            // Use CoFHE SDK's decryptForTx to generate on-chain verifiable signature
+            // This signature proves knowledge of the plaintext balance at the specific handle
+            const result = await c
+                .decryptForTx(handle)
+                .withoutPermit()
+                .execute();
+            
+            // The signature from decryptForTx is already a Threshold Network signature
+            // that proves knowledge of the plaintext at this ctHash
+            return {
+                signature: result.signature,
+                balance: result.decryptedValue
+            };
+        } catch (err: any) {
+            console.error("Failed to generate withdrawal signature:", err);
+            if (isCofheError(err) && err.message && err.message.toLowerCase().includes("rejected")) {
+                throw new Error("You cancelled the signature request.");
+            }
+            throw new Error(
+                `Failed to generate Threshold Network signature: ${err.message || err}`
+            );
+        }
+    };
+
+    const withdraw = async (amountEth: string, balanceSig?: string, currentBalance?: string) => {
+        if (!signer || !account) return;
         try {
             setLoading(true);
             const contract = getConfidentialETH(signer);
@@ -103,8 +165,18 @@ export function useConfidentialBalance() {
 
             if (units <= 0) throw new Error("Amount too low. Minimum is 0.000001 ETH");
 
-            const tx = await contract.withdraw(units);
-            await tx.wait();
+            // C-2: If signature and balance proof provided, use new secure withdrawal
+            if (balanceSig && currentBalance) {
+                const balance = BigInt(currentBalance);
+                const tx = await contract.withdraw(units, balanceSig, balance);
+                await tx.wait();
+            } else {
+                // Fallback: will fail on-chain after contract update - require signature
+                throw new Error(
+                    "C-2: Threshold Network signature required for withdrawal. " +
+                    "Please provide balanceSig and currentBalance parameters."
+                );
+            }
             hideBalance();
         } catch (err: any) {
             console.error("Withdrawal failed:", err);
@@ -128,6 +200,9 @@ export function useConfidentialBalance() {
         revealBalance,
         hideBalance,
         deposit,
-        withdraw
+        withdraw,
+        // C-2: Expose helper methods for signature generation
+        getWithdrawNonce,
+        generateWithdrawSignature
     };
 }

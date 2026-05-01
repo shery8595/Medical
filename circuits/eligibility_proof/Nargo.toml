@@ -1,0 +1,19 @@
+[package]
+name = "eligibility_proof"
+type = "bin"
+authors = ["MedVault"]
+compiler_version = ">=0.36.0"
+
+# No external dependencies — Poseidon is in the Noir stdlib:
+#   std::hash::poseidon::bn254::hash_1 / hash_2 / hash_3
+#
+# To compile and regenerate HonkVerifier.sol:
+#   1. Install nargo >= 0.36: https://noir-lang.org/docs/getting_started/installation
+#   2. cd circuits/eligibility_proof
+#   3. nargo compile
+#   4. nargo codegen-verifier
+#   5. cp target/HonkVerifier.sol ../../contracts/HonkVerifier.sol
+#
+# Or use the project shortcut:
+#   npm run build:circuit
+[dependencies]

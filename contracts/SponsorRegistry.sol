@@ -1,33 +1,47 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.27;
 
+import {FHE, euint64, InEuint64} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
+
 /**
  * @title SponsorRegistry
- * @notice Maintains an allowlist of verified clinical trial sponsors
+ * @notice Maintains an allowlist of verified clinical trial sponsors with encrypted institutional data
+ * @dev FHENIX UPGRADE: Institutional identifiers are now stored as euint64 on-chain.
+ *      The encryptedData field (raw bytes) is replaced with proper Fhenix encrypted types
+ *      so verification can happen on-chain via FHE operations.
  */
 contract SponsorRegistry {
     enum RequestStatus { None, Pending, Approved, Rejected }
-    
+
     struct SponsorshipRequest {
-        bytes encryptedData; // Encrypted institutional details
+        euint64 encryptedInstitutionId; // FHENIX: Encrypted institutional identifier (e.g., hospital ID, license number)
         RequestStatus status;
         uint256 requestedAt;
+        bool hasEncryptedData;
     }
 
     struct Sponsor {
         string name;
         bool verified;
         uint256 addedAt;
+        euint64 encryptedInstitutionId; // FHENIX: Link to encrypted institutional data
     }
 
     mapping(address => Sponsor) public sponsors;
     mapping(address => SponsorshipRequest) public requests;
+
+    // FHENIX: Encrypted institutional identifiers by sponsor address
+    mapping(address => euint64) private encryptedSponsorIds;
+
     address public owner;
+    address public pendingOwner; // MED-2: Two-step ownership transfer
 
     event SponsorAdded(address indexed sponsor, string name);
     event SponsorRemoved(address indexed sponsor);
-    event SponsorshipRequested(address indexed applicant, bytes encryptedData);
+    event SponsorshipRequested(address indexed applicant, euint64 encryptedInstitutionId);
     event SponsorshipRequestResolved(address indexed applicant, RequestStatus status);
+    event OwnershipProposed(address indexed proposedOwner);
+    event OwnershipAccepted(address indexed newOwner);
 
     constructor() {
         owner = msg.sender;
@@ -39,34 +53,88 @@ contract SponsorRegistry {
     }
 
     /**
-     * @notice Submit an encrypted sponsorship request
+     * @notice MED-2: Propose a new owner (two-step ownership transfer)
      */
-    function requestSponsorship(bytes calldata _encryptedData) external {
-        require(requests[msg.sender].status == RequestStatus.None, "Request already exists");
+    function proposeOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Zero address");
+        pendingOwner = _newOwner;
+        emit OwnershipProposed(_newOwner);
+    }
+
+    /**
+     * @notice MED-2: Accept ownership (must be called by proposed owner)
+     */
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not proposed owner");
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipAccepted(owner);
+    }
+
+    /**
+     * @notice Submit an encrypted sponsorship request with Fhenix encrypted institutional ID
+     * @param _encryptedInstitutionId Encrypted institutional identifier (e.g., hospital ID, license number)
+     */
+    function requestSponsorship(InEuint64 calldata _encryptedInstitutionId) external {
+        // AUDIT-HIGH: previously rejected applicants were permanently locked out.
+        // Allow re-application if prior request was Rejected (or never made).
+        // Still block if Pending or Approved.
+        RequestStatus prev = requests[msg.sender].status;
+        require(
+            prev == RequestStatus.None || prev == RequestStatus.Rejected,
+            "Request already exists"
+        );
+        // Also block if already a verified sponsor.
+        require(!sponsors[msg.sender].verified, "Already verified sponsor");
+
+        euint64 encId = FHE.asEuint64(_encryptedInstitutionId);
+        FHE.allowThis(encId);
+        FHE.allow(encId, msg.sender);
+        FHE.allow(encId, owner);
+
         requests[msg.sender] = SponsorshipRequest({
-            encryptedData: _encryptedData,
+            encryptedInstitutionId: encId,
             status: RequestStatus.Pending,
-            requestedAt: block.timestamp
+            requestedAt: block.timestamp,
+            hasEncryptedData: true
         });
-        emit SponsorshipRequested(msg.sender, _encryptedData);
+
+        emit SponsorshipRequested(msg.sender, encId);
     }
 
     /**
      * @notice Add a verified sponsor to the registry and resolve any pending request
+     * @param _sponsor The sponsor address
+     * @param _name The sponsor name
+     * @dev FHENIX: Preserves encrypted institution ID from request if available
      */
     function addSponsor(address _sponsor, string calldata _name) external onlyOwner {
         require(bytes(_name).length > 0, "Name required");
+
+        euint64 encId;
+        if (requests[_sponsor].hasEncryptedData) {
+            encId = requests[_sponsor].encryptedInstitutionId;
+        } else {
+            encId = FHE.asEuint64(0); // Default if no encrypted data
+            // L-4: Grant FHE permissions for default encrypted ID
+            FHE.allowThis(encId);
+            FHE.allow(encId, _sponsor);
+        }
+
         sponsors[_sponsor] = Sponsor({
             name: _name,
             verified: true,
-            addedAt: block.timestamp
+            addedAt: block.timestamp,
+            encryptedInstitutionId: encId
         });
-        
+
+        encryptedSponsorIds[_sponsor] = encId;
+
         if (requests[_sponsor].status == RequestStatus.Pending) {
             requests[_sponsor].status = RequestStatus.Approved;
             emit SponsorshipRequestResolved(_sponsor, RequestStatus.Approved);
         }
-        
+
         emit SponsorAdded(_sponsor, _name);
     }
 
@@ -80,9 +148,28 @@ contract SponsorRegistry {
 
     /**
      * @notice Check if an address is a verified sponsor
+     * @dev MED-2: Removed owner shortcut. Owner must explicitly be added as sponsor if needed.
      */
     function isVerifiedSponsor(address _sponsor) external view returns (bool) {
-        return _sponsor == owner || sponsors[_sponsor].verified;
+        return sponsors[_sponsor].verified;
+    }
+
+    /**
+     * @notice FHENIX: Get encrypted institutional identifier for a sponsor
+     * @param _sponsor The sponsor address
+     * @return The encrypted institution ID (euint64)
+     */
+    function getEncryptedInstitutionId(address _sponsor) external view returns (euint64) {
+        return encryptedSponsorIds[_sponsor];
+    }
+
+    /**
+     * @notice FHENIX: Get encrypted institutional ID from a sponsor request
+     * @param _applicant The applicant address
+     * @return The encrypted institution ID from their request
+     */
+    function getRequestEncryptedId(address _applicant) external view returns (euint64) {
+        return requests[_applicant].encryptedInstitutionId;
     }
 
     /**
@@ -94,11 +181,4 @@ contract SponsorRegistry {
         emit SponsorshipRequestResolved(_applicant, RequestStatus.Rejected);
     }
 
-    /**
-     * @notice Transfer ownership of the registry
-     */
-    function transferOwnership(address _newOwner) external onlyOwner {
-        require(_newOwner != address(0), "New owner is zero address");
-        owner = _newOwner;
-    }
 }

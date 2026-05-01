@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSubgraph } from './useSubgraph';
 import { Trial, SubgraphTrial, SubgraphConsent, SubgraphEligibilityResult } from '../types';
 import { useWeb3 } from '../lib/Web3Context';
-import { getMedVaultAutomation } from '../lib/contracts';
+import { getEligibilityEngine, getMedVaultAutomation } from '../lib/contracts';
+import { getAnonymousNullifier, recoverAnonymousNullifierIfMissing } from '../lib/semaphore';
 
 const GET_TRIALS_WITH_USER_STATE = `
   query GetTrialsWithUserState($account: Bytes!) {
@@ -100,6 +101,10 @@ export function useTrials(account?: string, sponsorAddress?: string) {
 
         const processed: Trial[] = await Promise.all(
           data.trials.filter((t: any) => {
+            // Sponsor dashboards must always list sponsor-owned trials so
+            // recruitment detail pages remain accessible.
+            if (sponsorAddress) return true;
+
             const hasInteraction =
               (t.consents && t.consents.length > 0) ||
               (t.eligibilityResults && t.eligibilityResults.length > 0) ||
@@ -112,22 +117,57 @@ export function useTrials(account?: string, sponsorAddress?: string) {
             const app = t.applications && t.applications.length > 0 ? t.applications[0] : null;
             const isExpired = t.endTime && parseInt(t.endTime) <= now;
 
-            // Fetch on-chain finalized status
+            // Fetch on-chain finalized status (MedVaultAutomation: mapping(uint256 => bool) public finalized)
             let isFinalized = false;
             try {
-              // The mapping in MedVaultAutomation is: mapping(uint256 => bool) public finalizedTrials;
-              // But the frontend trial ID is a string. If the contract expects a numeric ID, we cast it.
-              isFinalized = await automationContract.finalizedTrials(t.id);
+              isFinalized = await automationContract.finalized(BigInt(t.id));
             } catch (err) {
               console.warn(`Failed to fetch finalized status for trial ${t.id}`, err);
             }
 
+            // For anonymous flows, status is keyed by nullifier (not wallet),
+            // so subgraph wallet-filtered applications can be empty.
+            let anonymousStatus: string | null = null;
+            let anonymousNullifier: string | null = null;
+            try {
+              let nullifier = getAnonymousNullifier(t.id);
+              if (!nullifier && !app && account) {
+                // Backfill historical anonymous applications submitted before
+                // local nullifier persistence existed in the frontend.
+                nullifier = await recoverAnonymousNullifierIfMissing(provider as any, t.id);
+              }
+              if (nullifier) {
+                anonymousNullifier = nullifier.toString();
+                const eligibilityEngine = getEligibilityEngine(provider as any);
+                const rawStatus = await eligibilityEngine.getAnonymousApplicationStatus(
+                  nullifier,
+                  BigInt(t.id)
+                );
+                const statusNum = Number(rawStatus);
+                if (statusNum === 1) anonymousStatus = "Pending";
+                else if (statusNum === 2) anonymousStatus = "Accepted";
+                else if (statusNum === 3) anonymousStatus = "Rejected";
+              }
+            } catch (err) {
+              console.warn(`Failed to fetch anonymous status for trial ${t.id}`, err);
+            }
+
+            const effectiveStatus = app ? app.status : anonymousStatus;
+
+            // Anonymous applies don't create wallet-keyed subgraph eligibility rows — use chain status.
+            // Wallet-keyed applications always merit score reveal when present.
+            const hasComputed =
+              (t.eligibilityResults && t.eligibilityResults.length > 0) ||
+              anonymousStatus !== null ||
+              !!app;
+
             return {
               ...t,
               hasConsent: t.consents && t.consents.length > 0,
-              hasComputed: t.eligibilityResults && t.eligibilityResults.length > 0,
-              applicationStatus: app ? app.status : null,
+              hasComputed,
+              applicationStatus: effectiveStatus,
               applicationMessage: app ? app.message : null,
+              nullifier: anonymousNullifier,
               eligibilityScore: null,
               matchCount: t.eligibilityResults ? t.eligibilityResults.length : 0,
               isExpired,
@@ -153,7 +193,7 @@ export function useTrials(account?: string, sponsorAddress?: string) {
     }
 
     return () => { mounted = false; };
-  }, [data, provider, subgraphLoading]);
+  }, [account, data, provider, subgraphLoading, sponsorAddress]);
 
   return {
     trials: enrichedTrials,

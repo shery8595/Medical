@@ -38,14 +38,46 @@ contract TrialManager {
     address public automationContract;
     address public sponsorRegistry;
     address public owner;
+    address public pendingOwner; // FINDING 11: Two-step ownership transfer
 
     event TrialCreated(uint256 indexed trialId, address indexed sponsor, string name, uint256 endTime);
     event TrialDeactivated(uint256 indexed trialId);
     event SponsorNameUpdated(address indexed sponsor, string name);
     event SponsorRegistryUpdated(address indexed newRegistry);
+    event OwnershipProposed(address indexed proposedOwner); // FINDING 11
+    event OwnershipAccepted(address indexed newOwner); // FINDING 11
 
-    constructor() {
+    // FINDING 3: Error for invalid registry
+    error InvalidRegistryContract();
+
+    // AUDIT-HIGH: caller was able to self-declare sponsorship in createTrial.
+    // We now query sponsorRegistry.isVerifiedSponsor(msg.sender).
+    error SponsorNotVerified();
+    error DurationTooLong();
+    error TrialDoesNotExist();
+
+    // AUDIT-MED: Hard cap on trial duration to prevent unbounded trials
+    // (previously there was no upper bound on _duration).
+    uint256 public constant MAX_TRIAL_DURATION = 365 days * 5;
+
+    /// @dev Arbitrum Sepolia: skip SponsorRegistry allowlist for hackathon / open-wallet demos (Trials are still public test data).
+    uint256 private constant _ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
+
+    // FINDING 3: Require registry at construction with interface validation
+    constructor(address _sponsorRegistry) {
+        require(_sponsorRegistry != address(0), "Zero address");
+        _validateAndSetRegistry(_sponsorRegistry);
         owner = msg.sender;
+    }
+
+    // FINDING 3: Internal function to validate and set registry
+    function _validateAndSetRegistry(address _registry) internal {
+        (bool ok, bytes memory ret) = _registry.staticcall(
+            abi.encodeWithSignature("isVerifiedSponsor(address)", address(0))
+        );
+        if (!ok || ret.length != 32) revert InvalidRegistryContract();
+        sponsorRegistry = _registry;
+        emit SponsorRegistryUpdated(_registry);
     }
 
     modifier onlyOwner() {
@@ -53,13 +85,28 @@ contract TrialManager {
         _;
     }
 
+    // FINDING 11: Two-step ownership transfer
+    function proposeOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Zero address");
+        pendingOwner = _newOwner;
+        emit OwnershipProposed(_newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not proposed owner");
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipAccepted(owner);
+    }
+
     function setAutomationContract(address _automation) external onlyOwner {
+        require(_automation != address(0), "Zero address");
         automationContract = _automation;
     }
 
+    // FINDING 3: Validate interface on every update
     function setSponsorRegistry(address _registry) external onlyOwner {
-        sponsorRegistry = _registry;
-        emit SponsorRegistryUpdated(_registry);
+        _validateAndSetRegistry(_registry);
     }
 
     function setSponsorName(string calldata _name) external {
@@ -87,12 +134,14 @@ contract TrialManager {
         require(_minAge < _maxAge, "Invalid age range");
         require(bytes(_name).length > 0, "Name required");
         require(_duration > 0, "Duration required");
-        
-        if (sponsorRegistry != address(0)) {
-            (bool success, bytes memory data) = sponsorRegistry.staticcall(
+        if (_duration > MAX_TRIAL_DURATION) revert DurationTooLong();
+
+        // AUDIT-HIGH: require caller to be a verified sponsor (except Arbitrum Sepolia testnet for demos).
+        if (block.chainid != _ARBITRUM_SEPOLIA_CHAIN_ID) {
+            (bool ok, bytes memory ret) = sponsorRegistry.staticcall(
                 abi.encodeWithSignature("isVerifiedSponsor(address)", msg.sender)
             );
-            require(success && abi.decode(data, (bool)), "Only verified sponsors can create trials");
+            if (!ok || ret.length != 32 || !abi.decode(ret, (bool))) revert SponsorNotVerified();
         }
 
         uint256 trialId = trialCounter++;
@@ -118,15 +167,37 @@ contract TrialManager {
         });
 
         emit TrialCreated(trialId, msg.sender, _name, endTime);
+        
+        // FINDING 12: Notify automation contract of new trial for efficient checkUpkeep
+        if (automationContract != address(0)) {
+            (bool _success, ) = automationContract.call(
+                abi.encodeWithSignature("onTrialCreated(uint256)", trialId)
+            );
+            // Don't revert if automation call fails - trial is still valid
+            (_success); // silence unused variable warning
+        }
+        
         return trialId;
     }
 
     function deactivateTrial(uint256 _trialId) external {
+        // AUDIT-LOW: guard against deactivating a non-existent trial
+        // (all fields default to zero for uninitialized trial ids).
+        if (trials[_trialId].endTime == 0) revert TrialDoesNotExist();
         require(
             trials[_trialId].sponsor == msg.sender || msg.sender == automationContract,
             "Only sponsor or automation can deactivate"
         );
         trials[_trialId].active = false;
+        
+        // FINDING 12: Notify automation contract of deactivated trial
+        if (automationContract != address(0)) {
+            (bool _success, ) = automationContract.call(
+                abi.encodeWithSignature("onTrialDeactivated(uint256)", _trialId)
+            );
+            (_success); // silence unused variable warning
+        }
+        
         emit TrialDeactivated(_trialId);
     }
 

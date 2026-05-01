@@ -1,24 +1,23 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 import { motion } from "framer-motion";
 
 export function SmartContractsDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-emerald-500 font-bold tracking-widest uppercase text-xs">Technical Reference</span>
-                <h1 className="mt-2 text-5xl">Core Logic Contracts</h1>
+                <DocsPageHeaderForRoute />
 
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-12 max-w-prose">
-                    MedVault's logic is distributed across <strong>11 specialized smart contracts</strong>, ensuring strict separation of concerns and minimizing gas vulnerabilities while executing operations on the Fhenix fhEVM coprocessor. This page serves as a complete reference for every deployed contract.
-                </p>
-
-                <Callout type="info" title="Deployment Environment">
-                    All contracts are deployed on the <strong>Fhenix Sepolia Testnet</strong> chain. Connecting to the network requires RPC URLs pointing to Fhenix infrastructure. Contracts are compiled with Solidity 0.8.24+ and use the <code>@fhenixprotocol/cofhe-contracts</code> SDK for encrypted type support.
+                <Callout type="info" title="Deployment environment">
+                    Production contracts are deployed to <strong>Arbitrum Sepolia</strong> (see{" "}
+                    <code>src/lib/contracts/addresses.json</code>). They are compiled with Solidity 0.8.24+ and use{" "}
+                    <code>@fhenixprotocol/cofhe-contracts</code> for FHE types. The dApp defaults to this chain via
+                    Privy.
                 </Callout>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <div className="space-y-16 mt-12">
                     {/* 01 — Trial Manager */}
@@ -75,17 +74,17 @@ export function SmartContractsDoc() {
                             <div className="p-3 bg-blue-500/10 text-blue-500 rounded-2xl border border-blue-500/20">
                                 <span className="font-mono font-bold text-lg leading-none">02</span>
                             </div>
-                            <h2 className="m-0 border-0 pb-0">PatientRegistry.sol</h2>
+                            <h2 className="m-0 border-0 pb-0">MedVaultRegistry.sol</h2>
                         </div>
                         <p className="max-w-prose">
-                            The <code>PatientRegistry</code> handles the storage and updating of patient health metrics. It manages the <code>PatientInfo</code> struct which holds exclusively Fhenix encrypted data types. On registration, ZK input proofs are validated via the FHE precompile, ciphertext handles are stored with ACL permissions granted to this contract and the <code>EligibilityEngine</code>, and a <code>DataAccessLog</code> entry is recorded.
+                            The <code>MedVaultRegistry</code> handles the storage and updating of patient health metrics. It manages the <code>PatientInfo</code> struct which holds exclusively Fhenix encrypted data types. On registration, ZK input proofs are validated via the FHE precompile, ciphertext handles are stored with ACL permissions granted to this contract and the <code>EligibilityEngine</code>, and a <code>DataAccessLog</code> entry is recorded.
                         </p>
                         <Callout type="warning" title="Reentrancy Protections">
                             Because the patient registry interfaces with the <code>EligibilityEngine</code> and the <code>ConsentManager</code> directly upon state updates, it utilizes standard OpenZeppelin <code>ReentrancyGuard</code> modifiers to prevent recursive calls during FHE evaluations.
                         </Callout>
 
                         <CodeBlock
-                            filename="PatientRegistry.sol (Structs)"
+                            filename="MedVaultRegistry.sol (Structs)"
                             language="solidity"
                             code={`import "@fhenixprotocol/cofhe-contracts/FHE.sol";
 
@@ -115,7 +114,7 @@ mapping(address => PatientInfo) private registry;`}
                             <h2 className="m-0 border-0 pb-0">EligibilityEngine.sol</h2>
                         </div>
                         <p className="max-w-prose">
-                            The <strong>computational core</strong> of MedVault. Reads encrypted patient metrics from <code>PatientRegistry</code> and encrypted trial bounds from <code>TrialManager</code>, then executes 5 FHE comparison operations and 3 CMUX multiplexing operations to produce a weighted eligibility score (0-100) — all without decrypting any inputs. The score is stored in a private mapping keyed by <code>(trialId, patientAddress)</code> with FHE ACL granting decryption rights only to the patient.
+                            The <strong>computational core</strong> of MedVault. Reads encrypted patient metrics from <code>MedVaultRegistry</code> and encrypted trial bounds from <code>TrialManager</code>, then executes 5 FHE comparison operations and 3 CMUX multiplexing operations to produce a weighted eligibility score (0-100) — all without decrypting any inputs. The score is stored in a private mapping keyed by <code>(trialId, patientAddress)</code> with FHE ACL granting decryption rights only to the patient.
                         </p>
                         <p>
                             <strong>Key functions:</strong> <code>computeEligibility(address patient, uint256 trialId)</code>, <code>getScore(uint256 trialId, address patient) → euint32</code>
@@ -248,7 +247,7 @@ mapping(address => PatientInfo) private registry;`}
                             <h2 className="m-0 border-0 pb-0">DataAccessLog.sol</h2>
                         </div>
                         <p className="max-w-prose">
-                            A centralized, <strong>immutable on-chain audit recorder</strong> for every sensitive state change in MedVault. Only whitelisted MedVault contracts (PatientRegistry, EligibilityEngine, ConsentManager, SponsorIncentiveVault) can write to the log — external contracts cannot inject entries. Each entry contains an <code>ActionType</code> enum, trial ID, anonymized <code>keccak256</code> hash, and block timestamp.
+                            A centralized, <strong>immutable on-chain audit recorder</strong> for every sensitive state change in MedVault. Only whitelisted MedVault contracts (MedVaultRegistry, EligibilityEngine, ConsentManager, SponsorIncentiveVault) can write to the log — external contracts cannot inject entries. Each entry contains an <code>ActionType</code> enum, trial ID, anonymized <code>keccak256</code> hash, and block timestamp.
                         </p>
                         <p>
                             <strong>Key functions:</strong> <code>log(ActionType, uint256, bytes32)</code>, <code>authorizeLogger(address)</code>
@@ -259,7 +258,7 @@ mapping(address => PatientInfo) private registry;`}
                     </section>
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 {/* Contract Interaction Matrix */}
                 <h2>Contract Interaction Matrix</h2>
@@ -267,19 +266,19 @@ mapping(address => PatientInfo) private registry;`}
                     The following table summarizes cross-contract call relationships in the MedVault protocol:
                 </p>
 
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">Caller</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">Callee</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">Call Purpose</th>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 text-xs">Caller</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 text-xs">Callee</th>
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700 text-xs">Call Purpose</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {[
-                                    { caller: "EligibilityEngine", callee: "PatientRegistry", purpose: "Read encrypted patient health metrics" },
+                                    { caller: "EligibilityEngine", callee: "MedVaultRegistry", purpose: "Read encrypted patient health metrics" },
                                     { caller: "EligibilityEngine", callee: "TrialManager", purpose: "Read encrypted trial requirement bounds" },
                                     { caller: "TrialManager", callee: "SponsorRegistry", purpose: "Validate sponsor authorization (isVerifiedSponsor)" },
                                     { caller: "TrialManager", callee: "Chainlink PriceFeed", purpose: "Fetch live ETH/USD for compensation math" },
@@ -287,13 +286,13 @@ mapping(address => PatientInfo) private registry;`}
                                     { caller: "StakingManager", callee: "ConfidentialETH", purpose: "Shield/unshield encrypted balance wrappers" },
                                     { caller: "StakingManager", callee: "Aave V3 Pool", purpose: "Supply/withdraw from lending pool" },
                                     { caller: "MedVaultAutomation", callee: "SponsorIncentiveVault", purpose: "Trigger milestone-based reward distribution" },
-                                    { caller: "PatientRegistry", callee: "DataAccessLog", purpose: "Log registration/unregistration actions" },
+                                    { caller: "MedVaultRegistry", callee: "DataAccessLog", purpose: "Log registration/unregistration actions" },
                                     { caller: "ConsentManager", callee: "DataAccessLog", purpose: "Log consent grant/revocation actions" },
                                     { caller: "EligibilityEngine", callee: "DataAccessLog", purpose: "Log eligibility computation events" },
                                 ].map((row, i) => (
-                                    <tr key={`${row.caller}-${row.callee}`} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
-                                        <td className="px-4 py-3 font-mono text-xs text-blue-600 dark:text-blue-400 font-bold">{row.caller}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">{row.callee}</td>
+                                    <tr key={`${row.caller}-${row.callee}`} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                        <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold">{row.caller}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.callee}</td>
                                         <td className="px-4 py-3 text-xs text-slate-500">{row.purpose}</td>
                                     </tr>
                                 ))}

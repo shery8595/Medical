@@ -4,17 +4,17 @@ pragma solidity ^0.8.27;
 contract MockAave {
     mapping(address => uint256) public balances;
     
-    function depositETH(address pool, address onBehalfOf, uint16 referralCode) external payable {
+    function depositETH(address /* pool */, address onBehalfOf, uint16 /* referralCode */) external payable {
         balances[onBehalfOf] += msg.value;
     }
 
-    function withdrawETH(address pool, uint256 amount, address to) external {
+    function withdrawETH(address /* pool */, uint256 amount, address to) external {
         require(balances[msg.sender] >= amount, "Insufficient aWETH");
         balances[msg.sender] -= amount;
         payable(to).transfer(amount);
     }
 
-    function approve(address spender, uint256 amount) external returns (bool) {
+    function approve(address /* spender */, uint256 /* amount */) external pure returns (bool) {
         return true;
     }
 

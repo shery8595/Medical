@@ -10,6 +10,40 @@ import {
     ExternalLink, CircleDot, Workflow
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { cn } from "../../lib/utils";
+import { DOCS_CONTRACT_COUNT } from "../../lib/docsNav";
+
+const INTRO_STAT_TONE: Record<string, string> = {
+    teal: "bg-teal-100 text-teal-600",
+    emerald: "bg-emerald-100 text-emerald-600",
+    purple: "bg-purple-100 text-purple-600",
+    blue: "bg-blue-100 text-blue-600",
+    amber: "bg-amber-100 text-amber-600",
+    rose: "bg-rose-100 text-rose-600",
+};
+
+const STEP_ROW_ICON: Record<string, string> = {
+    blue: "bg-blue-100 text-blue-600",
+    purple: "bg-purple-100 text-purple-600",
+    teal: "bg-teal-100 text-teal-600",
+    amber: "bg-amber-100 text-amber-600",
+    emerald: "bg-emerald-100 text-emerald-600",
+};
+
+const ROLE_CARD: Record<string, { border: string; icon: string; dot: string }> = {
+    teal: { border: "border-teal-200", icon: "bg-teal-100 text-teal-600", dot: "bg-teal-500" },
+    purple: { border: "border-purple-200", icon: "bg-purple-100 text-purple-600", dot: "bg-purple-500" },
+    amber: { border: "border-amber-200", icon: "bg-amber-100 text-amber-600", dot: "bg-amber-500" },
+    blue: { border: "border-blue-200", icon: "bg-blue-100 text-blue-600", dot: "bg-blue-500" },
+};
+
+const SECTION_BADGE: Record<string, string> = {
+    teal: "bg-teal-100 text-teal-700",
+    purple: "bg-purple-100 text-purple-700",
+    blue: "bg-blue-100 text-blue-700",
+    amber: "bg-amber-100 text-amber-800",
+    emerald: "bg-emerald-100 text-emerald-700",
+};
 
 // ─── Animated Counter Stat ───
 const AnimatedStat = ({ value, label, icon, color }: { value: string; label: string; icon: React.ReactNode; color: string }) => (
@@ -17,12 +51,17 @@ const AnimatedStat = ({ value, label, icon, color }: { value: string; label: str
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm text-center group hover:shadow-lg transition-all duration-300"
+        className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 bg-white shadow-sm text-center group hover:shadow-lg transition-all duration-300"
     >
-        <div className={`p-2.5 rounded-xl mb-3 bg-${color}-100 dark:bg-${color}-900/30 text-${color}-600 dark:text-${color}-400 group-hover:scale-110 transition-transform duration-300`}>
+        <div
+            className={cn(
+                "p-2.5 rounded-xl mb-3 group-hover:scale-110 transition-transform duration-300",
+                INTRO_STAT_TONE[color] ?? "bg-slate-100 text-slate-600"
+            )}
+        >
             {icon}
         </div>
-        <div className="text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight">{value}</div>
+        <div className="text-3xl font-black font-display text-slate-900 tracking-tight">{value}</div>
         <div className="text-xs font-medium text-slate-500 mt-1 tracking-wide">{label}</div>
     </motion.div>
 );
@@ -30,9 +69,9 @@ const AnimatedStat = ({ value, label, icon, color }: { value: string; label: str
 // ─── Section Divider ───
 const Divider = () => (
     <div className="flex items-center gap-4 my-16">
-        <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1" />
-        <div className="w-3 h-3 rotate-45 border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800" />
-        <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1" />
+        <div className="h-px bg-slate-200 flex-1" />
+        <div className="w-3 h-3 rotate-45 border border-slate-300 bg-slate-100" />
+        <div className="h-px bg-slate-200 flex-1" />
     </div>
 );
 
@@ -70,7 +109,7 @@ const ArchitectureFlowDiagram = () => {
             label: "CLIENT LAYER",
             color: "blue",
             nodes: [
-                { icon: <Users className="w-4 h-4" />, name: "Patient Browser", detail: "fhevmjs SDK" },
+                { icon: <Users className="w-4 h-4" />, name: "Patient Browser", detail: "@cofhe/sdk SDK" },
                 { icon: <Building2 className="w-4 h-4" />, name: "Sponsor Portal", detail: "React DApp" },
             ]
         },
@@ -78,10 +117,11 @@ const ArchitectureFlowDiagram = () => {
             label: "SMART CONTRACT LAYER",
             color: "teal",
             nodes: [
-                { icon: <Database className="w-4 h-4" />, name: "PatientRegistry", detail: "euint32 Storage" },
-                { icon: <Activity className="w-4 h-4" />, name: "EligibilityEngine", detail: "FHE Compute" },
-                { icon: <Cpu className="w-4 h-4" />, name: "TrialManager", detail: "Trial Logic" },
-                { icon: <Shield className="w-4 h-4" />, name: "ConsentManager", detail: "ACL Gating" },
+                { icon: <Database className="w-4 h-4" />, name: "AnonymousPatientRegistry", detail: "Semaphore identity" },
+                { icon: <Database className="w-4 h-4" />, name: "MedVaultRegistry", detail: "Encrypted vault" },
+                { icon: <Activity className="w-4 h-4" />, name: "EligibilityEngine", detail: "FHE compute" },
+                { icon: <Cpu className="w-4 h-4" />, name: "TrialManager", detail: "Trial logic" },
+                { icon: <Shield className="w-4 h-4" />, name: "ConsentManager", detail: "ACL gating" },
             ]
         },
         {
@@ -104,7 +144,7 @@ const ArchitectureFlowDiagram = () => {
     ];
 
     return (
-        <div className="not-prose my-12 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060D18] relative overflow-hidden">
+        <div className="not-prose my-12 p-6 md:p-8 rounded-3xl border border-slate-200 bg-white relative overflow-hidden">
             {/* Background Grid */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px]" />
             {/* Glow accents */}
@@ -117,7 +157,7 @@ const ArchitectureFlowDiagram = () => {
                         <Layers className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">System Architecture — Layered Overview</h3>
+                        <h3 className="text-lg font-bold text-slate-900 m-0">System Architecture — Layered Overview</h3>
                         <p className="text-xs text-slate-500 m-0">4 distinct layers with strict separation of concerns</p>
                     </div>
                 </div>
@@ -146,13 +186,13 @@ const ArchitectureFlowDiagram = () => {
                                             whileInView={{ opacity: 1, scale: 1 }}
                                             transition={{ delay: layerIdx * 0.15 + nodeIdx * 0.05 }}
                                             viewport={{ once: true }}
-                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 shadow-sm hover:shadow-md hover:bg-white/10 transition-all duration-300 group cursor-default"
+                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/90 shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 group cursor-default"
                                         >
                                             <div className={`p-1.5 rounded-lg ${styles.iconBg} group-hover:scale-110 transition-transform`}>
                                                 {node.icon}
                                             </div>
                                             <div>
-                                                <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{node.name}</div>
+                                                <div className="text-xs font-bold text-slate-900 leading-tight">{node.name}</div>
                                                 <div className="text-[10px] text-slate-400 font-medium">{node.detail}</div>
                                             </div>
                                         </motion.div>
@@ -169,8 +209,8 @@ const ArchitectureFlowDiagram = () => {
                                         viewport={{ once: true }}
                                         className="flex flex-col items-center gap-0.5"
                                     >
-                                        <div className="w-px h-3 bg-slate-300 dark:bg-slate-700" />
-                                        <ArrowDown className="w-3 h-3 text-slate-400 dark:text-slate-600" />
+                                        <div className="w-px h-3 bg-slate-300" />
+                                        <ArrowDown className="w-3 h-3 text-slate-400" />
                                     </motion.div>
                                 </div>
                     )}
@@ -186,16 +226,16 @@ const ArchitectureFlowDiagram = () => {
 // ─── FHE Encryption Pipeline Diagram ───
 const EncryptionPipelineDiagram = () => {
     const stages = [
-        { label: "Plaintext", value: "age = 42", bg: "bg-rose-500", desc: "Raw patient data in browser memory", icon: <Heart className="w-4 h-4" /> },
-        { label: "FHE Encrypt", value: "fhevmjs.encrypt32(42)", bg: "bg-amber-500", desc: "Client-side encryption via Fhenix SDK", icon: <Lock className="w-4 h-4" /> },
-        { label: "Ciphertext", value: "0x7f3a...b2c1", bg: "bg-purple-500", desc: "euint32 handle stored on-chain", icon: <Database className="w-4 h-4" /> },
-        { label: "FHE Compute", value: "FHE.ge(age, minAge)", bg: "bg-blue-500", desc: "Homomorphic comparison in coprocessor", icon: <Cpu className="w-4 h-4" /> },
-        { label: "Encrypted Result", value: "ebool → euint32 score", bg: "bg-blue-500", desc: "Score accumulated via CMUX", icon: <Activity className="w-4 h-4" /> },
-        { label: "Patient Decrypt", value: "EIP-712 → plaintext 100", bg: "bg-emerald-500", desc: "Only patient can view their score", icon: <Key className="w-4 h-4" /> },
+        { label: "Plaintext", value: "age = 42", bg: "bg-rose-500", iconRing: "bg-rose-100", iconText: "text-rose-600", desc: "Raw patient data in browser memory", icon: <Heart className="w-4 h-4" /> },
+        { label: "FHE Encrypt", value: "@cofhe/sdk.encrypt32(42)", bg: "bg-amber-500", iconRing: "bg-amber-100", iconText: "text-amber-600", desc: "Client-side encryption via Fhenix SDK", icon: <Lock className="w-4 h-4" /> },
+        { label: "Ciphertext", value: "0x7f3a...b2c1", bg: "bg-purple-500", iconRing: "bg-purple-100", iconText: "text-purple-600", desc: "euint32 handle stored on-chain", icon: <Database className="w-4 h-4" /> },
+        { label: "FHE Compute", value: "FHE.ge(age, minAge)", bg: "bg-blue-500", iconRing: "bg-blue-100", iconText: "text-blue-600", desc: "Homomorphic comparison in coprocessor", icon: <Cpu className="w-4 h-4" /> },
+        { label: "Encrypted Result", value: "ebool → euint32 score", bg: "bg-blue-500", iconRing: "bg-blue-100", iconText: "text-blue-600", desc: "Score accumulated via CMUX", icon: <Activity className="w-4 h-4" /> },
+        { label: "Patient Decrypt", value: "EIP-712 → plaintext 100", bg: "bg-emerald-500", iconRing: "bg-emerald-100", iconText: "text-emerald-600", desc: "Only patient can view their score", icon: <Key className="w-4 h-4" /> },
     ];
 
     return (
-        <div className="not-prose my-12 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060D18] relative overflow-hidden">
+        <div className="not-prose my-12 p-6 md:p-8 rounded-3xl border border-slate-200 bg-white relative overflow-hidden">
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px]" />
             <div className="absolute top-1/2 left-0 w-full h-48 bg-gradient-to-r from-rose-500/5 via-purple-500/5 to-emerald-500/5 blur-[80px] -translate-y-1/2" />
 
@@ -205,7 +245,7 @@ const EncryptionPipelineDiagram = () => {
                         <Workflow className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">FHE Encryption Pipeline — Data Flow</h3>
+                        <h3 className="text-lg font-bold text-slate-900 m-0">FHE Encryption Pipeline — Data Flow</h3>
                         <p className="text-xs text-slate-500 m-0">End-to-end encryption lifecycle from plaintext to patient-only decryption</p>
                     </div>
                 </div>
@@ -218,36 +258,36 @@ const EncryptionPipelineDiagram = () => {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 transition={{ delay: idx * 0.1 }}
                                 viewport={{ once: true }}
-                                className="flex-1 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:shadow-lg transition-all duration-300 group relative"
+                                className="flex-1 p-4 rounded-2xl border border-slate-200 bg-slate-50 hover:shadow-lg transition-all duration-300 group relative"
                             >
                                 {/* Stage number badge */}
                                 <div className={`absolute -top-2 -right-2 w-6 h-6 rounded-full ${stage.bg} text-white text-[10px] font-black flex items-center justify-center shadow-lg`}>
                                     {idx + 1}
                                 </div>
 
-                                <div className={`w-9 h-9 rounded-xl ${stage.bg}/10 flex items-center justify-center mb-3`}>
-                                    <div className={`${stage.bg.replace('bg-', 'text-').replace('-500', '-500')}`}>
+                                <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center mb-3", stage.iconRing)}>
+                                    <div className={stage.iconText}>
                                         {stage.icon}
                                     </div>
                                 </div>
 
                                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{stage.label}</div>
-                                <div className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold mb-2 break-all leading-relaxed">{stage.value}</div>
+                                <div className="font-mono text-xs text-slate-700 font-bold mb-2 break-all leading-relaxed">{stage.value}</div>
                                 <div className="text-[11px] text-slate-500 leading-snug">{stage.desc}</div>
                             </motion.div>
 
                             {idx < stages.length - 1 && (
                                 <div className="hidden md:flex items-center justify-center px-0">
-                                    <ArrowRight className="w-4 h-4 text-slate-300 dark:text-slate-700 shrink-0" />
+                                    <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
                                 </div>
                             )}
                         </div>
                     ))}
                 </div>
 
-                <div className="mt-6 flex items-center gap-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-800/30">
+                <div className="mt-6 flex items-center gap-3 p-3 rounded-xl bg-rose-50 border border-rose-200/50">
                     <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-                    <p className="text-xs text-rose-700 dark:text-rose-400 m-0 font-medium">
+                    <p className="text-xs text-rose-700 m-0 font-medium">
                         <strong>Zero Plaintext Exposure:</strong> Raw values exist only in browser memory for milliseconds. After encryption, plaintext is discarded. The blockchain never sees unencrypted data.
                     </p>
                 </div>
@@ -260,7 +300,7 @@ const EncryptionPipelineDiagram = () => {
 const ContractInteractionDiagram = () => {
     const nodes = [
         { id: "patient", title: "Patient Wallet", subtitle: "Encrypted Data Owner", icon: <Users className="h-5 w-5" />, position: { x: 30, y: 20 }, color: "teal" as const },
-        { id: "registry", title: "Patient Registry", subtitle: "euint32 Storage", icon: <Database className="h-5 w-5" />, position: { x: 260, y: 20 }, color: "blue" as const },
+        { id: "registry", title: "MedVaultRegistry", subtitle: "Encrypted vault", icon: <Database className="h-5 w-5" />, position: { x: 260, y: 20 }, color: "blue" as const },
         { id: "engine", title: "Eligibility Engine", subtitle: "FHE Computation", icon: <Activity className="h-5 w-5" />, position: { x: 500, y: 20 }, color: "purple" as const },
         { id: "sponsor", title: "Sponsor Wallet", subtitle: "Trial Creator", icon: <Building2 className="h-5 w-5" />, position: { x: 30, y: 200 }, color: "amber" as const },
         { id: "trialmanager", title: "Trial Manager", subtitle: "Trial Logic & Access", icon: <Shield className="h-5 w-5" />, position: { x: 260, y: 200 }, color: "emerald" as const },
@@ -282,12 +322,12 @@ const ContractInteractionDiagram = () => {
                     <GitBranch className="w-5 h-5" />
                 </div>
                 <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">Contract Interaction Graph</h3>
+                    <h3 className="text-lg font-bold text-slate-900 m-0">Contract Interaction Graph</h3>
                     <p className="text-xs text-slate-500 m-0">Animated data flow between core smart contracts</p>
                 </div>
             </div>
             <AnimatedDiagram nodes={nodes} edges={edges} height={420} className="w-full" />
-            <p className="text-center text-xs font-medium text-slate-500 dark:text-slate-400 mt-3 tracking-tight">
+            <p className="text-center text-xs font-medium text-slate-500 mt-3 tracking-tight">
                 Fig 1. Data flows from Patient → Registry → Engine and Sponsor → TrialManager → Engine. Animated edges show live ciphertext transfer paths.
             </p>
         </div>
@@ -297,18 +337,18 @@ const ContractInteractionDiagram = () => {
 // ─── FHE State Machine ───
 const FheStateMachine = () => {
     const states = [
-        { step: "01", title: "Client Encryption", desc: "`fhevmjs` encrypts health metrics entirely in the browser using FHE.", icon: <Users className="w-5 h-5" />, color: "blue" },
-        { step: "02", title: "On-Chain Vault", desc: "`PatientRegistry` stores ciphertext handles in encrypted contract state.", icon: <Database className="w-5 h-5" />, color: "purple" },
-        { step: "03", title: "FHEVM Engine", desc: "`EligibilityEngine` runs homomorphic comparisons without decrypting inputs.", icon: <Lock className="w-5 h-5" />, color: "teal", highlight: true },
-        { step: "04", title: "EIP-712 Decrypt", desc: "Only the patient can sign a viewing key to decrypt their match score.", icon: <Key className="w-5 h-5" />, color: "amber" },
+        { step: "01", title: "Client Encryption", desc: "`@cofhe/sdk` encrypts health metrics entirely in the browser using FHE.", icon: <Users className="w-5 h-5" />, color: "blue" as const, iconRing: "bg-blue-100", iconGlyph: "text-blue-600" },
+        { step: "02", title: "On-Chain Vault", desc: "`MedVaultRegistry` stores ciphertext handles in encrypted contract state.", icon: <Database className="w-5 h-5" />, color: "purple" as const, iconRing: "bg-purple-100", iconGlyph: "text-purple-600" },
+        { step: "03", title: "FHEVM Engine", desc: "`EligibilityEngine` runs homomorphic comparisons without decrypting inputs.", icon: <Lock className="w-5 h-5" />, color: "teal" as const, iconRing: "bg-teal-100", iconGlyph: "text-teal-600", highlight: true },
+        { step: "04", title: "EIP-712 Decrypt", desc: "Only the patient can sign a viewing key to decrypt their match score.", icon: <Key className="w-5 h-5" />, color: "amber" as const, iconRing: "bg-white/20", iconGlyph: "text-white" },
     ];
 
     return (
-        <div className="my-16 p-8 border border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50 dark:bg-[#060D18] relative overflow-hidden group">
+        <div className="my-16 p-8 border border-slate-200 rounded-3xl bg-slate-50 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20 opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -ml-20 -mb-20 opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
 
-            <h3 className="text-xl font-bold font-display text-slate-900 dark:text-white mt-0 mb-8 relative z-10 flex items-center gap-3">
+            <h3 className="text-xl font-bold font-display text-slate-900 mt-0 mb-8 relative z-10 flex items-center gap-3">
                 <Activity className="w-5 h-5 text-blue-500" />
                 The FHE Matching State Machine
             </h3>
@@ -322,23 +362,28 @@ const FheStateMachine = () => {
                             transition={{ delay: i * 0.2 }}
                             viewport={{ once: true }}
                             className={`flex-1 w-full p-4 rounded-2xl shadow-sm text-center ${s.highlight
-                                ? "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-b-4 border-b-blue-500"
+                                ? "bg-white border border-slate-200 border-b-4 border-b-blue-500"
                                 : s.color === "amber"
                                     ? "bg-amber-500 text-white"
-                                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+                                    : "bg-white border border-slate-200"
                                 }`}
                         >
-                            <div className={`mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-3 ${s.color === "amber" && !s.highlight ? "bg-white/20" : `bg-${s.color}-100 dark:bg-${s.color}-900/30`}`}>
-                                <div className={s.color === "amber" && !s.highlight ? "text-white" : `text-${s.color}-600 dark:text-${s.color}-400`}>
+                            <div
+                                className={cn(
+                                    "mx-auto w-10 h-10 rounded-full flex items-center justify-center mb-3",
+                                    s.iconRing
+                                )}
+                            >
+                                <div className={s.iconGlyph}>
                                     {s.icon}
                                 </div>
                             </div>
                             <div className={`text-xs font-bold uppercase tracking-widest mb-1 ${s.color === "amber" && !s.highlight ? "text-white/70" : "text-slate-400"}`}>State {s.step}</div>
-                            <div className={`font-medium text-sm ${s.color === "amber" && !s.highlight ? "text-white" : "text-slate-900 dark:text-white"}`}>{s.title}</div>
+                            <div className={`font-medium text-sm ${s.color === "amber" && !s.highlight ? "text-white" : "text-slate-900"}`}>{s.title}</div>
                             <div className={`text-xs mt-2 ${s.color === "amber" && !s.highlight ? "text-white/80" : "text-slate-500"}`}>{s.desc}</div>
                         </motion.div>
                         {i < states.length - 1 && (
-                            <ArrowRight className="w-5 h-5 text-slate-300 dark:text-slate-700 hidden md:block shrink-0" />
+                            <ArrowRight className="w-5 h-5 text-slate-300 hidden md:block shrink-0" />
                         )}
                     </motion.div>
                 ))}
@@ -357,59 +402,71 @@ export function IntroductionDoc() {
                     HERO SECTION — Premium Landing
                 ═══════════════════════════════════════════════════════════════════════ */}
                 <div className="not-prose relative -mt-4 mb-16">
-                    {/* Hero Banner Image */}
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.97 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="w-full rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl relative group"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="w-full rounded-3xl overflow-hidden border border-slate-200/90 bg-white shadow-[0_20px_50px_-24px_rgba(0,104,95,0.15)] relative"
                     >
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-slate-950/20 z-10 pointer-events-none" />
-                        <img
-                            src="/assets/images/medvault_fhe_hero.png"
-                            alt="MedVault FHE Enclave Architecture"
-                            className="w-full aspect-[21/9] object-cover object-center transition-transform duration-[2000ms] group-hover:scale-105"
-                        />
-
-                        {/* Hero Text Overlay */}
-                        <div className="absolute inset-0 z-20 flex flex-col justify-end p-6 md:p-10">
-                            <motion.div
-                                initial={{ opacity: 0, y: 30 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.6, delay: 0.3 }}
-                            >
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
-                                    <span className="text-blue-400 text-xs font-black uppercase tracking-[0.25em]">Technical Documentation</span>
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#00685f]/[0.06] via-transparent to-blue-500/[0.05] pointer-events-none" />
+                        <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0 items-stretch">
+                            <div className="p-8 md:p-12 flex flex-col justify-center relative z-10">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-2 h-2 rounded-full bg-[#00685f] animate-pulse" />
+                                    <span className="text-[#00685f] text-xs font-black uppercase tracking-[0.2em]">
+                                        Technical documentation
+                                    </span>
                                 </div>
-                                <h1 className="text-4xl md:text-6xl font-display font-black text-white tracking-tight mb-3 leading-[1.1]">
-                                    MedVault<span className="text-blue-400">.</span>
+                                <h1 className="text-4xl md:text-5xl font-display font-black text-slate-900 tracking-tight mb-4 leading-[1.1] m-0">
+                                    MedVault<span className="text-[#00685f]">.</span>
                                 </h1>
-                                <p className="text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed font-medium">
-                                    The first <strong className="text-white">Fully Homomorphic Encryption</strong> powered clinical trial matching platform built on Ethereum, leveraging the Fhenix fhEVM coprocessor to enable computation on encrypted medical data.
+                                <p className="text-lg text-slate-600 max-w-xl leading-relaxed font-medium m-0">
+                                    FHE-powered clinical trial matching on{" "}
+                                    <strong className="text-slate-900">Arbitrum Sepolia</strong> using the fhEVM coprocessor
+                                    — compute on encrypted medical data without exposing it.
                                 </p>
-
-                                {/* Quick action pills */}
-                                <div className="flex flex-wrap gap-2 mt-6">
-                                    <Link to="/docs/architecture" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-500/25 hover:bg-blue-400 transition-colors">
+                                <div className="flex flex-wrap gap-2 mt-8">
+                                    <Link
+                                        to="/docs/architecture"
+                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#00685f] text-white text-xs font-bold shadow-md hover:bg-[#005a52] transition-colors"
+                                    >
                                         <Cpu className="w-3.5 h-3.5" /> Architecture
                                         <ArrowRight className="w-3 h-3" />
                                     </Link>
-                                    <Link to="/docs/engine" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-white text-xs font-bold border border-white/20 hover:bg-white/20 transition-colors">
-                                        <Activity className="w-3.5 h-3.5" /> Engine Mechanics
+                                    <Link
+                                        to="/docs/engine"
+                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <Activity className="w-3.5 h-3.5" /> Engine
                                     </Link>
-                                    <Link to="/docs/security-model" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-white text-xs font-bold border border-white/20 hover:bg-white/20 transition-colors">
-                                        <Shield className="w-3.5 h-3.5" /> Security Model
+                                    <Link
+                                        to="/docs/security-model"
+                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <Shield className="w-3.5 h-3.5" /> Security
                                     </Link>
                                 </div>
-                            </motion.div>
+                            </div>
+                            <div className="relative min-h-[200px] md:min-h-[280px] border-t md:border-t-0 md:border-l border-slate-100">
+                                <img
+                                    src="/assets/images/medvault_fhe_hero.png"
+                                    alt="MedVault architecture"
+                                    className="absolute inset-0 w-full h-full object-cover object-center opacity-95"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent md:bg-gradient-to-l" />
+                            </div>
                         </div>
                     </motion.div>
                 </div>
 
                 {/* ─── Platform Statistics Bar ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 my-12 not-prose">
-                    <AnimatedStat value="11" label="Smart Contracts" icon={<FileCode2 className="w-5 h-5" />} color="teal" />
+                    <AnimatedStat
+                        value={String(DOCS_CONTRACT_COUNT)}
+                        label="Production contracts"
+                        icon={<FileCode2 className="w-5 h-5" />}
+                        color="teal"
+                    />
                     <AnimatedStat value="100+" label="Tests Passing" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                     <AnimatedStat value="3" label="DeFi Protocols" icon={<TrendingUp className="w-5 h-5" />} color="purple" />
                     <AnimatedStat value="0" label="Data Exposed" icon={<Shield className="w-5 h-5" />} color="blue" />
@@ -417,7 +474,7 @@ export function IntroductionDoc() {
                     <AnimatedStat value="<100ms" label="Query Latency" icon={<Zap className="w-5 h-5" />} color="rose" />
                 </div>
 
-                <p className="text-lg text-slate-500 dark:text-slate-400 max-w-prose leading-relaxed mb-8">
+                <p className="text-lg text-slate-500 max-w-prose leading-relaxed mb-8">
                     MedVault allows patients to match with life-saving clinical trials while keeping their health data <em>mathematically encrypted at all times</em> — at rest, in transit, and most critically, <strong>during the actual computation of the eligibility algorithm</strong>. No trusted third party. No decryption. No data exposure. Ever.
                 </p>
 
@@ -444,12 +501,12 @@ export function IntroductionDoc() {
                     Traditional clinical trial recruitment is fundamentally broken. The pharmaceutical industry spends an estimated <strong>$2.6 billion per drug</strong> brought to market, with patient recruitment alone consuming up to 40% of the timeline. To determine if a single patient qualifies for a life-saving trial, research organizations demand complete access to unencrypted, highly sensitive medical records.
                 </p>
 
-                <div className="my-8 p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl">
-                    <h4 className="text-rose-900 dark:text-rose-400 font-bold mt-0 mb-4 flex items-center gap-2">
+                <div className="my-8 p-6 bg-rose-50 border-l-4 border-rose-500 rounded-r-2xl">
+                    <h4 className="text-rose-900 font-bold mt-0 mb-4 flex items-center gap-2">
                         <AlertTriangle className="w-5 h-5" />
                         The Web2 Privacy Catastrophe — By the Numbers
                     </h4>
-                    <ul className="text-rose-800 dark:text-rose-300/80 mb-0 space-y-3">
+                    <ul className="text-rose-800 mb-0 space-y-3">
                         <li><strong>Patient Custody Loss:</strong> The healthcare industry experienced over <strong>700 data breaches</strong> in 2023 alone, exposing 133 million records. Once submitted, data sovereignty is permanently and irrevocably lost.</li>
                         <li><strong>Sponsor Overhead:</strong> Pharmaceutical companies incur massive compliance overhead (HIPAA, GDPR, CCPA) to secure millions of records — often discovering that <strong>85-95% of screened candidates are ineligible</strong>.</li>
                         <li><strong>Recruitment Bottlenecks:</strong> 80% of clinical trials fail to meet enrollment deadlines. 48% of research sites fail to enroll a single patient.</li>
@@ -486,7 +543,7 @@ export function IntroductionDoc() {
 
                 <div className="not-prose space-y-4 my-10">
                     {[
-                        { step: "1", title: "Patient Encrypts Health Data in Browser", desc: "The patient enters their medical metrics (Age, Blood Pressure, HbA1c, Weight) into the MedVault dashboard. The Fhenix fhevmjs SDK encrypts every value into FHE ciphertexts entirely within the browser. The original plaintext values are immediately discarded from memory. Only encrypted ciphertext blobs are transmitted to the blockchain.", icon: <Lock className="w-6 h-6" />, color: "blue" },
+                        { step: "1", title: "Patient Encrypts Health Data in Browser", desc: "The patient enters their medical metrics (Age, Blood Pressure, HbA1c, Weight) into the MedVault dashboard. The Fhenix @cofhe/sdk SDK encrypts every value into FHE ciphertexts entirely within the browser. The original plaintext values are immediately discarded from memory. Only encrypted ciphertext blobs are transmitted to the blockchain.", icon: <Lock className="w-6 h-6" />, color: "blue" },
                         { step: "2", title: "Sponsor Publishes Encrypted Trial Criteria", desc: "A verified pharmaceutical sponsor defines their trial eligibility criteria (e.g., Age 18-65, HbA1c < 7.0). These requirements are also encrypted as euint32 ciphertext values and stored on-chain in the TrialManager contract. The trial's structural metadata (name, phase, location) remains public.", icon: <Building2 className="w-6 h-6" />, color: "purple" },
                         { step: "3", title: "EligibilityEngine Computes on Encrypted Data", desc: "The EligibilityEngine smart contract performs FHE homomorphic operations (FHE.ge(), FHE.le(), FHE.cmux()) to compare encrypted patient values against encrypted trial bounds. The result is an encrypted eligibility score (0-100) stored on-chain. The network computes the match without decrypting any inputs.", icon: <Activity className="w-6 h-6" />, color: "teal" },
                         { step: "4", title: "Patient Decrypts Their Own Score", desc: "The encrypted score can only be decrypted by the patient. They sign an EIP-712 message in MetaMask to generate a cryptographic viewing key. The Fhenix KMS threshold decryption service verifies this signature and returns the decrypted score exclusively to the patient.", icon: <Key className="w-6 h-6" />, color: "amber" },
@@ -498,17 +555,22 @@ export function IntroductionDoc() {
                             whileInView={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.08 }}
                             viewport={{ once: true }}
-                            className="flex gap-5 items-start p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow"
+                            className="flex gap-5 items-start p-6 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow"
                         >
-                            <div className={`p-3 rounded-2xl bg-${s.color}-100 dark:bg-${s.color}-900/30 text-${s.color}-600 dark:text-${s.color}-400 shrink-0 mt-0.5`}>
+                            <div
+                                className={cn(
+                                    "p-3 rounded-2xl shrink-0 mt-0.5",
+                                    STEP_ROW_ICON[s.color] ?? "bg-slate-100 text-slate-600"
+                                )}
+                            >
                                 {s.icon}
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-xs font-mono font-bold text-slate-400">Step {s.step}</span>
                                 </div>
-                                <h4 className="font-bold text-lg text-slate-900 dark:text-white mt-0 mb-2">{s.title}</h4>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-0">{s.desc}</p>
+                                <h4 className="font-bold text-lg text-slate-900 mt-0 mb-2">{s.title}</h4>
+                                <p className="text-sm text-slate-600 leading-relaxed mb-0">{s.desc}</p>
                             </div>
                         </motion.div>
                     ))}
@@ -521,7 +583,9 @@ export function IntroductionDoc() {
                 ═══════════════════════════════════════════════════════════════════════ */}
                 <h2>V. Smart Contract Interaction Graph</h2>
                 <p>
-                    MedVault's 11 smart contracts form a dependency graph with strictly scoped cross-contract interactions. The animated diagram below shows the primary data flow paths between the core contracts.
+                    MedVault&apos;s production contracts form a dependency graph with strictly scoped cross-contract
+                    interactions. The diagram below shows primary data flow paths between core contracts on{" "}
+                    <strong>Arbitrum Sepolia</strong>.
                 </p>
 
                 <ContractInteractionDiagram />
@@ -539,17 +603,17 @@ export function IntroductionDoc() {
                 </p>
 
                 {/* Comparison Table */}
-                <div className="not-prose my-10 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div className="px-4 pt-4 pb-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 m-0">Architectural Comparison: FHE vs. ZKP for Clinical Trial Matching</h4>
+                <div className="not-prose my-10 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="px-4 pt-4 pb-2 bg-slate-50 border-b border-slate-200">
+                        <h4 className="text-sm font-bold text-slate-700 m-0">Architectural Comparison: FHE vs. ZKP for Clinical Trial Matching</h4>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Dimension</th>
-                                    <th className="text-left px-4 py-3 font-bold text-blue-700 dark:text-blue-400">FHE (MedVault)</th>
-                                    <th className="text-left px-4 py-3 font-bold text-purple-700 dark:text-purple-400">ZKP</th>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                    <th className="text-left px-4 py-3 font-bold text-slate-700">Dimension</th>
+                                    <th className="text-left px-4 py-3 font-bold text-blue-700">FHE (MedVault)</th>
+                                    <th className="text-left px-4 py-3 font-bold text-purple-700">ZKP</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -563,12 +627,12 @@ export function IntroductionDoc() {
                                     { dim: "Proof Size", fhe: "Ciphertexts are larger (~256 bytes per euint32).", zkp: "Proofs are compact (~128-256 bytes).", win: "zkp" },
                                     { dim: "Setup Complexity", fhe: "No trusted setup. Standard FHE bootstrapping keys.", zkp: "May require trusted setup ceremony (zk-SNARKs).", win: "fhe" },
                                 ].map((row, i) => (
-                                    <tr key={row.dim} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
-                                        <td className="px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs">{row.dim}</td>
-                                        <td className={`px-4 py-3 text-xs ${row.win === "fhe" || row.win === "draw" ? "text-blue-700 dark:text-blue-400" : "text-slate-500"}`}>
+                                    <tr key={row.dim} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                        <td className="px-4 py-3 font-bold text-slate-700 text-xs">{row.dim}</td>
+                                        <td className={`px-4 py-3 text-xs ${row.win === "fhe" || row.win === "draw" ? "text-blue-700" : "text-slate-500"}`}>
                                             {row.win === "fhe" && <span className="mr-1">✓</span>}{row.fhe}
                                         </td>
-                                        <td className={`px-4 py-3 text-xs ${row.win === "zkp" ? "text-purple-700 dark:text-purple-400" : "text-slate-500"}`}>
+                                        <td className={`px-4 py-3 text-xs ${row.win === "zkp" ? "text-purple-700" : "text-slate-500"}`}>
                                             {row.win === "zkp" && <span className="mr-1">✓</span>}{row.zkp}
                                         </td>
                                     </tr>
@@ -576,7 +640,7 @@ export function IntroductionDoc() {
                             </tbody>
                         </table>
                     </div>
-                    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
+                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-xs text-slate-400">
                         Table 1. FHE wins on asynchronous multi-trial matching — the core requirement for clinical trial platforms.
                     </div>
                 </div>
@@ -636,17 +700,33 @@ export function IntroductionDoc() {
                         { icon: <ShieldCheck className="w-6 h-6" />, title: "Protocol Admin", color: "amber", permissions: ["Add/remove verified sponsors (multisig)", "Emergency halt trials via SponsorRegistry", "Authorize contracts in DataAccessLog", "Manage Chainlink Automation upkeep"] },
                         { icon: <Bot className="w-6 h-6" />, title: "Chainlink Keeper", color: "blue", permissions: ["Trigger checkUpkeep() on MedVaultAutomation", "Execute performUpkeep() for milestone payouts", "Automate trial deadline enforcement", "No access to encrypted data"] },
                     ].map(role => (
-                        <div key={role.title} className={`p-6 rounded-2xl border border-${role.color}-200 dark:border-${role.color}-900/30 bg-white dark:bg-slate-900 shadow-sm`}>
+                        <div
+                            key={role.title}
+                            className={cn(
+                                "p-6 rounded-2xl border bg-white shadow-sm",
+                                ROLE_CARD[role.color]?.border ?? "border-slate-200"
+                            )}
+                        >
                             <div className="flex items-center gap-3 mb-4">
-                                <div className={`p-2.5 rounded-xl bg-${role.color}-100 dark:bg-${role.color}-900/30 text-${role.color}-600 dark:text-${role.color}-400`}>
+                                <div
+                                    className={cn(
+                                        "p-2.5 rounded-xl",
+                                        ROLE_CARD[role.color]?.icon ?? "bg-slate-100 text-slate-600"
+                                    )}
+                                >
                                     {role.icon}
                                 </div>
-                                <h4 className="font-bold text-slate-900 dark:text-white text-lg m-0">{role.title}</h4>
+                                <h4 className="font-bold text-slate-900 text-lg m-0">{role.title}</h4>
                             </div>
                             <ul className="space-y-2 m-0 p-0">
                                 {role.permissions.map(p => (
-                                    <li key={p} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
-                                        <div className={`w-1.5 h-1.5 rounded-full bg-${role.color}-500 mt-1.5 shrink-0`} />
+                                    <li key={p} className="flex items-start gap-2 text-xs text-slate-600">
+                                        <div
+                                            className={cn(
+                                                "w-1.5 h-1.5 rounded-full mt-1.5 shrink-0",
+                                                ROLE_CARD[role.color]?.dot ?? "bg-slate-400"
+                                            )}
+                                        />
                                         {p}
                                     </li>
                                 ))}
@@ -655,8 +735,10 @@ export function IntroductionDoc() {
                     ))}
                 </div>
 
-                <Callout type="warning" title="Testnet Environment">
-                    MedVault is currently deployed on the <strong>Fhenix Sepolia Testnet</strong>. FHE operations require massive polynomial mathematics in the Fhenix coprocessor, so expect 15–60 second confirmation times for FHE transactions.
+                <Callout type="warning" title="Testnet environment">
+                    The app targets <strong>Arbitrum Sepolia</strong> (chainId 421614) with Privy embedded wallets. FHE
+                    operations use the fhEVM coprocessor and can take longer to confirm than plain transfers—plan for
+                    variable latency during heavy FHE calls.
                 </Callout>
 
                 <Divider />
@@ -666,28 +748,35 @@ export function IntroductionDoc() {
                 ═══════════════════════════════════════════════════════════════════════ */}
                 <h2>IX. Navigating the Technical Documentation</h2>
                 <p>
-                    This documentation is built for developers, auditors, and hackathon judges. It is organized into five thematic sections:
+                    This documentation is built for developers, auditors, and hackathon judges. It is organized into thematic sections below — covering protocol contracts (including Chainlink Automation), client integrations (encryption, subgraph, Semaphore / Noir / relayer / faucet), operations, and security.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 mb-8">
                     {[
                         { id: "S1", title: "Core Concepts", desc: "Architecture overviews, Fhenix integration deep-dive, and guide to FHE.sol encrypted types.", color: "teal", links: [{ label: "Architecture", href: "/docs/architecture" }, { label: "FHE Primitives", href: "/docs/fhe-primitives" }] },
-                        { id: "S2", title: "Smart Contracts", desc: "Reference for all 11 contracts, EligibilityEngine scoring mechanics, and consent-gated decryption.", color: "purple", links: [{ label: "Engine", href: "/docs/engine" }, { label: "Contracts", href: "/docs/contracts" }, { label: "Sponsors", href: "/docs/sponsor-system" }] },
-                        { id: "S3", title: "Integration & Frontend", desc: "Client-side encryption with fhevmjs, The Graph subgraph indexing, and React context management.", color: "blue", links: [{ label: "Encryption", href: "/docs/client-encryption" }, { label: "Subgraph", href: "/docs/subgraph" }, { label: "Frontend", href: "/docs/frontend" }] },
+                        { id: "S2", title: "Smart Contracts", desc: `Reference for ${DOCS_CONTRACT_COUNT} production contracts, EligibilityEngine scoring mechanics, Chainlink Automation, and consent-gated decryption.`, color: "purple", links: [{ label: "Engine", href: "/docs/engine" }, { label: "Contracts", href: "/docs/contracts" }, { label: "Sponsors", href: "/docs/sponsor-system" }, { label: "Chainlink Automation", href: "/docs/automation" }] },
+                        { id: "S3", title: "Integration & Frontend", desc: "Client-side encryption with @cofhe/sdk, subgraph indexing, React architecture, Semaphore / relayer / faucet tooling.", color: "blue", links: [{ label: "Encryption", href: "/docs/client-encryption" }, { label: "Subgraph", href: "/docs/subgraph" }, { label: "Frontend", href: "/docs/frontend" }, { label: "Identity & tooling", href: "/docs/identity-privacy" }] },
                         { id: "S4", title: "Operations & Guides", desc: "User workflows, private yield staking, deployment guides, and the verification suite.", color: "amber", links: [{ label: "Workflows", href: "/docs/guides" }, { label: "Staking", href: "/docs/staking" }, { label: "Testing", href: "/docs/testing" }, { label: "Deploy", href: "/docs/deployment" }] },
-                        { id: "S5", title: "Security & Compliance", desc: "Threat model, FHE security guarantees, HIPAA/GDPR compliance, and immutable audit trail.", color: "emerald", links: [{ label: "Security Model", href: "/docs/security-model" }, { label: "Compliance", href: "/docs/compliance" }] },
+                        { id: "S5", title: "Security & Compliance", desc: "Threat model, FHE security guarantees, HIPAA/GDPR compliance, and immutable audit trail.", color: "emerald", links: [{ label: "Security Model", href: "/docs/security-model" }, { label: "Compliance", href: "/docs/compliance" }, { label: "FAQ", href: "/docs/faq" }] },
                     ].map(section => (
-                        <div key={section.id} className="p-5 border border-slate-200 dark:border-slate-800 rounded-2xl group hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                        <div key={section.id} className="p-5 border border-slate-200 rounded-2xl group hover:bg-slate-50 transition-colors">
                             <div className="flex items-center gap-4 mb-3">
-                                <div className={`w-12 h-12 rounded-xl bg-${section.color}-100 dark:bg-${section.color}-900/30 flex items-center justify-center text-${section.color}-600 dark:text-${section.color}-400 font-bold font-display`}>{section.id}</div>
+                                <div
+                                    className={cn(
+                                        "w-12 h-12 rounded-xl flex items-center justify-center font-bold font-display",
+                                        SECTION_BADGE[section.color] ?? "bg-slate-100 text-slate-700"
+                                    )}
+                                >
+                                    {section.id}
+                                </div>
                                 <div>
-                                    <h5 className="font-bold text-slate-900 dark:text-white m-0">{section.title}</h5>
+                                    <h5 className="font-bold text-slate-900 m-0">{section.title}</h5>
                                 </div>
                             </div>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 m-0 leading-snug mb-3">{section.desc}</p>
+                            <p className="text-sm text-slate-500 m-0 leading-snug mb-3">{section.desc}</p>
                             <div className="flex flex-wrap gap-2">
                                 {section.links.map(link => (
-                                    <Link key={link.href} to={link.href} className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/50">
+                                    <Link key={link.href} to={link.href} className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors px-2 py-1 rounded-lg bg-blue-50 border border-blue-200/50">
                                         {link.label}
                                         <ArrowRight className="w-3 h-3" />
                                     </Link>

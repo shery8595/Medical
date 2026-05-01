@@ -3,6 +3,14 @@ pragma solidity ^0.8.27;
 
 import "./TrialManager.sol";
 
+// H-4: Interface to check if patient is registered participant.
+// AUDIT-LOW: removed the stale `pools(...)` entry. `pools` is a private
+// mapping in SponsorIncentiveVault (no auto-getter) and the signature here
+// did not even include `encryptedPoolSize`, so any call would have reverted.
+interface ISponsorIncentiveVault {
+    function isParticipantRegistered(uint256 _trialId, address _participant) external view returns (bool);
+}
+
 /**
  * @title TrialMilestoneManager
  * @notice Manages phased trial progress and milestone definitions
@@ -20,7 +28,9 @@ contract TrialMilestoneManager {
     }
 
     TrialManager public trialManager;
+    ISponsorIncentiveVault public vault; // H-4: Vault reference for participant validation
     address public owner;
+    address public pendingOwner; // FINDING 11: Two-step ownership transfer
 
     // trialId => phases
     mapping(uint256 => TrialPhases) private trialPhases;
@@ -31,6 +41,8 @@ contract TrialMilestoneManager {
     event MilestonesSet(uint256 indexed trialId, uint256 milestoneCount);
     event MilestoneCompleted(uint256 indexed trialId, address indexed patient, uint256 milestoneIndex);
     event TrialManagerUpdated(address indexed oldManager, address indexed newManager);
+    event OwnershipProposed(address indexed proposedOwner);
+    event OwnershipAccepted(address indexed newOwner);
 
     constructor(address _trialManager) {
         owner = msg.sender;
@@ -42,9 +54,32 @@ contract TrialMilestoneManager {
         _;
     }
 
+    // FINDING 11: Two-step ownership transfer
+    function proposeOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Zero address");
+        pendingOwner = _newOwner;
+        emit OwnershipProposed(_newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not proposed owner");
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipAccepted(owner);
+    }
+
     modifier onlySponsor(uint256 _trialId) {
         require(trialManager.getTrial(_trialId).sponsor == msg.sender, "Only sponsor");
         _;
+    }
+
+    /**
+     * @notice H-4: Set the vault contract for participant validation
+     * @param _vault Address of the SponsorIncentiveVault contract
+     */
+    function setVault(address _vault) external onlyOwner {
+        require(_vault != address(0), "Zero address");
+        vault = ISponsorIncentiveVault(_vault);
     }
 
     /**
@@ -59,6 +94,7 @@ contract TrialMilestoneManager {
 
     /**
      * @notice Define milestones for a trial
+     * @dev MED-6: Deadlines must be in the future and within trial end time
      */
     function setMilestones(
         uint256 _trialId,
@@ -70,9 +106,21 @@ contract TrialMilestoneManager {
         require(_names.length > 0 && _names.length <= 4, "1-4 milestones allowed");
         require(_names.length == _weights.length && _names.length == _deadlines.length, "Length mismatch");
 
-        uint16 totalWeight = 0;
+        // MED-6: Validate deadlines
+        TrialManager.Trial memory trial = trialManager.getTrial(_trialId);
+        for (uint256 i = 0; i < _deadlines.length; i++) {
+            require(_deadlines[i] > block.timestamp, "Deadline must be in future");
+            require(_deadlines[i] <= trial.endTime, "Deadline cannot exceed trial end");
+            // Validate deadlines are sequential (increasing order)
+            if (i > 0) {
+                require(_deadlines[i] > _deadlines[i - 1], "Deadlines must be sequential");
+            }
+        }
+
+        // FINDING 8: Accumulate in uint256 to prevent overflow
+        uint256 totalWeight = 0;
         for (uint256 i = 0; i < _names.length; i++) {
-            totalWeight += _weights[i];
+            totalWeight += uint256(_weights[i]);
             trialPhases[_trialId].milestones.push(Milestone({
                 name: _names[i],
                 weightBps: _weights[i],
@@ -87,23 +135,28 @@ contract TrialMilestoneManager {
 
     /**
      * @notice Mark a milestone as completed for a patient
+     * @dev HIGH-2: Milestones must be completed in sequential order
+     * @dev H-4: Patient must be registered participant in the vault
      */
     function completeMilestone(uint256 _trialId, address _patient, uint256 _milestoneIndex) external onlySponsor(_trialId) {
         require(trialPhases[_trialId].initialized, "Trial not initialized");
         require(_milestoneIndex < trialPhases[_trialId].milestones.length, "Invalid index");
-        
-        uint256 currentProgress = participantProgress[_trialId][_patient];
-        if (currentProgress == 0 && _milestoneIndex == 0) {
-            // First milestone, nothing to check (using 0-indexed with a "none" state check if needed)
-            // But let's simplify: progress stores the index of the LAST completed milestone.
-            // We'll use a special value or just allow sequential completion.
-        } else if (_milestoneIndex > 0) {
-            // Need to have completed previous milestone if not using a default value
-            // Let's use 0 as "not started" and check if previous was completed.
-            // Actually, let's just use simple indexing.
-        }
 
-        participantProgress[_trialId][_patient] = _milestoneIndex + 1; // 1-based progress tracking
+        // H-4: Verify patient is a registered participant
+        require(
+            address(vault) != address(0) && vault.isParticipantRegistered(_trialId, _patient),
+            "Not a registered participant"
+        );
+
+        uint256 currentProgress = participantProgress[_trialId][_patient];
+
+        // HIGH-2: Enforce sequential completion
+        // currentProgress is 0-based index of last completed + 1 (i.e., next expected milestone)
+        // For first milestone (index 0), currentProgress must be 0
+        // For subsequent milestones, currentProgress must equal the milestone being completed
+        require(_milestoneIndex == currentProgress, "Must complete milestones in order");
+
+        participantProgress[_trialId][_patient] = _milestoneIndex + 1;
         emit MilestoneCompleted(_trialId, _patient, _milestoneIndex);
     }
 

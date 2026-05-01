@@ -15,9 +15,8 @@ import {
     TrendingUp
 } from "lucide-react";
 import { useWeb3 } from "../../lib/Web3Context";
-import { getConfidentialETH } from "../../lib/contracts";
+import { getConfidentialETH, getContractAddressForChain } from "../../lib/contracts";
 import { reencryptUint64 } from "../../lib/fhe";
-import addresses from "../../lib/contracts/addresses.json";
 import { ethers } from "ethers";
 import { useStaking } from "../../hooks/useStaking";
 
@@ -32,7 +31,7 @@ export function RewardsCard() {
 
     const { stakeFromConfidential } = useStaking();
 
-    const cETHAddress = (addresses as any).sepolia.ConfidentialETH;
+    const cETHAddress = getContractAddressForChain("ConfidentialETH");
 
     const fetchEncryptedBalance = async () => {
         if (!signer || !account) return;

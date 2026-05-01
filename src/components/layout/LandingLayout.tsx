@@ -1,85 +1,72 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
-import { ShieldCheck, ArrowRight, Github, Twitter, Linkedin, Globe } from "lucide-react";
-import { Button } from "../ui/Button";
+import { motion, useReducedMotion } from "framer-motion";
+
+const ASSET_BASE = "/landing%20page";
 
 export function LandingLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans selection:bg-accent/20">
+  const reduce = useReducedMotion();
+  const footerVariants = reduce
+    ? { hidden: { opacity: 0 }, visible: { opacity: 1 } }
+    : { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } };
 
-      {/* ── Main ── */}
+  return (
+    <div className="min-h-screen bg-[#f7f9fb] text-[#191c1e] font-sans selection:bg-[#89f5e7]/40">
+      <nav className="sticky top-0 z-50 w-full border-b border-[#bcc9c6]/40 bg-white/70 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-4 md:px-8">
+          <Link to="/" className="inline-flex items-center gap-2 text-2xl font-bold tracking-tight text-[#00685f]">
+            <img src={`${ASSET_BASE}/logo-mark.svg`} alt="" className="h-7 w-7" aria-hidden />
+            <span>MedVault</span>
+          </Link>
+          <div className="hidden items-center gap-8 md:flex">
+            <a href="#how-it-works" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
+              How it Works
+            </a>
+            <a href="#privacy" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
+              Privacy
+            </a>
+            <Link to="/sponsor/dashboard" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
+              For Doctors
+            </Link>
+            <Link to="/patient/dashboard" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
+              For Patients
+            </Link>
+          </div>
+          <div className="hidden items-center gap-4 md:flex">
+            <Link
+              to="/patient/dashboard"
+              className="inline-flex items-center gap-2 rounded-full border border-[#00685f]/70 px-5 py-2 text-sm font-semibold text-[#00685f] transition hover:bg-[#00685f]/5"
+            >
+              <img src={`${ASSET_BASE}/icon-wallet.svg`} alt="" className="h-4 w-4" aria-hidden />
+              Log in
+            </Link>
+          </div>
+        </div>
+      </nav>
+
       <main>
         {children}
       </main>
 
-      {/* ── Footer ── */}
-      <footer className="relative bg-slate-950 text-white pt-20 pb-10 overflow-hidden">
-        {/* Top accent line */}
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
-        {/* BG glow */}
-        <div className="absolute bottom-0 right-0 w-[500px] h-[300px] bg-accent/5 blur-[120px] rounded-full pointer-events-none" />
-
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-14 relative z-10">
-
-          {/* Top grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-16 pb-16 border-b border-slate-800">
-
-            {/* Brand col — spans 2 */}
-            <div className="lg:col-span-2 space-y-6">
-              <Link to="/" className="flex items-center gap-0 group w-fit">
-                <div className="flex h-12 w-20 items-center justify-center transition-transform duration-300 group-hover:scale-110 -mr-2">
-                  <img src="/logo.png" alt="MedVault Logo" className="w-full h-full object-contain drop-shadow-xl" />
-                </div>
-                <span className="font-bold text-lg tracking-tight">MedVault</span>
-              </Link>
-              <p className="text-sm leading-relaxed text-slate-400 max-w-[280px]">
-                Securing the future of medical discovery through Fully Homomorphic Encryption. Patient privacy is no longer a trade-off.
-              </p>
-              <div className="flex gap-2">
-                {[Twitter, Github, Linkedin, Globe].map((Icon, i) => (
-                  <Link
-                    key={i}
-                    to="#"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-500 hover:text-accent hover:border-accent/50 transition-all"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* Simplified Navigation */}
-            <div className="lg:col-span-3 flex flex-wrap gap-x-12 gap-y-6 lg:justify-end items-start mt-4 lg:mt-0">
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Navigation</h4>
-                <ul className="space-y-3">
-                  <li><Link to="/patient" className="text-sm text-slate-400 hover:text-white transition-colors">Patient Portal</Link></li>
-                  <li><Link to="/sponsor" className="text-sm text-slate-400 hover:text-white transition-colors">Sponsor Console</Link></li>
-                  <li><Link to="/docs" className="text-sm text-slate-400 hover:text-white transition-colors">Technical Docs</Link></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between pt-8 gap-4">
-            <p className="text-[12px] text-slate-600">
-              © 2026 Fhenix MedVault. Built with FHE technology.
-            </p>
-            <div className="flex gap-6">
-              {["Privacy Policy", "Terms of Service", "Cookie Policy"].map((item) => (
-                <Link
-                  key={item}
-                  to="#"
-                  className="text-[12px] text-slate-600 hover:text-slate-300 transition-colors"
-                >
-                  {item}
-                </Link>
-              ))}
-            </div>
+      <motion.footer
+        className="border-t border-[#bcc9c6]/60 bg-white py-8"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        variants={footerVariants}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-4 px-6 lg:flex-row lg:px-10">
+          <p className="text-sm text-[#5a6a80]">
+            <span className="font-semibold text-[#00685f]">MedVault</span> — encrypted clinical trial matching.
+          </p>
+          <div className="flex items-center gap-6 text-sm text-[#5a6a80]">
+            <Link to="/technology" className="hover:text-[#00685f]">Technology</Link>
+            <Link to="/security" className="hover:text-[#00685f]">Security</Link>
+            <Link to="/docs" className="hover:text-[#00685f]">Docs</Link>
           </div>
         </div>
-      </footer>
+      </motion.footer>
     </div>
   );
 }

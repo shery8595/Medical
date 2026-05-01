@@ -1,5 +1,6 @@
 import { Prose } from "../../components/docs/Prose";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 import { Fingerprint, Stethoscope, ShieldAlert, BadgeCheck, DatabaseBackup, Building2, Lock, CheckCircle2 } from "lucide-react";
@@ -7,7 +8,7 @@ import { Fingerprint, Stethoscope, ShieldAlert, BadgeCheck, DatabaseBackup, Buil
 const patientJourneyChart = `
 stateDiagram-v2
     [*] --> Unregistered
-    Unregistered --> DataVault: Register + Encrypt Metrics (fhevmjs)
+    Unregistered --> DataVault: Register + Encrypt Metrics (@cofhe/sdk)
     DataVault --> Applied: Apply for Trial
     Applied --> Matching: EligibilityEngine.computeEligibility()
     Matching --> ScoreReady: FHE Score stored on-chain (encrypted)
@@ -34,7 +35,7 @@ stateDiagram-v2
 `;
 
 const patientSteps = [
-    { icon: <Fingerprint />, step: "1", title: "Connect & Register", color: "blue", desc: "Connect your MetaMask wallet to the Fhenix Sepolia testnet. In the Patient Dashboard, click 'Update Vault' and enter your medical metrics (Age, Blood Pressure, HbA1c, Weight). These are encrypted by `fhevmjs` in your browser before being sent on-chain." },
+    { icon: <Fingerprint />, step: "1", title: "Connect & Register", color: "blue", desc: "Connect your MetaMask wallet to the Fhenix Sepolia testnet. In the Patient Dashboard, click 'Update Vault' and enter your medical metrics (Age, Blood Pressure, HbA1c, Weight). These are encrypted by `@cofhe/sdk` in your browser before being sent on-chain." },
     { icon: <Stethoscope />, step: "2", title: "Browse & Apply", color: "teal", desc: "Navigate to the Trials tab to browse all active trials indexed by The Graph Subgraph. Click 'Apply' on any trial that might match your profile. The `EligibilityEngine` will immediately compute a score by comparing your encrypted metrics against the trial's encrypted requirements." },
     { icon: <ShieldAlert />, step: "3", title: "Request Result (EIP-712)", color: "purple", desc: "In your Applications list, click 'Reveal Score'. This triggers MetaMask to show an EIP-712 signing request. You are not signing a transaction — you are generating a cryptographic viewing key that proves you own the wallet. The Fhenix network uses this key to decrypt your specific score mapping slot." },
     { icon: <BadgeCheck />, step: "4", title: "Grant Consent (Optional)", color: "emerald", desc: "If your score is 100 (perfect match), you may optionally choose to reveal your identity to the sponsor by clicking 'Grant Access'. This records a time-locked access token on-chain. The sponsor can now contact you directly through the DApp's encrypted messaging system." },
@@ -47,46 +48,46 @@ const edgeCases = [
 ];
 const colorStyles: Record<string, { iconBg: string; iconText: string; cardBorder: string; cardBg: string; stepBadge?: string }> = {
     blue: {
-        iconBg: "bg-blue-100 dark:bg-blue-900/30",
-        iconText: "text-blue-600 dark:text-blue-400",
-        cardBorder: "border-blue-200 dark:border-blue-900/40",
-        cardBg: "bg-blue-50/50 dark:bg-blue-950/10",
-        stepBadge: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
+        iconBg: "bg-blue-100",
+        iconText: "text-blue-600",
+        cardBorder: "border-blue-200",
+        cardBg: "bg-blue-50/50",
+        stepBadge: "bg-blue-100 text-blue-600",
     },
     teal: {
-        iconBg: "bg-blue-100 dark:bg-blue-900/30",
-        iconText: "text-blue-600 dark:text-blue-400",
-        cardBorder: "border-blue-200 dark:border-blue-900/40",
-        cardBg: "bg-blue-50/50 dark:bg-blue-950/10",
-        stepBadge: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
+        iconBg: "bg-blue-100",
+        iconText: "text-blue-600",
+        cardBorder: "border-blue-200",
+        cardBg: "bg-blue-50/50",
+        stepBadge: "bg-blue-100 text-blue-600",
     },
     purple: {
-        iconBg: "bg-purple-100 dark:bg-purple-900/30",
-        iconText: "text-purple-600 dark:text-purple-400",
-        cardBorder: "border-purple-200 dark:border-purple-900/40",
-        cardBg: "bg-purple-50/50 dark:bg-purple-950/10",
-        stepBadge: "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400",
+        iconBg: "bg-purple-100",
+        iconText: "text-purple-600",
+        cardBorder: "border-purple-200",
+        cardBg: "bg-purple-50/50",
+        stepBadge: "bg-purple-100 text-purple-600",
     },
     emerald: {
-        iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
-        iconText: "text-emerald-600 dark:text-emerald-400",
-        cardBorder: "border-emerald-200 dark:border-emerald-900/40",
-        cardBg: "bg-emerald-50/50 dark:bg-emerald-950/10",
-        stepBadge: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400",
+        iconBg: "bg-emerald-100",
+        iconText: "text-emerald-600",
+        cardBorder: "border-emerald-200",
+        cardBg: "bg-emerald-50/50",
+        stepBadge: "bg-emerald-100 text-emerald-600",
     },
     rose: {
-        iconBg: "bg-rose-100 dark:bg-rose-900/30",
-        iconText: "text-rose-600 dark:text-rose-400",
-        cardBorder: "border-rose-200 dark:border-rose-900/40",
-        cardBg: "bg-rose-50/50 dark:bg-rose-950/10",
-        stepBadge: "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400",
+        iconBg: "bg-rose-100",
+        iconText: "text-rose-600",
+        cardBorder: "border-rose-200",
+        cardBg: "bg-rose-50/50",
+        stepBadge: "bg-rose-100 text-rose-600",
     },
     amber: {
-        iconBg: "bg-amber-100 dark:bg-amber-900/30",
-        iconText: "text-amber-600 dark:text-amber-400",
-        cardBorder: "border-amber-200 dark:border-amber-900/40",
-        cardBg: "bg-amber-50/50 dark:bg-amber-950/10",
-        stepBadge: "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400",
+        iconBg: "bg-amber-100",
+        iconText: "text-amber-600",
+        cardBorder: "border-amber-200",
+        cardBg: "bg-amber-50/50",
+        stepBadge: "bg-amber-100 text-amber-600",
     },
 };
 
@@ -94,23 +95,18 @@ export function UserGuideDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
-                <span className="text-emerald-500 font-bold tracking-widest uppercase text-xs">Operations</span>
-                <h1 className="mt-2 text-5xl">User Workflows & State Machines</h1>
+                <DocsPageHeaderForRoute />
 
-                <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
-                    MedVault operates with strict cryptographic guarantees at every phase of the user lifecycle. This guide documents the exact steps for Patients and Sponsors, the precise state machine both parties traverse, and critical edge cases developers must handle.
-                </p>
-
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>I. The Patient Journey</h2>
                 <p>
                     Patients are the absolute sovereign owners of their encrypted health data. Their workflow is a linear 4-step process, but each step involves distinct cryptographic operations.
                 </p>
 
-                <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 mb-8">
-                    <h3 className="text-xl font-semibold text-slate-200 mb-4">Patient State Machine</h3>
-                    <ul className="list-disc list-inside space-y-2 text-slate-300">
+                <div className="not-prose bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">Patient state machine</h3>
+                    <ul className="list-disc list-inside space-y-2 text-slate-600 text-sm">
                         <li><strong>Unregistered:</strong> Initial state</li>
                         <li><strong>Registered:</strong> After sign up</li>
                         <li><strong>Matching:</strong> Running FHE evaluation against trials</li>
@@ -131,7 +127,7 @@ export function UserGuideDoc() {
                             whileInView={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.1 }}
                             viewport={{ once: true }}
-                            className="flex gap-5 items-start p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm"
+                            className="flex gap-5 items-start p-6 rounded-2xl border border-slate-200 bg-white shadow-sm"
                         >
                             <div className={`p-3 rounded-2xl ${styles.iconBg} ${styles.iconText} shrink-0 mt-0.5`}>
                                 {s.icon}
@@ -140,24 +136,24 @@ export function UserGuideDoc() {
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-xs font-mono font-bold text-slate-400">Step {s.step}</span>
                                 </div>
-                                <h4 className="font-bold text-lg text-slate-900 dark:text-white mt-0 mb-2">{s.title}</h4>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{s.desc}</p>
+                                <h4 className="font-bold text-lg text-slate-900 mt-0 mb-2">{s.title}</h4>
+                                <p className="text-sm text-slate-600 leading-relaxed">{s.desc}</p>
                             </div>
                         </motion.div>
                         );
                     })}
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>II. The Sponsor Journey</h2>
                 <p>
                     Sponsors are authorized pharmaceutical research institutions. They follow a strictly gated workflow that requires both off-chain KYC verification and on-chain admin approval before they can publish trials.
                 </p>
 
-                <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 mb-8 mt-8">
-                    <h3 className="text-xl font-semibold text-slate-200 mb-4">Sponsor State Machine</h3>
-                    <ul className="list-disc list-inside space-y-2 text-slate-300">
+                <div className="not-prose bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8 mt-8">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">Sponsor state machine</h3>
+                    <ul className="list-disc list-inside space-y-2 text-slate-600 text-sm">
                         <li><strong>Trial Setup:</strong> Defining FHE criteria</li>
                         <li><strong>Active:</strong> Recruiting patients</li>
                         <li><strong>Reviewing:</strong> Checking matched patients and sending consent requests</li>
@@ -175,16 +171,20 @@ export function UserGuideDoc() {
                     ].map(s => {
                         const styles = colorStyles[s.color];
                         return (
-                        <div key={s.step} className={`p-5 rounded-2xl border ${styles.cardBorder} bg-white dark:bg-slate-900`}>
-                            <div className={`w-8 h-8 rounded-full ${styles.stepBadge} flex items-center justify-center font-bold font-mono text-sm mb-3`}>{s.step}</div>
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-2 mt-0">{s.title}</h4>
+                        <div key={s.step} className={`p-5 rounded-2xl border ${styles.cardBorder} bg-white shadow-sm`}>
+                            <div
+                                className={`w-8 h-8 rounded-full ${styles.stepBadge} flex items-center justify-center font-bold font-mono text-sm mb-3`}
+                            >
+                                {s.step}
+                            </div>
+                            <h4 className="font-bold text-slate-900 text-sm mb-2 mt-0">{s.title}</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">{s.desc}</p>
                         </div>
                         );
                     })}
                 </div>
 
-                <hr className="my-12 border-slate-200 dark:border-slate-800" />
+                <hr className="my-12 border-slate-200" />
 
                 <h2>III. Edge Cases & Known Behavior</h2>
                 <p>
@@ -198,8 +198,8 @@ export function UserGuideDoc() {
                         <div key={e.title} className={`p-5 rounded-2xl border ${styles.cardBorder} ${styles.cardBg} flex gap-4 items-start`}>
                             <div className={`p-2 rounded-xl ${styles.iconBg} shrink-0 ${styles.iconText}`}>{e.icon}</div>
                             <div>
-                                <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-1 mt-0">{e.title}</h4>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-0">{e.desc}</p>
+                                <h4 className="font-bold text-slate-900 text-sm mb-1 mt-0">{e.title}</h4>
+                                <p className="text-sm text-slate-600 leading-relaxed mb-0">{e.desc}</p>
                             </div>
                         </div>
                         );

@@ -3,79 +3,52 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 
 interface AnalyticsCardProps {
   title: string;
-  type: 'bar' | 'pie';
+  type: "bar" | "pie";
   data: any[];
+  /** When true, renders chart only (no outer Card) for nesting inside another Card */
+  embedded?: boolean;
   centerLabel?: {
     value: string | number;
     label: string;
   };
 }
 
-const COLORS = ['#14B8A6', '#6366F1', '#F43F5E', '#F59E0B', '#8B5CF6'];
+const COLORS = ["#0d9488", "#6366f1", "#e11d48", "#d97706", "#7c3aed"];
 
-export function AnalyticsCard({ title, type, data, centerLabel }: AnalyticsCardProps) {
-  return (
-    <Card className="min-h-[420px] relative overflow-hidden bg-white/5 border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-500 ease-out hover:border-blue-500/30 hover:shadow-blue-500/5 hover:-translate-y-1 group">
-      {/* Morphing Background Layer */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-in-out pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full blur-[100px] animate-pulse bg-blue-500/10" />
-        <div className="absolute -bottom-32 -left-32 w-64 h-64 rounded-full blur-[100px] animate-pulse bg-indigo-500/10 delay-700" />
-      </div>
+const tooltipStyle = {
+  backgroundColor: "#ffffff",
+  borderRadius: "8px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 4px 6px -1px rgb(15 23 42 / 0.06)",
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "#334155",
+};
 
-      <CardHeader className="pb-2 relative z-10">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(20,184,166,0.6)] animate-pulse" />
-          <CardTitle className="text-sm font-black uppercase tracking-[0.25em] text-slate-500 group-hover:text-slate-400 transition-colors">
-            {title}
-          </CardTitle>
-        </div>
-      </CardHeader>
+export function AnalyticsCard({ title, type, data, centerLabel, embedded }: AnalyticsCardProps) {
+  const showHeader = Boolean(title?.trim());
 
-      <CardContent className="relative z-10">
-        <div className="h-[320px] w-full relative flex items-center justify-center pt-4">
-          <ResponsiveContainer width="100%" height="100%">
-            {type === 'bar' ? (
+  const chartBlock = (
+    <div className="h-[280px] w-full relative flex items-center justify-center">
+      <ResponsiveContainer width="100%" height="100%">
+            {type === "bar" ? (
               <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <XAxis
                   dataKey="name"
-                  stroke="#64748b"
+                  stroke="#94a3b8"
                   fontSize={10}
-                  fontWeight="bold"
+                  fontWeight={600}
                   tickLine={false}
                   axisLine={false}
                   dy={10}
                 />
-                <YAxis
-                  stroke="#64748b"
-                  fontSize={10}
-                  fontWeight="bold"
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255, 255, 255, 0.05)', radius: 8 }}
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    backdropFilter: 'blur(12px)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    color: '#fff'
-                  }}
-                />
-                <Bar
-                  dataKey="value"
-                  fill="url(#barGradient)"
-                  radius={[8, 8, 0, 0]}
-                  barSize={32}
-                  animationDuration={1500}
-                />
+                <YAxis stroke="#94a3b8" fontSize={10} fontWeight={600} tickLine={false} axisLine={false} />
+                <Tooltip cursor={{ fill: "rgba(241, 245, 249, 0.9)", radius: 8 }} contentStyle={tooltipStyle} />
+                <Bar dataKey="value" fill="url(#barGradientLight)" radius={[6, 6, 0, 0]} barSize={28} animationDuration={800} />
                 <defs>
-                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#14B8A6" />
-                    <stop offset="100%" stopColor="#14B8A6" stopOpacity={0.3} />
+                  <linearGradient id="barGradientLight" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0d9488" />
+                    <stop offset="100%" stopColor="#0d9488" stopOpacity={0.35} />
                   </linearGradient>
                 </defs>
               </BarChart>
@@ -85,48 +58,52 @@ export function AnalyticsCard({ title, type, data, centerLabel }: AnalyticsCardP
                   data={data}
                   cx="50%"
                   cy="50%"
-                  innerRadius={85}
-                  outerRadius={110}
-                  paddingAngle={8}
+                  innerRadius={72}
+                  outerRadius={96}
+                  paddingAngle={4}
                   dataKey="value"
-                  stroke="none"
-                  animationBegin={200}
-                  animationDuration={1800}
+                  stroke="#f1f5f9"
+                  strokeWidth={2}
+                  animationBegin={0}
+                  animationDuration={600}
                 >
                   {data.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                    backdropFilter: 'blur(12px)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)',
-                    fontSize: '11px',
-                    fontWeight: 'bold'
-                  }}
-                />
+                <Tooltip contentStyle={tooltipStyle} />
               </PieChart>
             )}
           </ResponsiveContainer>
 
-          {type === 'pie' && centerLabel && (
+          {type === "pie" && centerLabel && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-5xl font-black text-white tracking-tighter transition-all duration-500 group-hover:scale-110">
+              <span className="text-4xl font-semibold text-slate-900 tracking-tight tabular-nums">
                 {centerLabel.value}
               </span>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2">
+              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mt-1.5">
                 {centerLabel.label}
               </p>
             </div>
           )}
-        </div>
-      </CardContent>
+    </div>
+  );
 
-      {/* Inner Glow Border */}
-      <div className="absolute inset-[1px] rounded-[inherit] pointer-events-none border border-white/5 opacity-50 group-hover:opacity-100 transition-opacity" />
+  if (embedded) {
+    return chartBlock;
+  }
+
+  return (
+    <Card className="min-h-[280px] border border-slate-200 bg-white shadow-sm">
+      {showHeader && (
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            {title}
+          </CardTitle>
+        </CardHeader>
+      )}
+
+      <CardContent className={showHeader ? "" : "pt-6"}>{chartBlock}</CardContent>
     </Card>
   );
 }

@@ -7,8 +7,44 @@ import {
   Entity,
   Bytes,
   Address,
-  BigInt
+  BigInt,
 } from "@graphprotocol/graph-ts";
+
+export class OwnershipAccepted extends ethereum.Event {
+  get params(): OwnershipAccepted__Params {
+    return new OwnershipAccepted__Params(this);
+  }
+}
+
+export class OwnershipAccepted__Params {
+  _event: OwnershipAccepted;
+
+  constructor(event: OwnershipAccepted) {
+    this._event = event;
+  }
+
+  get newOwner(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+}
+
+export class OwnershipProposed extends ethereum.Event {
+  get params(): OwnershipProposed__Params {
+    return new OwnershipProposed__Params(this);
+  }
+}
+
+export class OwnershipProposed__Params {
+  _event: OwnershipProposed;
+
+  constructor(event: OwnershipProposed) {
+    this._event = event;
+  }
+
+  get proposedOwner(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+}
 
 export class SponsorAdded extends ethereum.Event {
   get params(): SponsorAdded__Params {
@@ -89,7 +125,7 @@ export class SponsorshipRequested__Params {
     return this._event.parameters[0].value.toAddress();
   }
 
-  get encryptedData(): Bytes {
+  get encryptedInstitutionId(): Bytes {
     return this._event.parameters[1].value.toBytes();
   }
 }
@@ -98,25 +134,28 @@ export class SponsorRegistry__requestsResult {
   value0: Bytes;
   value1: i32;
   value2: BigInt;
+  value3: boolean;
 
-  constructor(value0: Bytes, value1: i32, value2: BigInt) {
+  constructor(value0: Bytes, value1: i32, value2: BigInt, value3: boolean) {
     this.value0 = value0;
     this.value1 = value1;
     this.value2 = value2;
+    this.value3 = value3;
   }
 
   toMap(): TypedMap<string, ethereum.Value> {
     let map = new TypedMap<string, ethereum.Value>();
-    map.set("value0", ethereum.Value.fromBytes(this.value0));
+    map.set("value0", ethereum.Value.fromFixedBytes(this.value0));
     map.set(
       "value1",
-      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value1))
+      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value1)),
     );
     map.set("value2", ethereum.Value.fromUnsignedBigInt(this.value2));
+    map.set("value3", ethereum.Value.fromBoolean(this.value3));
     return map;
   }
 
-  getEncryptedData(): Bytes {
+  getEncryptedInstitutionId(): Bytes {
     return this.value0;
   }
 
@@ -127,17 +166,23 @@ export class SponsorRegistry__requestsResult {
   getRequestedAt(): BigInt {
     return this.value2;
   }
+
+  getHasEncryptedData(): boolean {
+    return this.value3;
+  }
 }
 
 export class SponsorRegistry__sponsorsResult {
   value0: string;
   value1: boolean;
   value2: BigInt;
+  value3: Bytes;
 
-  constructor(value0: string, value1: boolean, value2: BigInt) {
+  constructor(value0: string, value1: boolean, value2: BigInt, value3: Bytes) {
     this.value0 = value0;
     this.value1 = value1;
     this.value2 = value2;
+    this.value3 = value3;
   }
 
   toMap(): TypedMap<string, ethereum.Value> {
@@ -145,6 +190,7 @@ export class SponsorRegistry__sponsorsResult {
     map.set("value0", ethereum.Value.fromString(this.value0));
     map.set("value1", ethereum.Value.fromBoolean(this.value1));
     map.set("value2", ethereum.Value.fromUnsignedBigInt(this.value2));
+    map.set("value3", ethereum.Value.fromFixedBytes(this.value3));
     return map;
   }
 
@@ -159,6 +205,10 @@ export class SponsorRegistry__sponsorsResult {
   getAddedAt(): BigInt {
     return this.value2;
   }
+
+  getEncryptedInstitutionId(): Bytes {
+    return this.value3;
+  }
 }
 
 export class SponsorRegistry extends ethereum.SmartContract {
@@ -166,11 +216,57 @@ export class SponsorRegistry extends ethereum.SmartContract {
     return new SponsorRegistry("SponsorRegistry", address);
   }
 
+  getEncryptedInstitutionId(_sponsor: Address): Bytes {
+    let result = super.call(
+      "getEncryptedInstitutionId",
+      "getEncryptedInstitutionId(address):(bytes32)",
+      [ethereum.Value.fromAddress(_sponsor)],
+    );
+
+    return result[0].toBytes();
+  }
+
+  try_getEncryptedInstitutionId(_sponsor: Address): ethereum.CallResult<Bytes> {
+    let result = super.tryCall(
+      "getEncryptedInstitutionId",
+      "getEncryptedInstitutionId(address):(bytes32)",
+      [ethereum.Value.fromAddress(_sponsor)],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBytes());
+  }
+
+  getRequestEncryptedId(_applicant: Address): Bytes {
+    let result = super.call(
+      "getRequestEncryptedId",
+      "getRequestEncryptedId(address):(bytes32)",
+      [ethereum.Value.fromAddress(_applicant)],
+    );
+
+    return result[0].toBytes();
+  }
+
+  try_getRequestEncryptedId(_applicant: Address): ethereum.CallResult<Bytes> {
+    let result = super.tryCall(
+      "getRequestEncryptedId",
+      "getRequestEncryptedId(address):(bytes32)",
+      [ethereum.Value.fromAddress(_applicant)],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBytes());
+  }
+
   isVerifiedSponsor(_sponsor: Address): boolean {
     let result = super.call(
       "isVerifiedSponsor",
       "isVerifiedSponsor(address):(bool)",
-      [ethereum.Value.fromAddress(_sponsor)]
+      [ethereum.Value.fromAddress(_sponsor)],
     );
 
     return result[0].toBoolean();
@@ -180,7 +276,7 @@ export class SponsorRegistry extends ethereum.SmartContract {
     let result = super.tryCall(
       "isVerifiedSponsor",
       "isVerifiedSponsor(address):(bool)",
-      [ethereum.Value.fromAddress(_sponsor)]
+      [ethereum.Value.fromAddress(_sponsor)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -204,27 +300,43 @@ export class SponsorRegistry extends ethereum.SmartContract {
     return ethereum.CallResult.fromValue(value[0].toAddress());
   }
 
+  pendingOwner(): Address {
+    let result = super.call("pendingOwner", "pendingOwner():(address)", []);
+
+    return result[0].toAddress();
+  }
+
+  try_pendingOwner(): ethereum.CallResult<Address> {
+    let result = super.tryCall("pendingOwner", "pendingOwner():(address)", []);
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toAddress());
+  }
+
   requests(param0: Address): SponsorRegistry__requestsResult {
     let result = super.call(
       "requests",
-      "requests(address):(bytes,uint8,uint256)",
-      [ethereum.Value.fromAddress(param0)]
+      "requests(address):(bytes32,uint8,uint256,bool)",
+      [ethereum.Value.fromAddress(param0)],
     );
 
     return new SponsorRegistry__requestsResult(
       result[0].toBytes(),
       result[1].toI32(),
-      result[2].toBigInt()
+      result[2].toBigInt(),
+      result[3].toBoolean(),
     );
   }
 
   try_requests(
-    param0: Address
+    param0: Address,
   ): ethereum.CallResult<SponsorRegistry__requestsResult> {
     let result = super.tryCall(
       "requests",
-      "requests(address):(bytes,uint8,uint256)",
-      [ethereum.Value.fromAddress(param0)]
+      "requests(address):(bytes32,uint8,uint256,bool)",
+      [ethereum.Value.fromAddress(param0)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -234,32 +346,34 @@ export class SponsorRegistry extends ethereum.SmartContract {
       new SponsorRegistry__requestsResult(
         value[0].toBytes(),
         value[1].toI32(),
-        value[2].toBigInt()
-      )
+        value[2].toBigInt(),
+        value[3].toBoolean(),
+      ),
     );
   }
 
   sponsors(param0: Address): SponsorRegistry__sponsorsResult {
     let result = super.call(
       "sponsors",
-      "sponsors(address):(string,bool,uint256)",
-      [ethereum.Value.fromAddress(param0)]
+      "sponsors(address):(string,bool,uint256,bytes32)",
+      [ethereum.Value.fromAddress(param0)],
     );
 
     return new SponsorRegistry__sponsorsResult(
       result[0].toString(),
       result[1].toBoolean(),
-      result[2].toBigInt()
+      result[2].toBigInt(),
+      result[3].toBytes(),
     );
   }
 
   try_sponsors(
-    param0: Address
+    param0: Address,
   ): ethereum.CallResult<SponsorRegistry__sponsorsResult> {
     let result = super.tryCall(
       "sponsors",
-      "sponsors(address):(string,bool,uint256)",
-      [ethereum.Value.fromAddress(param0)]
+      "sponsors(address):(string,bool,uint256,bytes32)",
+      [ethereum.Value.fromAddress(param0)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -269,8 +383,9 @@ export class SponsorRegistry extends ethereum.SmartContract {
       new SponsorRegistry__sponsorsResult(
         value[0].toString(),
         value[1].toBoolean(),
-        value[2].toBigInt()
-      )
+        value[2].toBigInt(),
+        value[3].toBytes(),
+      ),
     );
   }
 }
@@ -297,6 +412,32 @@ export class ConstructorCall__Outputs {
   _call: ConstructorCall;
 
   constructor(call: ConstructorCall) {
+    this._call = call;
+  }
+}
+
+export class AcceptOwnershipCall extends ethereum.Call {
+  get inputs(): AcceptOwnershipCall__Inputs {
+    return new AcceptOwnershipCall__Inputs(this);
+  }
+
+  get outputs(): AcceptOwnershipCall__Outputs {
+    return new AcceptOwnershipCall__Outputs(this);
+  }
+}
+
+export class AcceptOwnershipCall__Inputs {
+  _call: AcceptOwnershipCall;
+
+  constructor(call: AcceptOwnershipCall) {
+    this._call = call;
+  }
+}
+
+export class AcceptOwnershipCall__Outputs {
+  _call: AcceptOwnershipCall;
+
+  constructor(call: AcceptOwnershipCall) {
     this._call = call;
   }
 }
@@ -331,6 +472,36 @@ export class AddSponsorCall__Outputs {
   _call: AddSponsorCall;
 
   constructor(call: AddSponsorCall) {
+    this._call = call;
+  }
+}
+
+export class ProposeOwnershipCall extends ethereum.Call {
+  get inputs(): ProposeOwnershipCall__Inputs {
+    return new ProposeOwnershipCall__Inputs(this);
+  }
+
+  get outputs(): ProposeOwnershipCall__Outputs {
+    return new ProposeOwnershipCall__Outputs(this);
+  }
+}
+
+export class ProposeOwnershipCall__Inputs {
+  _call: ProposeOwnershipCall;
+
+  constructor(call: ProposeOwnershipCall) {
+    this._call = call;
+  }
+
+  get _newOwner(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+}
+
+export class ProposeOwnershipCall__Outputs {
+  _call: ProposeOwnershipCall;
+
+  constructor(call: ProposeOwnershipCall) {
     this._call = call;
   }
 }
@@ -412,8 +583,10 @@ export class RequestSponsorshipCall__Inputs {
     this._call = call;
   }
 
-  get _encryptedData(): Bytes {
-    return this._call.inputValues[0].value.toBytes();
+  get _encryptedInstitutionId(): RequestSponsorshipCall_encryptedInstitutionIdStruct {
+    return changetype<RequestSponsorshipCall_encryptedInstitutionIdStruct>(
+      this._call.inputValues[0].value.toTuple(),
+    );
   }
 }
 
@@ -425,32 +598,20 @@ export class RequestSponsorshipCall__Outputs {
   }
 }
 
-export class TransferOwnershipCall extends ethereum.Call {
-  get inputs(): TransferOwnershipCall__Inputs {
-    return new TransferOwnershipCall__Inputs(this);
+export class RequestSponsorshipCall_encryptedInstitutionIdStruct extends ethereum.Tuple {
+  get ctHash(): BigInt {
+    return this[0].toBigInt();
   }
 
-  get outputs(): TransferOwnershipCall__Outputs {
-    return new TransferOwnershipCall__Outputs(this);
-  }
-}
-
-export class TransferOwnershipCall__Inputs {
-  _call: TransferOwnershipCall;
-
-  constructor(call: TransferOwnershipCall) {
-    this._call = call;
+  get securityZone(): i32 {
+    return this[1].toI32();
   }
 
-  get _newOwner(): Address {
-    return this._call.inputValues[0].value.toAddress();
+  get utype(): i32 {
+    return this[2].toI32();
   }
-}
 
-export class TransferOwnershipCall__Outputs {
-  _call: TransferOwnershipCall;
-
-  constructor(call: TransferOwnershipCall) {
-    this._call = call;
+  get signature(): Bytes {
+    return this[3].toBytes();
   }
 }

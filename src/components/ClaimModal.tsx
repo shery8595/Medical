@@ -34,7 +34,7 @@ interface ClaimModalProps {
 
 export function ClaimModal({ isOpen, onClose, amountEth }: ClaimModalProps) {
     const { apy, loading: apyLoading } = useAaveYield();
-    const { withdraw, loading: withdrawLoading } = useConfidentialBalance();
+    const { withdraw, loading: withdrawLoading, getWithdrawNonce, generateWithdrawSignature } = useConfidentialBalance();
     const { loading: stakeLoading } = useStaking();
     const { signer } = useWeb3();
     const [status, setStatus] = useState<string | null>(null);
@@ -42,7 +42,16 @@ export function ClaimModal({ isOpen, onClose, amountEth }: ClaimModalProps) {
     const handleClaimDirect = async () => {
         try {
             setStatus("Preparing withdrawal...");
-            await withdraw(amountEth);
+            // C-2: Withdraw now requires Threshold Network signature
+            // Note: This requires the balance to be revealed first to get the handle
+            const nonce = await getWithdrawNonce();
+            throw new Error(
+                "Please reveal your balance first to generate the required Threshold Network signature. " +
+                "Return to the Confidential Wallet and click 'Reveal Balance' before claiming."
+            );
+            // After signature is obtained:
+            // const { signature, balance } = await generateWithdrawSignature(handle, balance, units, nonce);
+            // await withdraw(amountEth, signature, balance.toString());
             setStatus("Success!");
             setTimeout(onClose, 2000);
         } catch (err: any) {

@@ -18,35 +18,104 @@ import {
   TrendingUp,
   Unlock,
   Sparkles,
-  ArrowUpRight
+  ArrowUpRight,
+  ArrowRight,
+  Bookmark,
+  Info,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../lib/utils";
 import { Link } from "react-router-dom";
 import { useWeb3 } from "../../lib/Web3Context";
-import { getConsentManager, getEligibilityEngine, getSponsorIncentiveVault } from "../../lib/contracts";
+import {
+  getConsentManager,
+  getEligibilityEngine,
+  getMedVaultRegistry,
+  getSponsorIncentiveVault,
+  getContractAddressForChain
+} from "../../lib/contracts";
 import { useEncryptedData } from "../../lib/EncryptedDataContext";
+import {
+  getOrCreateIdentity,
+  getStoredIdentity,
+  isMemberRegistered,
+  resolveAnonymousNullifier,
+} from "../../lib/semaphore";
+import { useAnonymousApplication } from "../../hooks/useAnonymousRegistration";
 
-import { reencryptUint8 } from "../../lib/fhe";
-import addresses from "../../lib/contracts/addresses.json";
+import { forceConnectFHE, reencryptUint8, getFHEClient } from "../../lib/fhe";
+import { ethers } from "ethers";
 import { EncryptionAnimation } from "../ui/EncryptionAnimation";
+import { formatPhaseBadge, formatTrialDurationLabel, trialDiscoverDescription } from "../../lib/trialDisplay";
+import { NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE, isNotEligibleForTrialMessage } from "../../lib/relayer";
 
 interface TrialCardProps {
   trial: Trial;
   index?: number;
-  variant?: "default" | "glass";
+  variant?: "default" | "glass" | "discover";
+}
+
+const ZERO_HANDLE = "0x" + "0".repeat(64);
+
+/** Inline notice after failed anonymous apply — eligibility vs other failures */
+function AnonymousApplyFeedback({
+  registrationError,
+  semaphoreError,
+}: {
+  registrationError: string | null;
+  semaphoreError: string | null;
+}) {
+  const msg = registrationError || semaphoreError;
+  if (!msg) return null;
+  const notEligible = isNotEligibleForTrialMessage(msg);
+  const displayBody = notEligible ? NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE : msg;
+  return (
+    <motion.div
+      role="alert"
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className={cn(
+        "rounded-xl border p-4 text-left shadow-sm",
+        notEligible
+          ? "border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/80 text-amber-950 dark:border-amber-900/50 dark:from-amber-950/40 dark:to-orange-950/20 dark:text-amber-100"
+          : "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100"
+      )}
+    >
+      <div className="flex gap-3">
+        <div
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+            notEligible ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-rose-500/15 text-rose-600"
+          )}
+        >
+          {notEligible ? <Info className="h-5 w-5" aria-hidden /> : <AlertTriangle className="h-5 w-5" aria-hidden />}
+        </div>
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-black uppercase tracking-[0.12em] opacity-80">
+            {notEligible ? "Not eligible to apply" : "Something went wrong"}
+          </p>
+          <p className="text-sm font-medium leading-snug">{displayBody}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
 
 export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [discoverBookmarked, setDiscoverBookmarked] = useState(false);
   const isGlass = variant === "glass";
+  const isDiscover = variant === "discover" && !isGlass;
 
   const { signer, account } = useWeb3();
   const { setRevealedScore, getRevealedScore } = useEncryptedData();
+
   const [applyStatus, setApplyStatus] = useState<
     "idle" | "consenting" | "computing" | "success" | "error" | "applying" | "applied"
   >(trial.applicationStatus ? "applied" : (trial.hasComputed ? "success" : "idle"));
+
   const [applyError, setApplyError] = useState<string | null>(null);
   const [decryptedScore, setDecryptedScore] = useState<number | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
@@ -54,68 +123,227 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
   const [isRegistering, setIsRegistering] = useState(false);
   const [poolFunded, setPoolFunded] = useState(false);
   const [incentiveStatus, setIncentiveStatus] = useState<string | null>(null);
+  /** After first on-chain read of pool + isParticipantRegistered — avoids auto-enroll racing ahead of "already registered". */
+  const [incentiveCheckDone, setIncentiveCheckDone] = useState(false);
+
+  // Semaphore Anonymous Apply state
+  const [registrationStatus, setRegistrationStatus] = useState<'idle' | 'registering' | 'done' | 'error'>('idle');
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [isSemaphoreRegistered, setIsSemaphoreRegistered] = useState(false);
+
+  // Use the simplified Semaphore hook for anonymous application
+  const {
+    generateSemaphoreProof,
+    submitApplication,
+    isGeneratingSemaphore,
+    isSubmitting,
+    hasApplied,
+    error: semaphoreError,
+    reset
+  } = useAnonymousApplication(signer || undefined, signer?.provider || undefined);
+
+  // FIX 1: Track eligibility bool + signature separately from score
+  const [isEligibleDecrypted, setIsEligibleDecrypted] = useState<boolean | null>(null);
+  const [eligibilitySignature, setEligibilitySignature] = useState<string | null>(null);
+  const [isFetchingEligibility, setIsFetchingEligibility] = useState(false);
+  const autoEnrollAttemptedRef = useRef(false);
+  useEffect(() => {
+    autoEnrollAttemptedRef.current = false;
+  }, [trial.id]);
+
+  // FIX 2: Use correct network key — arbSepolia not sepolia
+  const engineAddress = getContractAddressForChain("EligibilityEngine");
 
   // Incentive Pool Logic
   useEffect(() => {
+    let cancelled = false;
     const checkPool = async () => {
-      if (!signer || !trial.id) return;
+      if (!signer || !trial.id) {
+        setIncentiveCheckDone(true);
+        return;
+      }
       try {
         const vault = getSponsorIncentiveVault(signer);
         const funded = await vault.isPoolFunded(BigInt(trial.id));
+        if (cancelled) return;
         setPoolFunded(funded);
 
         if (account) {
-          const registered = await vault.isRegistered(BigInt(trial.id), account);
+          const registered = await vault.isParticipantRegistered(BigInt(trial.id), account);
+          if (cancelled) return;
           setIsRegistered(registered);
         }
       } catch (err) {
         console.error("Error checking pool:", err);
+      } finally {
+        if (!cancelled) setIncentiveCheckDone(true);
       }
     };
-    checkPool();
+    setIncentiveCheckDone(false);
+    void checkPool();
+    return () => {
+      cancelled = true;
+    };
   }, [signer, trial.id, account]);
+
+  // Check if the current identity commitment is registered on-chain
+  const refreshMembership = async (): Promise<{
+    registered: boolean;
+    missingIdentity: boolean;
+    mismatch: boolean;
+    walletRegistered: boolean;
+    wrongNetwork: boolean;
+  }> => {
+    if (!signer?.provider || !account) {
+      return { registered: false, missingIdentity: false, mismatch: false, walletRegistered: false, wrongNetwork: false };
+    }
+    try {
+      const network = await signer.provider.getNetwork();
+      if (network.chainId !== 421614n) {
+        setIsSemaphoreRegistered(false);
+        return { registered: false, missingIdentity: false, mismatch: false, walletRegistered: false, wrongNetwork: true };
+      }
+
+      const registry = getMedVaultRegistry(signer);
+      const identity = getStoredIdentity();
+      if (!identity) {
+        setIsSemaphoreRegistered(false);
+        return { registered: false, missingIdentity: true, mismatch: false, walletRegistered: false, wrongNetwork: false };
+      }
+
+      const walletRegistered = await registry.isRegistered();
+      if (walletRegistered) {
+        const onChainCommitment = await registry.getCommitmentForWallet(account);
+        const localCommitment = identity.commitment;
+        if (BigInt(onChainCommitment) !== BigInt(localCommitment)) {
+          setIsSemaphoreRegistered(false);
+          return { registered: false, missingIdentity: false, mismatch: true, walletRegistered: true, wrongNetwork: false };
+        }
+      }
+
+      const registered = await isMemberRegistered(signer.provider, identity.commitment);
+      setIsSemaphoreRegistered(registered);
+      return { registered, missingIdentity: false, mismatch: false, walletRegistered, wrongNetwork: false };
+    } catch (err) {
+      console.error("Error checking membership:", err);
+      return { registered: false, missingIdentity: false, mismatch: false, walletRegistered: false, wrongNetwork: false };
+    }
+  };
+
+  useEffect(() => {
+    void refreshMembership();
+  }, [signer]);
 
   // Sync internal status with subgraph data if it changes
   useEffect(() => {
     if (trial.hasComputed) {
       setApplyStatus("success");
     } else if (trial.hasConsent && applyStatus === "idle") {
-      setApplyStatus("computing"); // If consented but not computed, allow computing
+      setApplyStatus("computing");
     }
   }, [trial.hasComputed, trial.hasConsent]);
 
   // Load score from memory store
   useEffect(() => {
-    if (account && trial.id) {
-      const score = getRevealedScore(addresses.sepolia.EligibilityEngine, trial.id);
+    if (account && trial.id && engineAddress) {
+      const score = getRevealedScore(engineAddress, trial.id);
       setDecryptedScore(score);
     }
-  }, [account, trial.id, getRevealedScore]);
+  }, [account, trial.id, getRevealedScore, engineAddress]);
+
+  // FIX 1: Pre-fetch eligibility bool + signature when eligibility is computed
+  // so the Apply button works without requiring score reveal first
+  useEffect(() => {
+    if (applyStatus !== "success" || !signer || !account || !trial.id) return;
+    if (isEligibleDecrypted !== null) return; // already fetched
+    if (trial.applicationStatus) return; // already applied
+
+    const prefetchEligibility = async () => {
+      setIsFetchingEligibility(true);
+      try {
+        const eligibilityEngine = getEligibilityEngine(signer);
+        const handle = await eligibilityEngine.encryptedResults(account, BigInt(trial.id));
+
+        // FIX 4: Zero handle guard
+        if (!handle || handle === ZERO_HANDLE) {
+          console.warn("Eligibility handle is zero — checkEligibility may not have run yet.");
+          return;
+        }
+
+        const c = await getFHEClient();
+
+        // FIX 2: Cast handle to bigint before passing to decryptForTx
+        const handleBig = typeof handle === "string" ? BigInt(handle) : handle;
+        const result = await c.decryptForTx(handleBig).withoutPermit().execute();
+
+        const eligible = result.decryptedValue === 1n || result.decryptedValue === true;
+        setIsEligibleDecrypted(eligible);
+        setEligibilitySignature(result.signature);
+      } catch (err) {
+        console.error("Failed to pre-fetch eligibility:", err);
+        // Non-fatal — user can still retry via apply button
+      } finally {
+        setIsFetchingEligibility(false);
+      }
+    };
+
+    prefetchEligibility();
+  }, [applyStatus, signer, account, trial.id, trial.applicationStatus]);
 
   const handleRevealScore = async () => {
-    if (!signer || !account) return;
+    if (!signer || !account || !engineAddress) return;
     setIsDecrypting(true);
     try {
       const eligibilityEngine = getEligibilityEngine(signer);
-      // Fetch the encrypted handle from the contract
-      const handle = await eligibilityEngine.encryptedScores(account, BigInt(trial.id));
 
-      if (handle === "0x0000000000000000000000000000000000000000000000000000000000000000") {
-        setDecryptedScore(0);
-        return;
+      // Derive the per-trial nullifier from local storage — never commitment
+      const { getAnonymousNullifier } = await import("../../lib/semaphore");
+      const nullifier = getAnonymousNullifier(BigInt(trial.id));
+
+      let handle: any = null;
+      let usedAnonymousHandle = false;
+      if (nullifier) {
+        // Primary: nullifier-keyed lookup (unlinkable across trials)
+        handle = await eligibilityEngine.getAnonymousScore(nullifier);
+        usedAnonymousHandle = !!handle && handle !== ZERO_HANDLE;
       }
 
-      const score = await reencryptUint8(
-        addresses.sepolia.EligibilityEngine,
-        account,
-        handle
-      );
+      // FIX: Consistent zero handle check
+      if (!handle || handle === ZERO_HANDLE) {
+        // Fallback to legacy address-based if needed
+        handle = await eligibilityEngine.getEncryptedScore(account, BigInt(trial.id));
+        if (!handle || handle === ZERO_HANDLE) {
+          setDecryptedScore(0);
+          return;
+        }
+      }
+
+      if (usedAnonymousHandle) {
+        const identity = getStoredIdentity();
+        if (!identity || !signer.provider) {
+          throw new Error("Anonymous score requires the local Semaphore identity.");
+        }
+        const privateKey = ethers.keccak256(
+          ethers.toUtf8Bytes(`medvault:ephemeral:${identity.secretScalar.toString()}`)
+        );
+        const ephemeralWallet = new ethers.Wallet(privateKey, signer.provider);
+        await forceConnectFHE(signer.provider, ephemeralWallet);
+      }
+
+      let score: unknown;
+      try {
+        score = await reencryptUint8(engineAddress, account, handle);
+      } finally {
+        if (usedAnonymousHandle && signer.provider) {
+          await forceConnectFHE(signer.provider, signer);
+        }
+      }
 
       const scoreNum = Number(score);
       setDecryptedScore(scoreNum);
 
-      // Save to memory store
-      setRevealedScore(addresses.sepolia.EligibilityEngine, trial.id, scoreNum);
+      // FIX 3: Save to memory store using correct network address
+      setRevealedScore(engineAddress, trial.id, scoreNum);
     } catch (err: any) {
       console.error("Decryption failed:", err);
       setApplyError("Decryption failed. Please try again.");
@@ -124,141 +352,485 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
     }
   };
 
-  const handleApplyEncrypted = async () => {
-    if (!signer || !account) {
-      setApplyError("Please connect your wallet first.");
-      setApplyStatus("error");
+  const handleApplyToSponsor = async () => {
+    setApplyError("Legacy application flow deprecated. Please use the anonymous ZK application instead.");
+    setApplyStatus("error");
+  };
+
+  const handleApplyAnonymously = async () => {
+    if (!signer || !account) return;
+    
+    if (!signer.provider) {
+      setRegistrationError('No network provider available. Please reconnect your wallet.');
       return;
     }
 
-    setApplyError(null);
+    setRegistrationError(null);
 
     try {
-      // Step 1: Grant consent (if not already granted)
-      if (!trial.hasConsent) {
-        setApplyStatus("consenting");
-        const consentManager = getConsentManager(signer);
-        const consentTx = await consentManager.grantConsent(BigInt(trial.id));
-        await consentTx.wait();
+      // Step 1: Check registration live right before apply to avoid stale UI state
+      const membership = await refreshMembership();
+      if (membership.wrongNetwork) {
+        throw new Error("Wrong network. Please switch your wallet to Arbitrum Sepolia and retry.");
+      }
+      if (membership.missingIdentity) {
+        throw new Error("No local anonymous identity found in this browser/profile. Use the same browser/profile used for registration, or re-register with a new wallet.");
+      }
+      if (membership.mismatch) {
+        throw new Error("Identity mismatch detected: this wallet is registered with a different anonymous identity than the one currently stored in your browser. Use the original browser/profile used at registration, or register again with a new wallet.");
+      }
+      if (!membership.walletRegistered) {
+        throw new Error("Wallet is not registered in MedVaultRegistry on Arbitrum Sepolia. Please register your health profile from this same wallet/network first.");
+      }
+      if (!membership.registered) {
+        throw new Error("Registered wallet found, but current local anonymous identity is not in the Semaphore group. Use the original browser/profile used at registration.");
       }
 
-      // Step 2: Compute eligibility on-chain (FHE comparison)
-      setApplyStatus("computing");
-      const eligibilityEngine = getEligibilityEngine(signer);
-      const eligibilityTx = await eligibilityEngine.checkEligibility(account, BigInt(trial.id));
-      await eligibilityTx.wait();
-
-      setApplyStatus("success");
+      // Step 2: Submit anonymous application (via relayer)
+      // Atomic call handles proof generation + submission internally
+      const trialIdNum = parseInt(trial.id);
+      await submitApplication(trialIdNum);
     } catch (err: any) {
-      console.error("Apply Encrypted failed:", err);
-      if (err.code === "ACTION_REJECTED" || err.code === 4001) {
-        setApplyError("Transaction rejected by user.");
-      } else {
-        setApplyError(err.reason || err.message || "Transaction failed.");
-      }
-      setApplyStatus("error");
+      console.error('Semaphore apply failed:', err);
+      setRegistrationError(err.reason || err.message || 'Anonymous application failed.');
+      setRegistrationStatus('error');
     }
   };
 
-  const handleApplyToSponsor = async () => {
-    if (!signer || !account) return;
-    setApplyStatus("applying");
-    setApplyError(null);
-    try {
-      const eligibilityEngine = getEligibilityEngine(signer);
-      const tx = await eligibilityEngine.applyToTrial(BigInt(trial.id));
-      await tx.wait();
-      setApplyStatus("applied");
-    } catch (err: any) {
-      console.error("Application failed:", err);
-      setApplyError(err.reason || err.message || "Application failed.");
-      setApplyStatus("success"); // Return to computed state
-    }
-  };
 
   const handleRegisterForRewards = async () => {
     if (!signer || !account || !trial.id) return;
     setIsRegistering(true);
     setIncentiveStatus("Registering for confidential rewards...");
     try {
+      if (!signer.provider) {
+        throw new Error("Wallet provider unavailable. Please reconnect and retry.");
+      }
       const vault = getSponsorIncentiveVault(signer);
-      const tx = await vault.registerParticipant(BigInt(trial.id), account);
+      const nullifier = await resolveAnonymousNullifier(signer.provider, BigInt(trial.id));
+      if (!nullifier) {
+        throw new Error("Unable to recover anonymous application nullifier for this trial. Re-open the original browser profile used during apply and retry.");
+      }
+      const tx = await vault.registerAnonymousParticipant(BigInt(trial.id), nullifier);
       await tx.wait();
       setIsRegistered(true);
       setIncentiveStatus("Successfully registered in reward enclave!");
     } catch (err: any) {
       console.error("Registration failed:", err);
-      setIncentiveStatus(`Registration failed: ${err.reason || err.message}`);
+      const raw = `${err?.reason || ""} ${err?.message || ""} ${err?.shortMessage || ""}`.toLowerCase();
+      if (raw.includes("already registered") || raw.includes("nullifier already used")) {
+        setIsRegistered(true);
+        setIncentiveStatus("You’re already registered for this pool.");
+        return;
+      }
+      if (err.reason?.includes("capacity") || err.message?.includes("capacity")) {
+        setIncentiveStatus("Registration failed: Trial participant limit reached (200 max).");
+      } else {
+        setIncentiveStatus(`Registration failed: ${err.reason || err.message || "Unknown error"}`);
+      }
     } finally {
       setIsRegistering(false);
     }
   };
 
+  useEffect(() => {
+    if (!incentiveCheckDone) return;
+    if (!signer || !account || !trial.id) return;
+    if (!trial.applicationStatus || trial.applicationStatus !== "Accepted") return;
+    if (!poolFunded || isRegistered || isRegistering) return;
+    if (autoEnrollAttemptedRef.current) return;
+
+    autoEnrollAttemptedRef.current = true;
+    setIncentiveStatus("Accepted! Auto-enrolling in reward pool...");
+    void handleRegisterForRewards();
+  }, [signer, account, trial.id, trial.applicationStatus, poolFunded, isRegistered, isRegistering, incentiveCheckDone]);
+
+  const isReadyToApply = applyStatus === "success" && !trial.applicationStatus;
+  const isStillFetchingEligibility = isReadyToApply && isFetchingEligibility;
+
   const getApplyButtonContent = () => {
-    if (trial.hasComputed) {
+    if (hasApplied || trial.applicationStatus) {
       return (
         <>
-          <CheckCircle className="h-4 w-4" /> Qualified & Applied
+          <CheckCircle className="h-4 w-4" /> Applied Anonymously
         </>
       );
     }
 
-    switch (applyStatus) {
-      case "consenting":
-        return (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Granting Consent…
-          </>
-        );
-      case "computing":
-        return (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Running FHE Check…
-          </>
-        );
-      case "applying":
-        return (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Applying…
-          </>
-        );
-      case "applied":
-      case "success":
-        if (applyStatus === "applied" || trial.applicationStatus) {
-          return (
-            <>
-              <CheckCircle className="h-4 w-4" /> Application {trial.applicationStatus || "Submitted"}
-            </>
-          );
-        }
-        if (decryptedScore === 100) {
-          return (
-            <>
-              <ShieldCheck className="h-4 w-4" /> Apply to Sponsor
-            </>
-          );
-        }
-        return (
-          <>
-            <CheckCircle className="h-4 w-4" /> Eligibility Computed
-          </>
-        );
-      case "error":
-        return (
-          <>
-            <XCircle className="h-4 w-4" /> Retry Action
-          </>
-        );
-      default:
-        return (
-          <>
-            <ShieldCheck className="h-4 w-4" /> {trial.hasConsent ? "Compute Eligibility" : "Apply Encrypted"}
-          </>
-        );
+    if (isSubmitting) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" /> Matching via Relayer...
+        </>
+      );
     }
+
+    if (isGeneratingSemaphore) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" /> Generating Secure Proof...
+        </>
+      );
+    }
+
+    if (registrationStatus === 'registering') {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" /> Registering Identity...
+        </>
+      );
+    }
+
+    if (registrationStatus === 'error' || semaphoreError) {
+      return (
+        <>
+          <XCircle className="h-4 w-4" /> Retry Secure Apply
+        </>
+      );
+    }
+
+    if (isStillFetchingEligibility) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" /> Checking Eligibility...
+        </>
+      );
+    }
+
+    if (isReadyToApply && isEligibleDecrypted === false) {
+      return (
+        <>
+          <XCircle className="h-4 w-4" /> Not Eligible
+        </>
+      );
+    }
+
+    return (
+      <>
+        <ShieldCheck className="h-4 w-4" /> Apply Anonymously
+      </>
+    );
   };
 
-  const isApplying = applyStatus === "consenting" || applyStatus === "computing";
+  const handleMainButtonClick = () => {
+    handleApplyAnonymously();
+  };
+
+  /* Discover: allow apply without prior subgraph eligibility + FHE prefetch — submit flow validates registration/proof. */
+  const isMainButtonDisabled =
+    isSubmitting ||
+    isGeneratingSemaphore ||
+    registrationStatus === 'registering' ||
+    hasApplied ||
+    !!trial.applicationStatus ||
+    (isDiscover && (!signer || !account)) ||
+    (!!account && isDiscover && isStillFetchingEligibility) ||
+    (!!account && isDiscover && isReadyToApply && isEligibleDecrypted === false);
+
+  if (isDiscover) {
+    const sponsorDisplay = trial.sponsor.name.startsWith("0x")
+      ? `${trial.sponsor.name.slice(0, 6)}...${trial.sponsor.name.slice(-4)}`
+      : trial.sponsor.name;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: 0.5,
+          delay: index * 0.1,
+          ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+        }}
+      >
+        <Card className="border border-slate-200/90 bg-white dark:bg-white shadow-[0px_12px_32px_rgba(30,41,59,0.04)] hover:shadow-[0px_12px_40px_rgba(30,41,59,0.07)] transition-shadow duration-300 rounded-2xl overflow-hidden">
+          <CardContent className="p-6 sm:p-8 relative z-10 space-y-6">
+            <div className="flex justify-between items-start gap-4">
+              <div className="space-y-2 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">
+                    {formatPhaseBadge(trial)}
+                  </span>
+                  {poolFunded && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-semibold uppercase tracking-wide"
+                    >
+                      <Coins className="h-3 w-3 mr-1" /> Reward pool
+                    </Badge>
+                  )}
+                </div>
+                <h3 className="font-display text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-900 leading-tight">
+                  {trial.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDiscoverBookmarked((v) => !v)}
+                className={cn(
+                  "shrink-0 p-2 rounded-full transition-colors text-slate-400 hover:text-teal-600 hover:bg-slate-100",
+                  discoverBookmarked && "text-teal-600 bg-teal-50"
+                )}
+                aria-label={discoverBookmarked ? "Remove bookmark" : "Bookmark trial"}
+              >
+                <Bookmark className={cn("h-5 w-5", discoverBookmarked && "fill-teal-600 text-teal-600")} />
+              </button>
+            </div>
+
+            <p className="text-slate-600 dark:text-slate-600 text-sm leading-relaxed">
+              {trialDiscoverDescription(trial)}
+            </p>
+
+            <div className="bg-slate-50/90 dark:bg-slate-50 rounded-xl border border-slate-100 p-5 flex flex-col gap-0">
+              <div className="flex justify-between items-center border-b border-slate-200/80 pb-3">
+                <span className="text-sm text-slate-500 font-medium">Sponsor</span>
+                <span className="text-sm font-semibold text-slate-900 text-right truncate max-w-[55%]">{sponsorDisplay}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200/80 py-3">
+                <span className="text-sm text-slate-500 font-medium">Duration</span>
+                <span className="text-sm font-semibold text-slate-900">{formatTrialDurationLabel(trial)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-3 gap-3 bg-emerald-50/80 dark:bg-emerald-50 -mx-1 px-4 py-3 rounded-lg border border-emerald-100/80">
+                <span className="text-sm text-slate-500 font-medium">Compensation</span>
+                <span className="text-sm font-semibold font-mono text-teal-700 tabular-nums">
+                  {trial.compensation}
+                </span>
+              </div>
+            </div>
+
+            {trial.hasComputed && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">Eligibility</p>
+                  <div className="flex items-end gap-1.5">
+                    <span className="text-2xl font-black text-slate-900 dark:text-slate-900 tabular-nums">
+                      {decryptedScore !== null ? decryptedScore : <EncryptionAnimation />}
+                    </span>
+                    <span className="text-sm font-bold text-slate-400 mb-1">%</span>
+                  </div>
+                </div>
+                {decryptedScore === null && (
+                  <Button
+                    size="sm"
+                    className="rounded-full bg-teal-600 hover:bg-teal-500 text-white font-semibold"
+                    onClick={handleRevealScore}
+                    disabled={isDecrypting}
+                  >
+                    {isDecrypting ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Decrypting...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Reveal match score
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-1">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 text-violet-800 border border-violet-200/80 px-3 py-2 text-xs font-semibold w-fit">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                ZK Protected
+              </div>
+              <Button
+                className={cn(
+                  "rounded-full px-6 py-3 font-semibold text-sm shadow-md transition-all hover:-translate-y-0.5 gap-2 min-h-[48px]",
+                  "bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white border-0 w-full sm:w-auto justify-center",
+                  hasApplied || trial.applicationStatus ? "from-emerald-600 to-emerald-700" : "",
+                  registrationStatus === "error" || semaphoreError ? "from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600" : ""
+                )}
+                onClick={handleMainButtonClick}
+                disabled={isMainButtonDisabled}
+              >
+                {getApplyButtonContent()}
+                {!(
+                  hasApplied ||
+                  trial.applicationStatus ||
+                  isSubmitting ||
+                  isGeneratingSemaphore ||
+                  registrationStatus === "registering"
+                ) && <ArrowRight className="h-4 w-4 opacity-90" />}
+              </Button>
+            </div>
+
+            {(registrationError || semaphoreError) && (
+              <AnonymousApplyFeedback registrationError={registrationError} semaphoreError={semaphoreError} />
+            )}
+
+            <AnimatePresence>
+              {trial.applicationStatus && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    "p-3 rounded-lg border text-xs font-medium",
+                    trial.applicationStatus === "Accepted"
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800"
+                      : trial.applicationStatus === "Rejected"
+                        ? "bg-rose-500/10 border-rose-500/20 text-rose-700"
+                        : "bg-slate-500/10 border-slate-500/20 text-slate-600"
+                  )}
+                >
+                  <p className="mb-1">Status: {trial.applicationStatus}</p>
+                  {trial.applicationMessage && (
+                    <p className="text-[10px] opacity-80 leading-relaxed italic">&ldquo;{trial.applicationMessage}&rdquo;</p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {applyStatus === "success" && isEligibleDecrypted === false && (
+              <motion.div
+                role="status"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/80 p-4 text-left text-amber-950 shadow-sm dark:border-amber-900/50 dark:from-amber-950/40 dark:to-orange-950/20 dark:text-amber-100"
+              >
+                <div className="flex gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                    <Info className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-black uppercase tracking-[0.12em] opacity-80">
+                      Not eligible to apply
+                    </p>
+                    <p className="text-sm font-medium leading-snug">{NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {poolFunded && trial.applicationStatus === "Accepted" && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={cn(
+                  "p-4 rounded-xl border space-y-3",
+                  trial.incentivePool?.distributed
+                    ? "bg-emerald-500/5 border-emerald-500/20"
+                    : "bg-amber-500/5 border-amber-500/20"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className={cn(
+                        "p-1.5 rounded-lg",
+                        trial.incentivePool?.distributed ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"
+                      )}
+                    >
+                      <Coins className="h-3.5 w-3.5" />
+                    </div>
+                    <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider truncate">
+                      {trial.incentivePool?.distributed ? "Payout secured" : "Incentive enclave"}
+                    </h5>
+                  </div>
+                  {trial.incentivePool?.distributed ? (
+                    <Badge className="bg-emerald-600 text-white border-0 text-[9px]">Confirmed</Badge>
+                  ) : (
+                    !isRegistered && (
+                      <Badge variant="outline" className="text-[9px] border-amber-500/30 text-amber-700 bg-amber-50">
+                        Action required
+                      </Badge>
+                    )
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-600 leading-relaxed">
+                  {trial.incentivePool?.distributed
+                    ? "Rewards are available in your private enclave. Open Medical Vault to reveal and withdraw."
+                    : "This trial has a funded incentive pool. Register to secure your encrypted reward share."}
+                </p>
+                {trial.incentivePool?.distributed ? (
+                  <Link to="/patient/medical-vault" className="block">
+                    <Button className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest gap-2">
+                      Medical Vault
+                      <ArrowUpRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                ) : !isRegistered ? (
+                  <Button
+                    className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest gap-2"
+                    onClick={handleRegisterForRewards}
+                    disabled={isRegistering}
+                  >
+                    {isRegistering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                    {isRegistering ? "Registering..." : "Join reward pool"}
+                  </Button>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-700 text-[10px] font-bold">
+                    <CheckCircle className="h-3 w-3" /> Registered for incentives
+                  </div>
+                )}
+                {incentiveStatus && (
+                  <p
+                    className={cn(
+                      "text-[9px] font-semibold text-center",
+                      incentiveStatus.includes("failed") ? "text-rose-600" : "text-teal-700"
+                    )}
+                  >
+                    {incentiveStatus}
+                  </p>
+                )}
+              </motion.div>
+            )}
+
+            {applyError && <p className="text-xs text-center text-rose-600 font-medium">{applyError}</p>}
+
+            <details className="group rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-between gap-2">
+                Protocol &amp; eligibility details
+                <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-slate-100 p-4 space-y-6 bg-slate-50/40">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Eligibility analysis</h4>
+                  <ul className="space-y-2">
+                    {trial.breakdown?.met?.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                        <CheckCircle className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                    {trial.breakdown?.borderline?.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                    {trial.breakdown?.missing?.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                        <XCircle className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                    {(!trial.breakdown ||
+                      (trial.breakdown.met.length === 0 && trial.breakdown.missing.length === 0)) && (
+                      <li className="text-sm text-slate-500 italic">Upload your medical profile to run encrypted eligibility checks.</li>
+                    )}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Secure disclosure</h4>
+                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+                    Apply with FHE-encrypted zero-knowledge proofs. Minimal metadata is shared with the investigator.
+                  </p>
+                  <div className="space-y-2 p-3 rounded-lg bg-white border border-slate-100">
+                    {["Anonymized vitals", "Encrypted labs", "ZKP diagnosis"].map((tag) => (
+                      <div key={tag} className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                        <div className="h-1 w-1 rounded-full bg-teal-500" /> {tag}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </details>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -280,12 +852,10 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
       >
         {isGlass && (
           <>
-            {/* Morphing Glow Layer */}
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-in-out pointer-events-none">
               <div className="absolute -top-32 -left-32 w-64 h-64 rounded-full blur-[100px] animate-pulse bg-blue-500/10" />
               <div className="absolute -bottom-32 -right-32 w-64 h-64 rounded-full blur-[100px] animate-pulse bg-indigo-500/10 delay-700" />
             </div>
-            {/* Inner Glow Border */}
             <div className="absolute inset-[1px] rounded-[inherit] pointer-events-none border border-white/5 opacity-50 group-hover:opacity-100 transition-opacity" />
           </>
         )}
@@ -368,9 +938,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                     <MapPin className={cn("h-5 w-5", isGlass ? "text-slate-400" : "text-slate-500")} />
                   </div>
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-slate-500 mb-1">
-                      Location
-                    </p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-slate-500 mb-1">Location</p>
                     <p className={cn("text-sm font-black", isGlass ? "text-slate-200" : "text-slate-700 dark:text-slate-300")}>
                       {trial.location}
                     </p>
@@ -385,9 +953,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                     <DollarSign className="h-4.5 w-4.5 text-emerald-500" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-emerald-500/60 mb-1">
-                      Reward
-                    </p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-emerald-500/60 mb-1">Reward</p>
                     <p className={cn("text-sm font-black", isGlass ? "text-white" : "text-slate-900 dark:text-slate-100")}>
                       {trial.compensation}
                     </p>
@@ -402,9 +968,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                     <Clock className="h-4.5 w-4.5 text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-blue-500/60 mb-1">
-                      Status
-                    </p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-blue-500/60 mb-1">Status</p>
                     {(() => {
                       const hasEnded = trial.endTime && parseInt(trial.endTime) <= Math.floor(Date.now() / 1000);
                       const isLive = trial.active && !hasEnded;
@@ -430,12 +994,10 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
 
               <div className="text-center mb-4 relative z-10">
                 <div className="inline-flex items-end gap-1.5 mb-2">
-                  <span
-                    className={cn(
-                      "font-display font-black leading-none transition-all duration-500 group-hover:scale-110",
-                      isGlass ? "text-4xl text-blue-400" : "text-2xl text-slate-900 dark:text-slate-50"
-                    )}
-                  >
+                  <span className={cn(
+                    "font-display font-black leading-none transition-all duration-500 group-hover:scale-110",
+                    isGlass ? "text-4xl text-blue-400" : "text-2xl text-slate-900 dark:text-slate-50"
+                  )}>
                     {isGlass
                       ? (trial.matchCount || 0)
                       : (decryptedScore !== null ? decryptedScore : <EncryptionAnimation />)}
@@ -459,8 +1021,11 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                   transition={{ duration: 1, ease: "easeOut" }}
                   className={cn(
                     "h-full rounded-full transition-all duration-500",
-                    isGlass || (decryptedScore !== null ? decryptedScore : 0) > 80 ? "bg-blue-500 shadow-[0_0_12px_rgba(20,184,166,0.6)]" :
-                      (decryptedScore !== null ? decryptedScore : 0) > 50 ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.6)]" : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]"
+                    isGlass || (decryptedScore !== null ? decryptedScore : 0) > 80
+                      ? "bg-blue-500 shadow-[0_0_12px_rgba(20,184,166,0.6)]"
+                      : (decryptedScore !== null ? decryptedScore : 0) > 50
+                        ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.6)]"
+                        : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]"
                   )}
                 />
               </div>
@@ -524,35 +1089,25 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                       </h4>
                       <ul className="space-y-3">
                         {trial.breakdown?.met?.map((item, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300"
-                          >
+                          <li key={i} className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
                             <CheckCircle className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
                             <span>{item}</span>
                           </li>
                         ))}
                         {trial.breakdown?.borderline?.map((item, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300"
-                          >
+                          <li key={i} className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
                             <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                             <span>{item}</span>
                           </li>
                         ))}
                         {trial.breakdown?.missing?.map((item, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300"
-                          >
+                          <li key={i} className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
                             <XCircle className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
                             <span>{item}</span>
                           </li>
                         ))}
                         {(!trial.breakdown ||
-                          (trial.breakdown.met.length === 0 &&
-                            trial.breakdown.missing.length === 0)) && (
+                          (trial.breakdown.met.length === 0 && trial.breakdown.missing.length === 0)) && (
                             <li className="text-sm text-slate-500 italic">
                               {isGlass
                                 ? "On-chain eligibility logic active."
@@ -572,15 +1127,8 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                           shared with the investigator.
                         </p>
                         <div className="space-y-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                          {[
-                            "Anonymized Vital Signs",
-                            "Encrypted Lab Values",
-                            "ZKP for Diagnosis",
-                          ].map((tag) => (
-                            <div
-                              key={tag}
-                              className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400"
-                            >
+                          {["Anonymized Vital Signs", "Encrypted Lab Values", "ZKP for Diagnosis"].map((tag) => (
+                            <div key={tag} className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400">
                               <div className="h-1 w-1 rounded-full bg-accent" /> {tag}
                             </div>
                           ))}
@@ -598,25 +1146,24 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                           <Button
                             className={cn(
                               "w-full shadow-lg gap-2 font-bold",
-                              applyStatus === "applied" || trial.applicationStatus
+                              hasApplied || trial.applicationStatus
                                 ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
-                                : applyStatus === "success" && decryptedScore === 100
-                                  ? "bg-accent hover:bg-accent/90"
-                                  : applyStatus === "error"
-                                    ? "bg-rose-600 hover:bg-rose-700 shadow-rose-500/20"
-                                    : "shadow-accent/20"
+                                : (registrationStatus === "error" || semaphoreError)
+                                  ? "bg-rose-600 hover:bg-rose-700 shadow-rose-500/20"
+                                  : "bg-accent hover:bg-accent/90 shadow-accent/20"
                             )}
-                            onClick={
-                              applyStatus === "success" && decryptedScore === 100
-                                ? handleApplyToSponsor
-                                : handleApplyEncrypted
-                            }
-                            disabled={isApplying || applyStatus === "applied" || !!trial.applicationStatus || (applyStatus === "success" && decryptedScore !== 100)}
+                            onClick={handleMainButtonClick}
+                            disabled={isMainButtonDisabled}
                           >
                             {getApplyButtonContent()}
                           </Button>
 
-                          {/* Status message */}
+                          {/* Semaphore error message */}
+                          {(registrationError || semaphoreError) && (
+                            <AnonymousApplyFeedback registrationError={registrationError} semaphoreError={semaphoreError} />
+                          )}
+
+                          {/* Status messages */}
                           <AnimatePresence>
                             {trial.applicationStatus && (
                               <motion.div
@@ -639,15 +1186,29 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                                 )}
                               </motion.div>
                             )}
-                            {applyStatus === "success" && decryptedScore !== 100 && (
-                              <motion.p
+
+                            {/* FIX 1: Show ineligibility message based on ebool, not score */}
+                            {applyStatus === "success" && isEligibleDecrypted === false && (
+                              <motion.div
+                                role="status"
                                 initial={{ opacity: 0, y: -4 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="text-xs text-center text-amber-500 font-medium"
+                                className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/80 p-4 text-left text-amber-950 shadow-sm dark:border-amber-900/50 dark:from-amber-950/40 dark:to-orange-950/20 dark:text-amber-100"
                               >
-                                Eligibility: {decryptedScore}%. 100% required to apply.
-                              </motion.p>
+                                <div className="flex gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                                    <Info className="h-5 w-5" aria-hidden />
+                                  </div>
+                                  <div className="min-w-0 space-y-1">
+                                    <p className="text-xs font-black uppercase tracking-[0.12em] opacity-80">
+                                      Not eligible to apply
+                                    </p>
+                                    <p className="text-sm font-medium leading-snug">{NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE}</p>
+                                  </div>
+                                </div>
+                              </motion.div>
                             )}
+
                             {applyStatus === "applied" && !trial.applicationStatus && (
                               <motion.p
                                 initial={{ opacity: 0, y: -4 }}
@@ -696,10 +1257,8 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                                     : "This trial has a verified incentive pool. Register to secure your encrypted reward share upon trial completion."}
                                 </p>
                                 {trial.incentivePool?.distributed ? (
-                                  <Link to="/patient/vault" className="block w-full">
-                                    <Button
-                                      className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest flex gap-2 shadow-xl shadow-emerald-500/20"
-                                    >
+                                  <Link to="/patient/medical-vault" className="block w-full">
+                                    <Button className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest flex gap-2 shadow-xl shadow-emerald-500/20">
                                       Go to Medical Vault
                                       <ArrowUpRight className="h-3 w-3" />
                                     </Button>

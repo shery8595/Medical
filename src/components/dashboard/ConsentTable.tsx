@@ -1,93 +1,146 @@
 import { ConsentLog } from "../../types";
-import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
-import { Trash2, MessageSquare } from "lucide-react";
-import { ethers } from "ethers";
+import { Ban } from "lucide-react";
 import { useMemo } from "react";
+import { cn } from "../../lib/utils";
 
 interface ConsentTableProps {
   logs: ConsentLog[];
   searchQuery?: string;
 }
 
-export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
-  const filteredLogs = logs.filter(log =>
-    log.sponsorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    log.trialName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+function shortTrialId(id: string | undefined) {
+  if (!id) return "—";
+  const s = String(id);
+  if (s.startsWith("0x") && s.length >= 12) {
+    return `${s.slice(0, 6)}…${s.slice(-4)}`;
+  }
+  return s.length > 18 ? `${s.slice(0, 10)}…` : s;
+}
 
-  const decodeMessage = (hexMessage?: string) => {
-    if (!hexMessage) return null;
-    try {
-      // Subgraph returns bytes as hex strings
-      if (hexMessage.startsWith("0x")) {
-        // Remove padding if necessary or handles as is if it's a valid hex string for UTF8
-        return ethers.toUtf8String(hexMessage);
-      }
-      return hexMessage;
-    } catch (e) {
-      console.warn("Failed to decode message", e);
-      return "Message encrypted or undecodable";
-    }
+function formatDateGranted(rawTimestamp?: number) {
+  if (rawTimestamp == null || Number.isNaN(rawTimestamp)) {
+    return { line1: "—", line2: "" };
+  }
+  const d = new Date(rawTimestamp * 1000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const h = String(d.getUTCHours()).padStart(2, "0");
+  const min = String(d.getUTCMinutes()).padStart(2, "0");
+  return {
+    line1: `${y}.${m}.${day}`,
+    line2: `${h}:${min} UTC`,
   };
+}
+
+function rowVariant(
+  log: ConsentLog
+): "active" | "revoked" | "pending" {
+  const s = (log.status || "").toLowerCase();
+  if (s === "rejected" || s === "revoked") return "revoked";
+  if (s === "pending") return "pending";
+  return "active";
+}
+
+export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
+  const filteredLogs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return logs;
+    return logs.filter(
+      (log) =>
+        (log.sponsorName?.toLowerCase().includes(q) ?? false) ||
+        log.trialName.toLowerCase().includes(q) ||
+        (log.trialId != null && String(log.trialId).toLowerCase().includes(q))
+    );
+  }, [logs, searchQuery]);
 
   return (
     <div className="w-full">
-      <table className="w-full text-sm text-left border-collapse">
-        <thead className="bg-slate-50/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-          <tr>
-            <th className="px-6 py-4 font-semibold">Sponsor & Trial</th>
-            <th className="px-6 py-4 font-semibold">Data Shared</th>
-            <th className="px-6 py-4 font-semibold">Message</th>
-            <th className="px-6 py-4 font-semibold">Date</th>
-            <th className="px-6 py-4 font-semibold">Status</th>
-            <th className="px-6 py-4 font-semibold text-right">Action</th>
+      <table className="w-full text-sm text-left border-collapse min-w-[640px]">
+        <thead>
+          <tr className="border-b border-slate-200 bg-white">
+            <th className="px-6 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Trial name
+            </th>
+            <th className="px-6 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 whitespace-nowrap">
+              Date granted
+            </th>
+            <th className="px-6 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Status
+            </th>
+            <th className="px-6 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 text-right">
+              Action
+            </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+        <tbody className="divide-y divide-slate-100">
           {filteredLogs.map((log) => {
-            const decoded = decodeMessage(log.message);
+            const variant = rowVariant(log);
+            const { line1, line2 } = formatDateGranted(log.rawTimestamp);
             return (
-              <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                <td className="px-6 py-5">
-                  <div className="font-bold text-slate-900 dark:text-white mb-0.5">{log.sponsorName}</div>
-                  <div className="text-xs text-slate-400 font-medium">{log.trialName}</div>
-                </td>
-                <td className="px-6 py-5">
-                  <div className="flex gap-1.5 flex-wrap">
-                    {(log.dataShared || ["Vital Signs", "Lab Data"]).map((data, i) => (
-                      <span key={i} className="inline-flex items-center rounded-lg bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-tight">
-                        {data}
-                      </span>
-                    ))}
+              <tr
+                key={log.id}
+                className="bg-white hover:bg-slate-50/80 transition-colors"
+              >
+                <td className="px-6 py-5 align-top">
+                  <div className="font-semibold text-slate-900 leading-snug">
+                    {log.trialName}
+                  </div>
+                  <div className="mt-1 font-mono text-xs text-slate-500">
+                    ID: {shortTrialId(log.trialId)}
                   </div>
                 </td>
-                <td className="px-6 py-5 min-w-[200px]">
-                  {decoded ? (
-                    <div className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300 italic">
-                      <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0 text-slate-400" />
-                      <span>"{decoded}"</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400 italic">No message</span>
+                <td className="px-6 py-5 align-top text-slate-600">
+                  <div>{line1}</div>
+                  {line2 ? (
+                    <div className="text-xs text-slate-500 mt-0.5">{line2}</div>
+                  ) : null}
+                </td>
+                <td className="px-6 py-5 align-top">
+                  {variant === "active" && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                        "bg-teal-50 text-teal-700 border border-teal-100"
+                      )}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-teal-500 shrink-0" aria-hidden />
+                      Active
+                    </span>
+                  )}
+                  {variant === "revoked" && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                        "bg-rose-50 text-rose-700 border border-rose-100"
+                      )}
+                    >
+                      <Ban className="h-3.5 w-3.5 shrink-0" />
+                      Revoked
+                    </span>
+                  )}
+                  {variant === "pending" && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                        "bg-amber-50 text-amber-800 border border-amber-100"
+                      )}
+                    >
+                      Pending
+                    </span>
                   )}
                 </td>
-                <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">{log.timestamp}</td>
-                <td className="px-6 py-5">
-                  <Badge variant={
-                    log.status === "Active" || log.status === "Accepted" || (log.status as string) === "granted"
-                      ? "success"
-                      : log.status === "Pending"
-                        ? "warning"
-                        : "secondary"
-                  }>
-                    {log.status}
-                  </Badge>
-                </td>
-                <td className="px-6 py-5 text-right">
-                  {(log.status === "Active" || (log.status as string) === "granted") && (
-                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold text-xs h-8 rounded-lg">
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Revoke
+                <td className="px-6 py-5 align-top text-right">
+                  {variant === "revoked" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      className="rounded-lg border-slate-200 text-slate-400 cursor-not-allowed font-medium h-9"
+                    >
+                      Revoked
                     </Button>
                   )}
                 </td>
@@ -96,8 +149,12 @@ export function ConsentTable({ logs, searchQuery = "" }: ConsentTableProps) {
           })}
           {filteredLogs.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-20 text-center">
-                <p className="text-slate-400 font-medium">No matching logs found</p>
+              <td colSpan={4} className="px-6 py-16 text-center">
+                <p className="text-slate-500 font-medium text-sm">
+                  {logs.length === 0
+                    ? "No consent records yet. When you grant access to a trial, it will appear here."
+                    : "No records match your search."}
+                </p>
               </td>
             </tr>
           )}

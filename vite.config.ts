@@ -52,9 +52,23 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      headers: {
-        'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp',
+      // Do NOT set COOP/COEP to crossOriginIsolate here. That breaks Privy embedded wallets,
+      // Coinbase Smart Wallet, and Base Account SDKs (popups / cross-window messaging).
+      // CoFHE runs with useWorkers: false, so SAB / strict isolation is not required for dev.
+      proxy: {
+        // Proxy CoFHE VRF requests through Node to bypass CORS / ERR_CONNECTION_TIMED_OUT
+        '/cofhe-vrf': {
+          target: 'https://testnet-cofhe-vrf.fhenix.zone',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/cofhe-vrf/, ''),
+          secure: true,
+        },
+        // Proxy relayer requests to bypass CORS in local dev
+        '/relay': {
+          target: 'https://medvault-relayer-production.up.railway.app',
+          changeOrigin: true,
+          secure: true,
+        },
       },
     },
     worker: {

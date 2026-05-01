@@ -16,10 +16,13 @@ export function handleActionLogged(event: ActionLogged): void {
     else if (action == 5) actionType = "REWARDS_DISTRIBUTED"
 
     log.action = actionType
+    log.actionType = actionType
     log.trialId = event.params.trialId
     log.patientHash = event.params.patientHash
     log.timestamp = event.block.timestamp
     log.performer = event.transaction.from
+    log.actor = event.transaction.from
     log.txHash = event.transaction.hash
+    log.transactionHash = event.transaction.hash.toHexString()
     log.save()
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.27;
 
-import {FHE, euint64} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
+import {FHE, Common, euint64} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 import "./ConfidentialETH.sol";
 
 interface IWrappedTokenGatewayV3 {
@@ -27,13 +27,43 @@ contract StakingManager {
 
     ConfidentialETH public cETH;
     mapping(address => euint64) private _encryptedTotalStaked;
+    // FINDING 6: Replay protection for balance proofs
+    mapping(bytes32 => bool) private usedUnstakeProofs;
+    // C-2: Per-user nonce for replay protection
+    mapping(address => uint256) public unstakeNonces;
+
+    // FINDING 11: Two-step ownership transfer
+    address public owner;
+    address public pendingOwner;
 
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount);
+    event OwnershipProposed(address indexed proposedOwner);
+    event OwnershipAccepted(address indexed newOwner);
 
     constructor(address payable _cETH) {
         cETH = ConfidentialETH(_cETH);
         _status = _NOT_ENTERED;
+        owner = msg.sender; // FINDING 11
+    }
+
+    // FINDING 11: Two-step ownership transfer
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+
+    function proposeOwnership(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Zero address");
+        pendingOwner = _newOwner;
+        emit OwnershipProposed(_newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Not proposed owner");
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipAccepted(owner);
     }
 
     modifier nonReentrant() {
@@ -45,10 +75,16 @@ contract StakingManager {
 
     /**
      * @notice Stakes ETH into Aave V3 and records the amount encrypted
+     * @dev MED-4: Must stake a whole number of Gwei to prevent rounding/truncation
      */
     function stake() external payable {
         require(msg.value > 0, "Must stake > 0");
-        
+        require(msg.value % 1e9 == 0, "Stake amount must be a whole Gwei"); // MED-4: Prevent truncation
+
+        // AUDIT-MED: Reject stakes too large to fit encrypted uint64 accounting.
+        // type(uint64).max * 1e9 ~= 1.8446e28 wei ~= 1.8446e10 ETH.
+        require(msg.value / 1e9 <= type(uint64).max, "Stake overflows uint64");
+
         // Supply ETH to Aave -> receives aWETH
         IWrappedTokenGatewayV3(WETH_GATEWAY).depositETH{value: msg.value}(
             AAVE_POOL,
@@ -57,8 +93,9 @@ contract StakingManager {
         );
 
         // Encrypt and store the staked amount securely in Gwei to fit euint64 safety
-        euint64 encAmount = FHE.asEuint64(uint64(msg.value / 1e9)); 
-        if (euint64.unwrap(_encryptedTotalStaked[msg.sender]) != 0) {
+        euint64 encAmount = FHE.asEuint64(uint64(msg.value / 1e9));
+        // L-1: Use Common.isInitialized() instead of unwrap() != 0
+        if (Common.isInitialized(_encryptedTotalStaked[msg.sender])) {
             _encryptedTotalStaked[msg.sender] = FHE.add(_encryptedTotalStaked[msg.sender], encAmount);
         } else {
             _encryptedTotalStaked[msg.sender] = encAmount;
@@ -73,9 +110,34 @@ contract StakingManager {
     /**
      * @notice Unstakes from Aave by withdrawing ETH 
      * @dev User MUST approve this contract to spend their aWETH before calling!
+     * @dev FINDING 6: Requires a Threshold Network balance proof to prevent underflow
+     * @dev C-2: Signature must cover (ctHash, balance, msg.sender, amount, nonce) to prevent replay
+     * @param amount The amount to unstake
+     * @param balanceSig Threshold Network ECDSA signature over (ctHash, balance, caller, amount, nonce)
+     * @param stakedBalance The claimed plaintext staked balance
      */
-    function unstake(uint256 amount) external nonReentrant {
+    function unstake(
+        uint256 amount,
+        bytes calldata balanceSig,
+        uint64 stakedBalance
+    ) external nonReentrant {
         require(amount > 0, "Amount must be > 0");
+        require(stakedBalance >= uint64(amount / 1e9), "Insufficient staked balance");
+
+        // C-2: Include caller, amount, and nonce in proof key for replay protection
+        // The Threshold Network signature must cover: (ctHash, balance, msg.sender, amount, nonce)
+        uint256 currentNonce = unstakeNonces[msg.sender];
+        bytes32 proofKey = keccak256(abi.encodePacked(balanceSig, msg.sender, amount, currentNonce));
+        require(!usedUnstakeProofs[proofKey], "Proof already used");
+        usedUnstakeProofs[proofKey] = true;
+
+        // FINDING 6: Verify TN signed that plaintext(stakedBalance) is valid
+        euint64 encStaked = _encryptedTotalStaked[msg.sender];
+        require(Common.isInitialized(encStaked), "No stake found");
+        require(
+            FHE.verifyDecryptResult(encStaked, stakedBalance, balanceSig),
+            "Invalid balance proof"
+        );
 
         // Transfer aWETH from user to this contract
         bool success = IERC20(AWETH).transferFrom(msg.sender, address(this), amount);
@@ -87,49 +149,23 @@ contract StakingManager {
         // Withdraw ETH from Aave to user
         IWrappedTokenGatewayV3(WETH_GATEWAY).withdrawETH(AAVE_POOL, amount, msg.sender);
 
+        // LOW-3: Reset approval to prevent residual allowance
+        IERC20(AWETH).approve(WETH_GATEWAY, 0);
+
         // Deduct from encrypted balance
         euint64 encAmount = FHE.asEuint64(uint64(amount / 1e9));
-        if (euint64.unwrap(_encryptedTotalStaked[msg.sender]) != 0) {
-            _encryptedTotalStaked[msg.sender] = FHE.sub(_encryptedTotalStaked[msg.sender], encAmount);
-            FHE.allow(_encryptedTotalStaked[msg.sender], msg.sender);
-            FHE.allowThis(_encryptedTotalStaked[msg.sender]);
-        }
+        _encryptedTotalStaked[msg.sender] = FHE.sub(_encryptedTotalStaked[msg.sender], encAmount);
+        FHE.allow(_encryptedTotalStaked[msg.sender], msg.sender);
+        FHE.allowThis(_encryptedTotalStaked[msg.sender]);
+
+        // C-2: Increment nonce after successful unstake
+        unstakeNonces[msg.sender] = currentNonce + 1;
 
         emit Unstaked(msg.sender, amount);
     }
 
     function getEncryptedTotalStaked(address user) external view returns (euint64) {
         return _encryptedTotalStaked[user];
-    }
-
-    /**
-     * @notice Stakes ETH directly from the participant's ConfidentialETH balance
-     */
-    function stakeFromConfidential(uint64 units) external {
-        require(units > 0, "Must stake > 0");
-        uint256 weiAmount = uint256(units) * cETH.UNIT_SCALE();
-
-        // This requires StakingManager to be authorized on cETH!
-        cETH.withdrawTo(msg.sender, address(this), units);
-
-        // Supply ETH to Aave -> receives aWETH
-        IWrappedTokenGatewayV3(WETH_GATEWAY).depositETH{value: weiAmount}(
-            AAVE_POOL,
-            msg.sender, // aWETH sent to user
-            0
-        );
-
-        euint64 encAmount = FHE.asEuint64(uint64(weiAmount / 1e9)); 
-        if (euint64.unwrap(_encryptedTotalStaked[msg.sender]) != 0) {
-            _encryptedTotalStaked[msg.sender] = FHE.add(_encryptedTotalStaked[msg.sender], encAmount);
-        } else {
-            _encryptedTotalStaked[msg.sender] = encAmount;
-        }
-        
-        FHE.allow(_encryptedTotalStaked[msg.sender], msg.sender);
-        FHE.allowThis(_encryptedTotalStaked[msg.sender]);
-
-        emit Staked(msg.sender, weiAmount);
     }
 
     receive() external payable {}

@@ -22,6 +22,7 @@ export interface Trial {
   hasComputed?: boolean;
   applicationStatus?: "Pending" | "Accepted" | "Rejected";
   applicationMessage?: string;
+  nullifier?: string;
   criteria?: {
     ageRange: [number, number];
     labThresholds: { labName: string; operator: string; value: number }[];
@@ -84,6 +85,8 @@ export interface Match {
   applicationMessage?: string;
   rawTimestamp?: number; // For sorting
   currentMilestone?: number; // 0 = none, 1-4 for milestones
+  isAnonymous?: boolean; // For anonymous applications
+  nullifier?: string; // For anonymous applications
 }
 
 export interface AnalyticsData {

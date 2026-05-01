@@ -1,0 +1,152 @@
+import type { ReactNode } from "react";
+import { Prose } from "../../components/docs/Prose";
+import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
+import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
+
+const faqs: { q: string; a: ReactNode }[] = [
+    {
+        q: "Which network does MedVault use?",
+        a: (
+            <>
+                The app is configured for <strong>Arbitrum Sepolia</strong> (chain ID <code>421614</code>) with Privy
+                embedded wallets. Use a faucet for test ETH before sending FHE-heavy transactions.
+            </>
+        ),
+    },
+    {
+        q: "Why do some transactions take a long time?",
+        a: "FHE operations are evaluated by the fhEVM coprocessor. Latency is higher than a simple transfer; the UI should show pending states until the receipt confirms.",
+    },
+    {
+        q: "Where is my health data decrypted?",
+        a: "Only in contexts authorized by FHE ACL and, where applicable, patient-signed viewing flows. Ciphertexts live on-chain; plaintext should only exist in the patient-controlled client when deliberately decrypted.",
+    },
+    {
+        q: "What replaced the old PatientRegistry?",
+        a: (
+            <>
+                The system uses <code>AnonymousPatientRegistry</code> for private identity membership and{" "}
+                <code>MedVaultRegistry</code> for encrypted health vault state. See the{" "}
+                <Link to="/docs/contracts" className="text-blue-600 font-semibold">
+                    contract reference
+                </Link>{" "}
+                and{" "}
+                <Link to="/docs/identity-privacy" className="text-blue-600 font-semibold">
+                    identity &amp; privacy
+                </Link>{" "}
+                pages.
+            </>
+        ),
+    },
+    {
+        q: "How do sponsors get verified?",
+        a: "Trials are gated through SponsorRegistry allowlisting. The exact admin flow depends on your deployment; see the sponsor system and deployment docs.",
+    },
+    {
+        q: "What is Privy used for?",
+        a: (
+            <>
+                <strong>Privy</strong> handles sign-in and issues the embedded EVM wallet the app uses by default, wired
+                through <code>Web3Context.tsx</code>. You need <code>VITE_PRIVY_APP_ID</code> in <code>.env</code> from
+                the Privy dashboard.
+            </>
+        ),
+    },
+    {
+        q: "How do I get test ETH on Arbitrum Sepolia?",
+        a: (
+            <>
+                Use a public Sepolia ETH faucet, or run / configure the <code>arb-sepolia-faucet</code> service and set{" "}
+                <code>VITE_TESTNET_FAUCET_URL</code> for in-app drips. See <code>src/lib/testnetFaucet.ts</code> and the{" "}
+                <Link to="/docs/identity-privacy" className="text-blue-600 font-semibold">
+                    identity &amp; tooling
+                </Link>{" "}
+                page.
+            </>
+        ),
+    },
+    {
+        q: "What does the MedVault relayer do?",
+        a: (
+            <>
+                The <strong>HTTP relayer</strong> pays gas for the anonymous apply flow. The browser calls{" "}
+                <code>submitViaRelayer</code> in <code>src/lib/relayer.ts</code>, which hits{" "}
+                <code>POST /relay/apply-stage</code> then (after CoFHE decrypt in-wallet){" "}
+                <code>POST /relay/apply-finalize</code>. Host it yourself in production; configure{" "}
+                <code>VITE_RELAYER_URL</code> or the Vite <code>/relay</code> proxy for local dev.
+            </>
+        ),
+    },
+    {
+        q: "What is the ephemeral wallet?",
+        a: (
+            <>
+                It is a deterministic address derived from your Semaphore identity secret — used as the CoFHE{" "}
+                <strong>permit recipient</strong> so decrypt-for-tx runs without tying ciphertext ACL to your main Privy EOA.
+                See{" "}
+                <Link to="/docs/identity-privacy" className="text-blue-600 font-semibold">
+                    Identity &amp; privacy
+                </Link>
+                .
+            </>
+        ),
+    },
+    {
+        q: "Where are Noir / Semaphore documented?",
+        a: (
+            <>
+                Semaphore flows live in <code>src/lib/semaphore.ts</code>; Noir eligibility circuits live under{" "}
+                <code>circuits/eligibility_proof</code> with frontend hooks in <code>useEligibilityProof.ts</code> /{" "}
+                <code>src/lib/noir.ts</code>. Overview:{" "}
+                <Link to="/docs/identity-privacy" className="text-blue-600 font-semibold">
+                    Identity &amp; privacy
+                </Link>
+                .
+            </>
+        ),
+    },
+    {
+        q: "Does MedVault use Chainlink?",
+        a: (
+            <>
+                Yes — <strong>MedVaultAutomation</strong> implements Chainlink Automation for trial expiry finalization, and{" "}
+                <strong>TrialManager</strong> can use Chainlink price feeds for compensation math. Details:{" "}
+                <Link to="/docs/automation" className="text-blue-600 font-semibold">
+                    Chainlink Automation
+                </Link>{" "}
+                and the{" "}
+                <Link to="/docs/contracts" className="text-blue-600 font-semibold">
+                    contract reference
+                </Link>
+                .
+            </>
+        ),
+    },
+];
+
+export function FaqDoc() {
+    return (
+        <motion.div>
+            <Prose className="max-w-none">
+                <DocsPageHeaderForRoute />
+                <div className="not-prose space-y-6">
+                    {faqs.map((item) => (
+                        <div
+                            key={item.q}
+                            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                        >
+                            <h2 className="text-base font-bold text-slate-900 m-0 mb-2">{item.q}</h2>
+                            <p className="text-sm text-slate-600 m-0 leading-relaxed">{item.a}</p>
+                        </div>
+                    ))}
+                </div>
+                <Callout type="tip" title="Still stuck?">
+                    Read the <Link to="/docs/guides">user workflows</Link> or{" "}
+                    <Link to="/docs/security-model">security model</Link> for deeper context.
+                </Callout>
+            </Prose>
+        </motion.div>
+    );
+}

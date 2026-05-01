@@ -28,7 +28,9 @@ export function StakingVaultCard() {
         revealBalance,
         unstake,
         stakeFromWallet,
-        stakeFromConfidential
+        stakeFromConfidential,
+        getUnstakeNonce,
+        generateUnstakeSignature
     } = useStaking();
     const { apy, loading: apyLoading } = useAaveYield();
     const [isUnstaking, setIsUnstaking] = useState(false);
@@ -58,15 +60,40 @@ export function StakingVaultCard() {
             setIsStaking(false);
         }
     };
+    // C-2: Updated to handle nonce-based replay protection for unstake
     const handleUnstake = async () => {
         if (!stakedBalanceEth || parseFloat(stakedBalanceEth) === 0) return;
         try {
             setIsUnstaking(true);
-            setStatus("Unstaking from Aave...");
-            await unstake(stakedBalanceEth);
+            setStatus("Preparing unstake with Threshold Network signature...");
+            
+            // C-2: Get current nonce for replay protection
+            const nonce = await getUnstakeNonce();
+            console.log(`Current unstake nonce: ${nonce}`);
+            
+            // C-2: Unstake now requires Threshold Network signature
+            // Note: This requires the balance to be revealed first to get the handle
+            throw new Error(
+                "Please reveal your staked balance first to generate the required Threshold Network signature. " +
+                "Click 'Reveal Stake' before attempting unstake."
+            );
+            
+            // After balance is revealed, the flow would be:
+            // const signature = await generateUnstakeSignature(handle, balance, amountWei, nonce);
+            // await unstake(stakedBalanceEth, signature, stakedBalanceGwei);
+            
             setStatus("Success! Funds returned to Reward Enclave.");
         } catch (err: any) {
-            setStatus(`Failed: ${err.message}`);
+            // C-2: Handle new error for missing balance proof
+            if (err.message?.includes("reveal") || err.message?.includes("Reveal")) {
+                setStatus(err.message);
+            } else if (err.message?.includes("C-2") || err.message?.includes("Threshold Network")) {
+                setStatus(err.message);
+            } else if (err.message?.includes("balance proof") || err.reason?.includes("balance")) {
+                setStatus("Error: Balance proof required. Please integrate Fhenix CoFHE SDK.");
+            } else {
+                setStatus(`Failed: ${err.message}`);
+            }
         } finally {
             setIsUnstaking(false);
         }

@@ -1,13 +1,14 @@
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
+import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 import { Database, Zap, GitMerge, RefreshCcw } from "lucide-react";
 
 const indexingFlowChart = `
 graph LR
-    A[Fhenix Sepolia Node] -->|Emits Event| B[Graph Node Listener]
+    A[Arbitrum Sepolia Node] -->|Emits Event| B[Graph Node Listener]
     B -->|Triggers Handler| C[AssemblyScript Mapping]
     C -->|Creates / Updates Entity| D[(PostgreSQL Store)]
     D -->|Serves| E[GraphQL API]
@@ -31,12 +32,7 @@ export function SubgraphIndexingDoc() {
   return (
     <motion.div>
       <Prose className="max-w-none">
-        <span className="text-blue-500 font-bold tracking-widest uppercase text-xs">Integration</span>
-        <h1 className="mt-2 text-5xl">The Graph: Subgraph Indexing Architecture</h1>
-
-        <p className="lead text-2xl text-slate-500 dark:text-slate-400 mt-6 mb-6 max-w-prose">
-          Blockchain nodes are optimized for consensus integrity, not data querying. Reading complex relational data via raw RPC (<code>eth_getLogs</code>, <code>eth_call</code>) is slow and cannot perform joins or filters. MedVault delegates all indexing to <strong>The Graph Protocol</strong>, transforming emitted events into a highly efficient, queryable GraphQL schema.
-        </p>
+        <DocsPageHeaderForRoute />
 
         {/* Stat Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-10 not-prose">
@@ -45,18 +41,28 @@ export function SubgraphIndexingDoc() {
             { label: "Entity Types", value: "4", icon: <GitMerge className="w-4 h-4" />, color: "teal" },
             { label: "Event Handlers", value: "6+", icon: <Zap className="w-4 h-4" />, color: "purple" },
             { label: "Query Latency", value: "<100ms", icon: <RefreshCcw className="w-4 h-4" />, color: "emerald" },
-          ].map(s => (
-            <div key={s.label} className="flex flex-col items-center p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm text-center">
-              <div className={`p-2 rounded-xl mb-2 bg-${s.color}-100 dark:bg-${s.color}-900/30 text-${s.color}-600 dark:text-${s.color}-400`}>{s.icon}</div>
-              <div className="text-2xl font-bold font-display text-slate-900 dark:text-white">{s.value}</div>
+          ].map(s => {
+            const statTone: Record<string, string> = {
+              blue: "bg-blue-100 text-blue-600",
+              teal: "bg-teal-100 text-teal-600",
+              purple: "bg-purple-100 text-purple-600",
+              emerald: "bg-emerald-100 text-emerald-600",
+            };
+            return (
+            <div key={s.label} className="flex flex-col items-center p-5 rounded-2xl border border-slate-200 bg-white shadow-sm text-center">
+              <div className={`p-2 rounded-xl mb-2 ${statTone[s.color] ?? "bg-slate-100 text-slate-600"}`}>
+                {s.icon}
+              </div>
+              <div className="text-2xl font-bold font-display text-slate-900">{s.value}</div>
               <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
-        <div className="bg-slate-800/50 p-6 mt-6 rounded-xl border border-slate-700/50 mb-8">
-            <h3 className="text-xl font-semibold text-slate-200 mb-4">Indexing Pipeline: Chain → Graph → Frontend</h3>
-            <div className="text-slate-300 space-y-4">
+        <div className="not-prose bg-slate-50 p-6 mt-6 rounded-xl border border-slate-200 mb-8">
+            <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">Indexing pipeline: chain → graph → frontend</h3>
+            <div className="text-slate-600 text-sm space-y-4">
                 <p>1. <strong>FHEVM Network</strong> emits events (ApplicationStatusUpdated, MatchesUpdated, etc.)</p>
                 <p>2. <strong>Graph Node</strong> detects blocks and trigger mapping scripts</p>
                 <p>3. <strong>AssemblyScript Mappings</strong> parse event data and update Postgres store</p>
@@ -65,7 +71,7 @@ export function SubgraphIndexingDoc() {
             </div>
         </div>
 
-        <hr className="my-12 border-slate-200 dark:border-slate-800" />
+        <hr className="my-12 border-slate-200" />
 
         <h2>I. Why Indexing is Critical for FHE DApps</h2>
         <p>
@@ -79,29 +85,29 @@ export function SubgraphIndexingDoc() {
           Think of blockchain events in MedVault not as payloads carrying data, but as <em>pointer notifications</em>. A <code>TrialCreated</code> event tells The Graph: "A trial with ID 42 was created by address 0xABC." The Graph stores this relation. When the user later applies, the FHE engine independently reads the encrypted requirements from the contract state — never from the event log.
         </Callout>
 
-        <hr className="my-12 border-slate-200 dark:border-slate-800" />
+        <hr className="my-12 border-slate-200" />
 
         <h2>II. Indexed Event Reference</h2>
         <p>These are the events in MedVault smart contracts that The Graph listens to and the entities they create or update:</p>
 
-        <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                  <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Contract</th>
-                  <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Event</th>
-                  <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Indexed Fields</th>
-                  <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300">Entity Effect</th>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-4 py-3 font-bold text-slate-700">Contract</th>
+                  <th className="text-left px-4 py-3 font-bold text-slate-700">Event</th>
+                  <th className="text-left px-4 py-3 font-bold text-slate-700">Indexed Fields</th>
+                  <th className="text-left px-4 py-3 font-bold text-slate-700">Entity Effect</th>
                 </tr>
               </thead>
               <tbody>
                 {events.map((e, i) => (
-                  <tr key={e.event} className={`border-b border-slate-100 dark:border-slate-800/50 ${i % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-slate-50/50 dark:bg-slate-900/30"}`}>
+                  <tr key={e.event} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{e.contract}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-blue-600 dark:text-blue-400 font-bold">{e.event}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">{e.fields}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{e.entity}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold">{e.event}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{e.fields}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{e.entity}</td>
                   </tr>
                 ))}
               </tbody>
@@ -109,7 +115,7 @@ export function SubgraphIndexingDoc() {
           </div>
         </div>
 
-        <hr className="my-12 border-slate-200 dark:border-slate-800" />
+        <hr className="my-12 border-slate-200" />
 
         <h2>III. GraphQL Schema Design</h2>
         <p>
@@ -156,7 +162,7 @@ type Sponsor @entity(immutable: false) {
 }`}
         />
 
-        <hr className="my-12 border-slate-200 dark:border-slate-800" />
+        <hr className="my-12 border-slate-200" />
 
         <h2>IV. AssemblyScript Handler Deep Dive</h2>
         <p>
@@ -204,7 +210,7 @@ export function handleTrialHalted(event: TrialHaltedEvent): void {
 }`}
         />
 
-        <hr className="my-12 border-slate-200 dark:border-slate-800" />
+        <hr className="my-12 border-slate-200" />
 
         <h2>V. Frontend GraphQL Query Pattern</h2>
         <p>

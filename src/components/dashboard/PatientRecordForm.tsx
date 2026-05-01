@@ -1,91 +1,91 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowRight, Loader2, Lock, ShieldCheck, Stethoscope, Sparkles } from "lucide-react";
 import { Button } from "../ui/Button";
 import { useWeb3 } from "../../lib/Web3Context";
-import { encryptUint8, encryptUint16, encryptBool } from "../../lib/fhe";
-import { getPatientRegistry } from "../../lib/contracts";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-    User,
-    Dna,
-    Activity,
-    Droplets,
-    Scale,
-    Ruler,
-    Cigarette,
-    CheckCircle2,
-    ArrowRight,
-    ArrowLeft,
-    Heart,
-    ShieldCheck,
-    Stethoscope
-} from "lucide-react";
+import { encryptBool, encryptUint8, encryptUint16, connectFHE, yieldToMain } from "../../lib/fhe";
+import { getOrCreateIdentity, isMemberRegistered, forceNewIdentity, registerPatientWithHealthData } from "../../lib/semaphore";
+import { getContractAddressForChain } from "../../lib/contracts";
 import { cn } from "../../lib/utils";
+
+import type { ReclaimAttestation } from "../../lib/reclaim";
 
 interface PatientRecordFormProps {
     onSuccess: () => void;
     onCancel: () => void;
+    /** Set after a successful Reclaim session before this form (optional). */
+    reclaimAttestation?: ReclaimAttestation | null;
 }
 
-const steps = [
-    { id: 0, title: "Bio-Identity", icon: User },
-    { id: 1, title: "Clinical Metrics", icon: Activity },
-    { id: 2, title: "Lifestyle", icon: Stethoscope },
-];
+type FormErrors = {
+    age?: string;
+    weight?: string;
+    height?: string;
+    hbLevel?: string;
+    gender?: string;
+};
 
-export function PatientRecordForm({ onSuccess, onCancel }: PatientRecordFormProps) {
-    const { signer, account, isFHEReady } = useWeb3();
-    const [currentStep, setCurrentStep] = useState(0);
+type EncryptPhase = {
+    step: number;
+    total: number;
+    label: string;
+};
 
-    // Step 0: Biology
-    const [age, setAge] = useState(25);
-    const [gender, setGender] = useState(true); // true = Male, false = Female
-    const [weight, setWeight] = useState(70);
-    const [height, setHeight] = useState(175);
+const ENCRYPT_STEPS_TOTAL = 10;
 
-    // Step 1: Clinical
-    const [hasDiabetes, setHasDiabetes] = useState(false);
-    const [hbLevel, setHbLevel] = useState(110);
-    const [hasHypertension, setHasHypertension] = useState(false);
-
-    // Step 2: Lifestyle
+export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: PatientRecordFormProps) {
+    const { signer, account, isFHEReady, connect, isConnecting, error: connectError } = useWeb3();
+    const [age, setAge] = useState("25");
+    const [gender, setGender] = useState<"male" | "female" | "">("");
+    const [weight, setWeight] = useState("70");
+    const [height, setHeight] = useState("175");
+    const [hasDiabetes, setHasDiabetes] = useState<"yes" | "no" | "">("");
+    const [hbLevel, setHbLevel] = useState("110");
     const [isSmoker, setIsSmoker] = useState(false);
-
+    const [hasHypertension, setHasHypertension] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isTransitioning, setIsTransitioning] = useState(false);
-    const [allowSubmit, setAllowSubmit] = useState(false);
+    const [encryptPhase, setEncryptPhase] = useState<EncryptPhase | null>(null);
     const [status, setStatus] = useState<string | null>(null);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
-    const nextStep = () => {
-        if (isTransitioning) return;
-        setIsTransitioning(true);
-        const next = Math.min(currentStep + 1, steps.length - 1);
-        setCurrentStep(next);
+    const canSubmit = useMemo(() => {
+        return !!account && isFHEReady && !isSubmitting;
+    }, [account, isFHEReady, isSubmitting]);
 
-        // Safety: If moving to last step, only allow submission after a delay
-        if (next === steps.length - 1) {
-            setTimeout(() => setAllowSubmit(true), 1000);
+    const validateForm = (): FormErrors => {
+        const parsedAge = Number(age);
+        const parsedWeight = Number(weight);
+        const parsedHeight = Number(height);
+        const parsedHb = Number(hbLevel);
+        const nextErrors: FormErrors = {};
+
+        if (!gender) nextErrors.gender = "Please select biological sex.";
+        if (!Number.isFinite(parsedAge) || parsedAge < 1 || parsedAge > 120) {
+            nextErrors.age = "Age must be between 1 and 120.";
         }
-
-        setTimeout(() => setIsTransitioning(false), 500);
-    };
-
-    const prevStep = () => {
-        if (isTransitioning) return;
-        setIsTransitioning(true);
-        setCurrentStep(prev => Math.max(prev - 1, 0));
-        setAllowSubmit(false);
-        setTimeout(() => setIsTransitioning(false), 500);
+        if (!Number.isFinite(parsedWeight) || parsedWeight < 20 || parsedWeight > 300) {
+            nextErrors.weight = "Weight must be between 20 and 300 kg.";
+        }
+        if (!Number.isFinite(parsedHeight) || parsedHeight < 100 || parsedHeight > 250) {
+            nextErrors.height = "Height must be between 100 and 250 cm.";
+        }
+        if (!Number.isFinite(parsedHb) || parsedHb < 20 || parsedHb > 300) {
+            nextErrors.hbLevel = "HbA1c equivalent must be between 20 and 300.";
+        }
+        return nextErrors;
     };
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        if (!canSubmit) {
+            return;
+        }
 
-        // EXPLICIT GUARD: 
-        // 1. Must be on last step
-        // 2. Must not be transitioning
-        // 3. Must have explicit permission (allowSubmit) to prevent accidental double-clicks or bleed
-        if (isSubmitting || currentStep !== steps.length - 1 || isTransitioning || !allowSubmit) {
-            console.log("Submit blocked:", { isSubmitting, step: currentStep, isTransitioning, allowSubmit });
+        const validationErrors = validateForm();
+        setErrors(validationErrors);
+        if (Object.keys(validationErrors).length > 0) {
+            setStatus("Error: Please fix the highlighted fields.");
             return;
         }
 
@@ -95,359 +95,510 @@ export function PatientRecordForm({ onSuccess, onCancel }: PatientRecordFormProp
         }
 
         setIsSubmitting(true);
-        setStatus("Initializing encryption engine...");
+        setEncryptPhase(null);
+        setStatus("Starting secure encryption…");
+
+        const advance = async (step: number, label: string) => {
+            setEncryptPhase({ step, total: ENCRYPT_STEPS_TOTAL, label });
+            setStatus(label);
+            await yieldToMain();
+        };
 
         try {
-            const registry = getPatientRegistry(signer);
-            const registryAddress = await registry.getAddress();
+            const provider = await signer.provider;
+            if (!provider) {
+                throw new Error("No provider from signer.");
+            }
 
-            // Longer pause to ensure UI "Securing Data..." state is painted
-            const pause = (ms = 300) => new Promise(r => setTimeout(r, ms));
+            await advance(1, "FHE: connecting…");
+            await connectFHE(provider, signer);
 
-            // Encrypt all 8 metrics sequentially
-            setStatus("Stage 1/4: Encrypting Bio-Identity...");
-            await pause();
-            const rawAge = await encryptUint8(registryAddress, account, age);
-            const rawGender = await encryptBool(registryAddress, account, gender);
+            await advance(2, "Private identity…");
+            const identity = getOrCreateIdentity();
+            await yieldToMain();
 
-            setStatus("Stage 2/4: Encrypting Physical Metrics...");
-            await pause();
-            const rawWeight = await encryptUint16(registryAddress, account, weight);
-            const rawHeight = await encryptUint8(registryAddress, account, height);
+            // Guard: if this commitment is already in the Semaphore group the tx WILL revert
+            // with a custom error (0x258a195a) before FHE is ever reached.
+            // Check on-chain before spending time on encryption.
+            const alreadyIn = await isMemberRegistered(provider, identity.commitment);
+            if (alreadyIn) {
+                setAlreadyRegistered(true);
+                setIsSubmitting(false);
+                setEncryptPhase(null);
+                setStatus(null);
+                return;
+            }
 
-            setStatus("Stage 3/4: Encrypting Clinical Data...");
-            await pause();
-            const rawDiabetes = await encryptBool(registryAddress, account, hasDiabetes);
-            const rawHb = await encryptUint16(registryAddress, account, hbLevel);
+            // CoFHE verifies encrypted inputs against the Solidity msg.sender passed into
+            // FHE.asEuint*(). This function is executed inside AnonymousPatientRegistry, but
+            // it is called externally by MedVaultRegistry, so msg.sender is MedVaultRegistry.
+            // If the SDK proof is bound to any other account, the FHE TaskManager reverts with
+            // InvalidSigner(address,address), selector 0x7ba5ffb5.
+            const registryAddress = getContractAddressForChain("MedVaultRegistry");
+            if (!registryAddress) {
+                throw new Error("MedVaultRegistry address not configured for current network.");
+            }
 
-            setStatus("Stage 4/4: Encrypting Lifestyle Factors...");
-            await pause();
-            const rawHypertension = await encryptBool(registryAddress, account, hasHypertension);
+            const parsedAge = Number(age);
+            const parsedWeight = Number(weight);
+            const parsedHeight = Number(height);
+            const parsedHb = Number(hbLevel);
+            const genderFlag = gender === "male";
+            const diabetesFlag = hasDiabetes === "yes";
+
+            await advance(3, "Encrypt: age…");
+            const rawAge = await encryptUint8(registryAddress, account, parsedAge);
+            await advance(4, "Encrypt: sex…");
+            const rawGender = await encryptBool(registryAddress, account, genderFlag);
+            await advance(5, "Encrypt: weight…");
+            const rawWeight = await encryptUint16(registryAddress, account, parsedWeight);
+            await advance(6, "Encrypt: height…");
+            const rawHeight = await encryptUint8(registryAddress, account, parsedHeight);
+            await advance(7, "Encrypt: diabetes, HbA1c…");
+            const rawDiabetes = await encryptBool(registryAddress, account, diabetesFlag);
+            await yieldToMain();
+            const rawHb = await encryptUint16(registryAddress, account, parsedHb);
+            await advance(8, "Encrypt: smoker, hypertension…");
             const rawSmoker = await encryptBool(registryAddress, account, isSmoker);
+            await yieldToMain();
+            const rawHypertension = await encryptBool(registryAddress, account, hasHypertension);
 
-            setStatus("Verification: Preparing blockchain transaction...");
-            await pause(500);
+            const encryptedData = {
+                age: rawAge,
+                gender: rawGender,
+                weight: rawWeight,
+                height: rawHeight,
+                hasDiabetes: rawDiabetes,
+                hbLevel: rawHb,
+                isSmoker: rawSmoker,
+                hasHypertension: rawHypertension
+            };
 
-            // Prepare parameters for the contract
-            const params = [
-                rawAge,
-                rawGender,
-                rawWeight,
-                rawHeight,
-                rawDiabetes,
-                rawHb,
-                rawSmoker,
-                rawHypertension
-            ];
+            await advance(9, "Wallet: sign & submit…");
+            await registerPatientWithHealthData(signer, identity, encryptedData);
 
-            console.log("Submitting with FHE handles:", params);
-
-            const tx = await registry.submitEncryptedProfile(...params);
-
-            setStatus("Waiting for cryptographic confirmation...");
-            await tx.wait();
-
-            setStatus("Success! Metrics secured in FHE vault.");
-            setTimeout(onSuccess, 2000);
+            setStatus("Submitted. Record encrypted and linked to your anonymous identity.");
+            setEncryptPhase({ step: ENCRYPT_STEPS_TOTAL, total: ENCRYPT_STEPS_TOTAL, label: "Done" });
+            setIsSubmitting(false);
+            setTimeout(() => {
+                setEncryptPhase(null);
+                onSuccess();
+            }, 1600);
         } catch (err: any) {
             console.error("Submission failed:", err);
             const errorMsg = err.reason || err.message || "Encryption failed";
             setStatus(`Error: ${errorMsg}`);
+            setEncryptPhase(null);
             setIsSubmitting(false);
-            setAllowSubmit(false); // Reset on error
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        // Only allow Enter key to move steps, NEVER submit the form
-        if (e.key === "Enter") {
-            e.preventDefault();
-            if (currentStep < steps.length - 1) {
-                nextStep();
-            }
-        }
-    };
+    const progressPct = encryptPhase
+        ? Math.min(100, Math.round((encryptPhase.step / encryptPhase.total) * 100))
+        : 0;
 
-    return (
-        <div className="bg-white dark:bg-[#0a1628] rounded-3xl border border-slate-200 dark:border-[#3b82f6]/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_24px_48px_-12px_rgba(0,0,0,0.4)] overflow-hidden">
-            {/* Header / Info */}
-            <div className="bg-slate-50 dark:bg-[#3b82f6]/5 p-6 border-b border-slate-100 dark:border-[#3b82f6]/10">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500 dark:bg-[#3b82f6]/20 dark:text-[#3b82f6]">
-                        <ShieldCheck className="h-6 w-6" />
+    const showEncryptProgress = isSubmitting || encryptPhase !== null;
+
+    if (alreadyRegistered) {
+        return (
+            <div className="relative overflow-hidden rounded-[2rem] border border-teal-200 bg-white shadow-xl">
+                <div className="absolute top-0 right-0 h-64 w-64 -translate-y-1/3 translate-x-1/3 rounded-full bg-teal-100/50 blur-[80px] pointer-events-none" />
+                <div className="relative z-10 p-10 flex flex-col items-center text-center gap-6">
+                    <div className="h-20 w-20 rounded-full bg-teal-50 border-2 border-teal-200 flex items-center justify-center shadow-inner">
+                        <ShieldCheck className="h-10 w-10 text-teal-600" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Secure Record Upload</h2>
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Add expanded clinical indicators to your encrypted profile.</p>
-
-                {/* Stepper */}
-                <div className="flex items-center justify-between mt-6 relative">
-                    <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 z-0" />
-                    {steps.map((s, i) => {
-                        const Icon = s.icon;
-                        const isActive = currentStep >= i;
-                        const isCurrent = currentStep === i;
-                        return (
-                            <div key={s.id} className="relative z-10 flex flex-col items-center gap-2">
-                                <div className={cn(
-                                    "h-10 w-10 rounded-full flex items-center justify-center transition-all duration-300",
-                                    isActive
-                                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20 dark:bg-[#3b82f6] dark:text-[#020810] dark:shadow-[#3b82f6]/20"
-                                        : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600"
-                                )}>
-                                    <Icon className="h-5 w-5" />
-                                </div>
-                                <span className={cn(
-                                    "text-[10px] uppercase tracking-widest font-bold",
-                                    isActive ? "text-slate-900 dark:text-slate-200" : "text-slate-400 dark:text-slate-600"
-                                )}>{s.title}</span>
-                            </div>
-                        );
-                    })}
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">Already Registered</h2>
+                        <p className="text-slate-600 max-w-sm mx-auto leading-relaxed">
+                            Your anonymous health identity is already on-chain. Your vault is active and ready — no re-registration needed.
+                        </p>
+                    </div>
+                    <div className="w-full rounded-2xl bg-amber-50 border border-amber-200 p-4 text-left">
+                        <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">Why did this happen?</p>
+                        <p className="text-sm text-amber-800">
+                            Your device's Semaphore identity (stored locally) was already registered in a previous session. Submitting again would revert on-chain because the commitment already exists in the privacy group.
+                        </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full">
+                        <Button
+                            onClick={onSuccess}
+                            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold h-12 px-6 rounded-2xl gap-2"
+                        >
+                            <ShieldCheck className="h-4 w-4" />
+                            Go to My Vault
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                forceNewIdentity();
+                                setAlreadyRegistered(false);
+                                setStatus("New identity created. Fill in your details and submit.");
+                            }}
+                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold h-12 px-6 rounded-2xl gap-2 border border-slate-200"
+                        >
+                            Reset Identity
+                        </Button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-xs">
+                        "Reset Identity" generates a brand-new anonymous key. Only use this if you deliberately want a fresh on-chain profile.
+                    </p>
                 </div>
             </div>
+        );
+    }
 
-            <div onKeyDown={handleKeyDown} className="p-6">
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={currentStep}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="space-y-4 min-h-[280px]"
-                    >
-                        {currentStep === 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Biological Age</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={age}
-                                            onChange={(e) => setAge(parseInt(e.target.value))}
-                                            className="w-full h-12 pl-4 pr-12 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-[#3b82f6]/20 transition-all font-bold"
-                                        />
-                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">YRS</span>
-                                    </div>
-                                </div>
+    return (
+        <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
+            <div className="absolute top-0 right-0 h-72 w-72 -translate-y-1/3 translate-x-1/4 rounded-full bg-teal-100/60 blur-[90px] pointer-events-none" />
+            <div className="absolute bottom-0 left-0 h-56 w-56 translate-y-1/3 -translate-x-1/4 rounded-full bg-emerald-100/50 blur-[80px] pointer-events-none" />
 
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Legal Gender</label>
-                                    <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl h-12">
-                                        <button
-                                            type="button"
-                                            onClick={() => setGender(true)}
-                                            className={cn(
-                                                "flex-1 rounded-lg text-xs font-bold uppercase tracking-widest transition-all",
-                                                gender ? "bg-white dark:bg-[#3b82f6] text-blue-500 dark:text-[#020810] shadow-sm" : "text-slate-400"
-                                            )}
-                                        >
-                                            Male
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setGender(false)}
-                                            className={cn(
-                                                "flex-1 rounded-lg text-xs font-bold uppercase tracking-widest transition-all",
-                                                !gender ? "bg-white dark:bg-[#3b82f6] text-blue-500 dark:text-[#020810] shadow-sm" : "text-slate-400"
-                                            )}
-                                        >
-                                            Female
-                                        </button>
-                                    </div>
-                                </div>
+            <div className="relative z-10 p-6 md:p-8 border-b border-slate-200 bg-slate-50/80">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-200">
+                        <ShieldCheck className="h-5 w-5" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-900">Encrypt Health Data</h2>
+                </div>
+                <p className="text-slate-600">
+                    Enter your baseline clinical metrics. This data is encrypted locally before transmission.
+                </p>
+                {reclaimAttestation ? (
+                    <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3">
+                        <p className="text-xs font-bold uppercase tracking-widest text-emerald-800 mb-1">
+                            Reclaim — verified source
+                        </p>
+                        <p className="text-sm text-emerald-900/90">
+                            A Reclaim attestation is bound to this wallet for provider{" "}
+                            <code className="text-xs bg-white/60 px-1 rounded border border-emerald-200/80">
+                                {reclaimAttestation.providerId}
+                            </code>
+                            . Encrypted values below are separate from the proof; the proof only attests a real provider
+                            session in this flow.
+                        </p>
+                    </div>
+                ) : null}
+            </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                                        <Ruler className="h-3 w-3" /> Height
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={height}
-                                            onChange={(e) => setHeight(parseInt(e.target.value))}
-                                            className="w-full h-12 pl-4 pr-12 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-[#3b82f6]/20 transition-all font-bold"
-                                        />
-                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">CM</span>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                                        <Scale className="h-3 w-3" /> Body Weight
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={weight}
-                                            onChange={(e) => setWeight(parseInt(e.target.value))}
-                                            className="w-full h-12 pl-4 pr-12 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-[#3b82f6]/20 transition-all font-bold"
-                                        />
-                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">KG</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {currentStep === 1 && (
-                            <div className="space-y-6">
-                                <div className="p-6 rounded-2xl bg-blue-50/50 dark:bg-[#3b82f6]/5 border border-blue-100 dark:border-[#3b82f6]/10 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center text-blue-500 dark:text-[#3b82f6]">
-                                                <Droplets className="h-5 w-5" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900 dark:text-white">Diagnostic: Diabetes</p>
-                                                <p className="text-xs text-slate-500 font-medium">Type 1 or Type 2 Diagnosis</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setHasDiabetes(!hasDiabetes)}
-                                            className={cn(
-                                                "h-6 w-11 rounded-full relative transition-colors duration-200",
-                                                hasDiabetes ? "bg-blue-500 dark:bg-[#3b82f6]" : "bg-slate-200 dark:bg-slate-800"
-                                            )}
-                                        >
-                                            <div className={cn(
-                                                "absolute top-1 left-1 h-4 w-4 bg-white rounded-full transition-transform duration-200",
-                                                hasDiabetes ? "translate-x-5" : "translate-x-0"
-                                            )} />
-                                        </button>
-                                    </div>
-
-                                    <div className="relative">
-                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 block">Recent HbA1c Level</label>
-                                        <input
-                                            type="number"
-                                            value={hbLevel}
-                                            onChange={(e) => setHbLevel(parseInt(e.target.value))}
-                                            className="w-full h-12 px-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl outline-none font-bold"
-                                        />
-                                        <span className="absolute right-4 bottom-3.5 text-[10px] font-bold text-slate-400">MG/DL Equivalent</span>
-                                    </div>
-                                </div>
-
-                                <div className="p-6 rounded-2xl bg-rose-50/50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/10 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center text-rose-500">
-                                            <Heart className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-900 dark:text-white">Hypertension</p>
-                                            <p className="text-xs text-slate-500 font-medium">Clinically High Blood Pressure</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setHasHypertension(!hasHypertension)}
-                                        className={cn(
-                                            "h-6 w-11 rounded-full relative transition-colors duration-200",
-                                            hasHypertension ? "bg-rose-500" : "bg-slate-200 dark:bg-slate-800"
-                                        )}
-                                    >
-                                        <div className={cn(
-                                            "absolute top-1 left-1 h-4 w-4 bg-white rounded-full transition-transform duration-200",
-                                            hasHypertension ? "translate-x-5" : "translate-x-0"
-                                        )} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {currentStep === 2 && (
-                            <div className="space-y-4">
-                                <div className="p-6 rounded-2xl bg-amber-50/50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/10 flex flex-col items-center text-center gap-4">
-                                    <div className="h-16 w-16 rounded-2xl bg-white dark:bg-slate-900 flex items-center justify-center text-amber-500 shadow-lg shadow-amber-500/5">
-                                        <Cigarette className="h-8 w-8" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Lifestyle Factor: Smoking</h3>
-                                        <p className="text-sm text-slate-500 max-w-xs mt-1">Select if you have used any tobacco products in the last 6 months.</p>
-                                    </div>
-                                    <div className="flex gap-3 w-full">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsSmoker(true)}
-                                            className={cn(
-                                                "flex-1 h-12 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all",
-                                                isSmoker ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" : "bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800"
-                                            )}
-                                        >
-                                            Current Smoker
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsSmoker(false)}
-                                            className={cn(
-                                                "flex-1 h-12 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all",
-                                                !isSmoker ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-800"
-                                            )}
-                                        >
-                                            Non-Smoker
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 flex items-start gap-3">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5" />
-                                    <p className="text-xs text-slate-500 leading-relaxed font-medium">All data will be encrypted into secure FHE handles before leaving your browser. No plaintext data is ever stored on-chain.</p>
-                                </div>
-                            </div>
-                        )}
-                    </motion.div>
-                </AnimatePresence>
-
-                {/* Footer Actions */}
-                <div className="mt-8 flex items-center justify-between">
-                    <button
-                        type="button"
-                        onClick={prevStep}
-                        disabled={currentStep === 0 || isSubmitting}
-                        className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 disabled:opacity-0 transition-all"
-                    >
-                        <ArrowLeft className="h-4 w-4" /> Back
-                    </button>
-
-                    <div className="flex gap-3">
-                        {currentStep < steps.length - 1 ? (
-                            <Button
-                                key="btn-next"
-                                type="button"
-                                onClick={nextStep}
-                                className="bg-slate-900 dark:bg-[#3b82f6] text-white dark:text-[#020810] h-12 px-8 rounded-xl font-bold uppercase tracking-widest text-xs"
-                            >
-                                Next Step <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        ) : (
-                            <Button
-                                key="btn-submit"
-                                type="button"
-                                onClick={() => handleSubmit()}
-                                disabled={isSubmitting || !isFHEReady}
-                                className="bg-blue-500 dark:bg-[#3b82f6] text-white dark:text-[#020810] h-12 px-8 rounded-xl font-bold uppercase tracking-widest text-xs shadow-lg shadow-blue-500/20"
-                            >
-                                {isSubmitting ? "Securing Data..." : "Finalize & Upload"}
-                            </Button>
-                        )}
+            <form
+                onSubmit={handleSubmit}
+                className="relative z-10 p-6 md:p-8 space-y-6"
+                aria-busy={isSubmitting}
+            >
+                <div className="rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3 flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-white text-violet-700 mt-0.5 border border-violet-200">
+                        <Lock className="h-4 w-4" />
+                    </div>
+                    <div>
+                        <p className="font-semibold text-violet-900 text-sm">Zero-Knowledge Proof Active</p>
+                        <p className="text-violet-800/90 text-sm">
+                            Your data is encrypted before leaving your device. Researchers receive verifying proof without exposing underlying values.
+                        </p>
                     </div>
                 </div>
+
+                {showEncryptProgress ? (
+                    <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-2xl border border-teal-200 bg-gradient-to-b from-teal-50/90 to-white px-4 py-4 shadow-sm"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-teal-800">Encryption progress</p>
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+                            <div className="relative shrink-0">
+                                <motion.div
+                                    className="absolute -inset-2 rounded-2xl bg-teal-400/15"
+                                    animate={{ scale: [1, 1.05, 1], opacity: [0.6, 1, 0.6] }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                                />
+                                <div className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-teal-200 bg-white shadow-sm">
+                                    <Lock className="h-5 w-5 text-teal-600" strokeWidth={2} />
+                                    <Sparkles
+                                        className="absolute -right-0.5 -top-0.5 h-4 w-4 text-amber-400"
+                                        strokeWidth={2}
+                                        aria-hidden
+                                    />
+                                </div>
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-2">
+                                <p className="text-sm font-semibold text-slate-800">
+                                    {encryptPhase?.label ?? "Preparing…"}
+                                </p>
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/90">
+                                    <motion.div
+                                        className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500"
+                                        initial={false}
+                                        animate={{ width: `${progressPct}%` }}
+                                        transition={{ type: "spring", stiffness: 200, damping: 26 }}
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    Step {encryptPhase?.step ?? 0} of {ENCRYPT_STEPS_TOTAL}
+                                </p>
+                            </div>
+                        </div>
+                    </motion.div>
+                ) : null}
+
+                <fieldset
+                    disabled={isSubmitting || encryptPhase?.step === ENCRYPT_STEPS_TOTAL}
+                    className="min-w-0 space-y-6 border-0 p-0 disabled:opacity-60"
+                >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Field label="Age" error={errors.age}>
+                        <InputShell
+                            type="number"
+                            value={age}
+                            placeholder="Years"
+                            onChange={setAge}
+                            trailing={<span className="text-slate-400 text-xs font-semibold">yrs</span>}
+                        />
+                    </Field>
+                    <Field label="Biological Sex" error={errors.gender}>
+                        <SelectShell
+                            value={gender}
+                            onChange={setGender}
+                            placeholder="Select..."
+                            options={[
+                                { label: "Male", value: "male" },
+                                { label: "Female", value: "female" }
+                            ]}
+                        />
+                    </Field>
+                    <Field label="Weight" error={errors.weight}>
+                        <InputShell
+                            type="number"
+                            value={weight}
+                            placeholder="kg"
+                            onChange={setWeight}
+                            trailing={<span className="text-slate-400 text-xs font-semibold">kg</span>}
+                        />
+                    </Field>
+                    <Field label="Height" error={errors.height}>
+                        <InputShell
+                            type="number"
+                            value={height}
+                            placeholder="cm"
+                            onChange={setHeight}
+                            trailing={<span className="text-slate-400 text-xs font-semibold">cm</span>}
+                        />
+                    </Field>
+                    <Field label="HbA1c Level (Equivalent)" error={errors.hbLevel}>
+                        <InputShell
+                            type="number"
+                            value={hbLevel}
+                            placeholder="e.g. 110"
+                            onChange={setHbLevel}
+                        />
+                    </Field>
+                    <Field label="Diabetes Diagnosis">
+                        <SelectShell
+                            value={hasDiabetes}
+                            onChange={setHasDiabetes}
+                            placeholder="Select status..."
+                            options={[
+                                { label: "Yes", value: "yes" },
+                                { label: "No", value: "no" }
+                            ]}
+                        />
+                    </Field>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                    <ToggleCard
+                        title="Smoker Status"
+                        enabled={isSmoker}
+                        onToggle={() => setIsSmoker((prev) => !prev)}
+                    />
+                    <ToggleCard
+                        title="Hypertension"
+                        enabled={hasHypertension}
+                        onToggle={() => setHasHypertension((prev) => !prev)}
+                    />
+                </div>
+                </fieldset>
+
+                {!account ? (
+                    <Button
+                        type="button"
+                        onClick={() => void connect()}
+                        disabled={isConnecting}
+                        className="w-full md:w-auto md:ml-auto h-12 px-8 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-600/20"
+                    >
+                        {isConnecting ? "Connecting..." : "Log in"}
+                    </Button>
+                ) : (
+                    <div className="flex items-center justify-between pt-2">
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            disabled={isSubmitting}
+                            className="text-sm text-slate-500 transition-colors enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Cancel
+                        </button>
+                        <motion.div
+                            animate={isSubmitting ? { scale: [1, 1.01, 1] } : { scale: 1 }}
+                            transition={isSubmitting ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : {}}
+                        >
+                            <Button
+                                type="submit"
+                                disabled={!canSubmit}
+                                className={cn(
+                                    "h-12 px-8 rounded-full bg-teal-600 font-semibold shadow-lg shadow-teal-600/20",
+                                    isSubmitting
+                                        ? "text-white"
+                                        : "hover:bg-teal-700 text-white"
+                                )}
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                                        {encryptPhase?.label ?? "Encrypting…"}
+                                    </>
+                                ) : (
+                                    <>
+                                        Encrypt &amp; Continue
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </>
+                                )}
+                            </Button>
+                        </motion.div>
+                    </div>
+                )}
 
                 {status && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={cn(
-                            "mt-6 p-4 rounded-2xl text-xs font-bold font-mono tracking-tight",
-                            status.includes("Error") ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"
+                            "p-3 rounded-xl text-xs font-semibold",
+                            status.includes("Error")
+                                ? "bg-rose-50 text-rose-700 border border-rose-100"
+                                : "bg-teal-50 text-teal-700 border border-teal-100"
                         )}
                     >
                         {status}
                     </motion.div>
                 )}
-            </div>
+                {!account && connectError ? (
+                    <p className="text-sm text-rose-600">{connectError}</p>
+                ) : null}
+            </form>
         </div>
+    );
+}
+
+function Field({
+    label,
+    error,
+    children
+}: {
+    label: string;
+    error?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="space-y-2">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</label>
+            {children}
+            {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+        </div>
+    );
+}
+
+function InputShell({
+    type = "text",
+    value,
+    onChange,
+    placeholder,
+    trailing
+}: {
+    type?: string;
+    value: string;
+    onChange: (v: string) => void;
+    placeholder: string;
+    trailing?: React.ReactNode;
+}) {
+    return (
+        <div className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 flex items-center gap-2">
+            <input
+                type={type}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className="bg-transparent outline-none w-full text-slate-800 placeholder:text-slate-400"
+            />
+            <Lock className="h-4 w-4 text-teal-600/80 shrink-0" />
+            {trailing}
+        </div>
+    );
+}
+
+function SelectShell({
+    value,
+    onChange,
+    placeholder,
+    options
+}: {
+    value: string;
+    onChange: (v: any) => void;
+    placeholder: string;
+    options: Array<{ label: string; value: string }>;
+}) {
+    return (
+        <div className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 flex items-center gap-2">
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="bg-transparent outline-none w-full text-slate-800"
+            >
+                <option value="" disabled>
+                    {placeholder}
+                </option>
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                    </option>
+                ))}
+            </select>
+            <Lock className="h-4 w-4 text-teal-600/80 shrink-0" />
+        </div>
+    );
+}
+
+function ToggleCard({
+    title,
+    enabled,
+    onToggle
+}: {
+    title: string;
+    enabled: boolean;
+    onToggle: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            className="h-14 rounded-xl border border-slate-200 bg-slate-50 px-4 flex items-center justify-between"
+        >
+            <span className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                <Stethoscope className="h-4 w-4 text-slate-500" />
+                {title}
+            </span>
+            <span
+                className={cn(
+                    "h-6 w-10 rounded-full relative transition-colors",
+                    enabled ? "bg-teal-500" : "bg-slate-300"
+                )}
+            >
+                <span
+                    className={cn(
+                        "absolute top-1 h-4 w-4 rounded-full bg-white transition-all",
+                        enabled ? "left-5" : "left-1"
+                    )}
+                />
+            </span>
+        </button>
     );
 }

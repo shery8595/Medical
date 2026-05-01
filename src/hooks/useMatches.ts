@@ -31,6 +31,14 @@ const GET_SPONSOR_DATA = `
         patient
         lastCompletedMilestoneIndex
       }
+      anonymousSubmissions {
+        id
+        trialId
+        nullifier
+        submittedAt
+        status
+        statusUpdatedAt
+      }
     }
   }
 `;
@@ -102,7 +110,29 @@ export function useMatches(sponsorAddress?: string) {
                     matchScore: state.score,
                     applicationStatus: ["Pending", "Accepted", "Rejected"].includes(state.status) ? state.status : "None",
                     applicationMessage: state.message,
-                    currentMilestone: state.currentMilestone || 0
+                    currentMilestone: state.currentMilestone || 0,
+                    isAnonymous: false
+                });
+            });
+
+            // Process anonymous submissions
+            trial.anonymousSubmissions?.forEach((anon: any) => {
+                const status = anon.status || "Pending";
+                allMatches.push({
+                    id: anon.id,
+                    trialId: trial.id,
+                    trialName: trial.name,
+                    patientAddress: "0x0000000000000000000000000000000000000000", // Zero address for anonymous
+                    patientId: `Anonymous-${anon.nullifier.slice(0, 8)}...`,
+                    status: status,
+                    timestamp: new Date(Number(anon.submittedAt) * 1000).toLocaleString(),
+                    rawTimestamp: Number(anon.submittedAt),
+                    matchScore: 100,
+                    applicationStatus: ["Pending", "Accepted", "Rejected"].includes(status) ? status : "None",
+                    applicationMessage: undefined,
+                    currentMilestone: 0,
+                    isAnonymous: true,
+                    nullifier: anon.nullifier
                 });
             });
         });

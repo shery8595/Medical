@@ -1,0 +1,29 @@
+# MedVault Eligibility Proof — Prover inputs
+#
+# Private inputs (never revealed):
+#   secret            — Semaphore V4 identity secret as decimal BigInt string
+#   eligibility_result — the eligibility decision (true/false)
+#
+# Public inputs (submitted on-chain to HonkVerifier.verify()):
+#   commitment   — Poseidon([secret])
+#   scope        — trial_id as Field
+#   nullifier    — Poseidon([scope, secret])
+#   result_hash  — Poseidon([eligible_as_field, scope, secret])
+#
+# These placeholder values are computed for secret=12345678901234567890, scope=1, eligible=true.
+# In production the frontend (src/lib/noir.ts) computes all values from the live identity.
+#
+# To generate real values:
+#   1. nargo compile
+#   2. populate with real values from identity.toString() + poseidon-lite
+#   3. nargo prove
+#   4. nargo verify
+
+secret = "12345678901234567890"
+eligibility_result = true
+
+# Public outputs (derive these via: poseidon-lite in TS, or nargo test to see computed values)
+commitment = "0"   # replace with: poseidon1([secret])
+scope = "1"        # replace with: actual trial_id
+nullifier = "0"    # replace with: poseidon2([scope, secret])
+result_hash = "0"  # replace with: poseidon3([1n, scope, secret])  (1n = eligible)
