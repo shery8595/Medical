@@ -968,6 +968,89 @@ export class AuditLog extends Entity {
   }
 }
 
+export class PatientConsentEpoch extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id != null, "Cannot save PatientConsentEpoch entity without an ID");
+    if (id) {
+      assert(
+        id.kind == ValueKind.STRING,
+        `Entities of type PatientConsentEpoch must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`,
+      );
+      store.set("PatientConsentEpoch", id.toString(), this);
+    }
+  }
+
+  static loadInBlock(id: string): PatientConsentEpoch | null {
+    return changetype<PatientConsentEpoch | null>(
+      store.get_in_block("PatientConsentEpoch", id),
+    );
+  }
+
+  static load(id: string): PatientConsentEpoch | null {
+    return changetype<PatientConsentEpoch | null>(
+      store.get("PatientConsentEpoch", id),
+    );
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get patient(): Bytes {
+    let value = this.get("patient");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set patient(value: Bytes) {
+    this.set("patient", Value.fromBytes(value));
+  }
+
+  get epoch(): BigInt {
+    let value = this.get("epoch");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set epoch(value: BigInt) {
+    this.set("epoch", Value.fromBigInt(value));
+  }
+
+  get lastUpdatedAt(): BigInt {
+    let value = this.get("lastUpdatedAt");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set lastUpdatedAt(value: BigInt) {
+    this.set("lastUpdatedAt", Value.fromBigInt(value));
+  }
+}
+
 export class Consent extends Entity {
   constructor(id: string) {
     super();
@@ -1044,6 +1127,32 @@ export class Consent extends Entity {
 
   set granted(value: boolean) {
     this.set("granted", Value.fromBoolean(value));
+  }
+
+  get validEpoch(): BigInt {
+    let value = this.get("validEpoch");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set validEpoch(value: BigInt) {
+    this.set("validEpoch", Value.fromBigInt(value));
+  }
+
+  get expiresAt(): BigInt {
+    let value = this.get("expiresAt");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set expiresAt(value: BigInt) {
+    this.set("expiresAt", Value.fromBigInt(value));
   }
 
   get lastUpdatedAt(): BigInt {

@@ -163,7 +163,15 @@ export function PatientVaultPage() {
                 className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl custom-scrollbar relative z-[110]"
               >
                 <PatientRecordForm
-                  onSuccess={() => setShowUploadForm(false)}
+                  onSuccess={async () => {
+                    setShowUploadForm(false);
+                    // Subgraph may lag the confirmed tx; poll until the Patient entity exists.
+                    for (let i = 0; i < 20; i++) {
+                      const fresh = await refetchPatient();
+                      if (fresh?.patient) break;
+                      await new Promise((r) => setTimeout(r, 3000));
+                    }
+                  }}
                   onCancel={() => setShowUploadForm(false)}
                 />
               </motion.div>
@@ -203,7 +211,11 @@ export function PatientVaultPage() {
           </div>
         ) : isRegistered && hasProfile ? (
           <motion.div {...fadeUp(0.2)}>
-            <VaultCard report={{
+            <VaultCard
+              signer={signer}
+              account={account}
+              isFHEReady={isFHEReady}
+              report={{
               id: profile.id,
               patientAddress: account || "",
               age: 0,

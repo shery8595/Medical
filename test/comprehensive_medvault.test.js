@@ -68,8 +68,8 @@ describe("MedVault Comprehensive Stress Test (90+ cases)", function () {
             const mockCode = await ethers.provider.getCode(await mockAave.getAddress());
             console.log("MockAave deployed");
 
-            const WETH_GATEWAY = "0x387d311e47e80b498169e6fb51d3193167d89F7D";
-            const AWETH = "0x5B071B590a59395FE4025a0CCc1Fcc931EaC2323";
+            const WETH_GATEWAY = "0x20040a64612555042335926d72B4E5F667a67fA1";
+            const AWETH = "0xf5f17EbE81E516Dc7cB38D61908EC252F150CE60";
 
             await ethers.provider.send("hardhat_setCode", [WETH_GATEWAY, mockCode]);
             await ethers.provider.send("hardhat_setCode", [AWETH, mockCode]);

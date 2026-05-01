@@ -46,6 +46,20 @@ contract ConsentManager {
      *      Emitting ConsentRevoked allows off-chain systems to track this state change.
      * @param _trialId The trial ID
      */
+    function grantConsent(uint256 _trialId, uint256 _durationSeconds) external {
+        _ensureEpoch(msg.sender);
+        uint256 ce = consentEpoch[msg.sender];
+        trialConsentEpoch[msg.sender][_trialId] = ce;
+
+        uint256 expiresAt = 0;
+        if (_durationSeconds > 0) {
+            expiresAt = block.timestamp + _durationSeconds;
+        }
+        trialConsentExpiresAt[msg.sender][_trialId] = expiresAt;
+
+        emit ConsentGranted(msg.sender, _trialId, ce, expiresAt);
+    }
+
     function revokeConsent(uint256 _trialId) external {
         // M-2: Emit event with old handle info for off-chain tracking before overwriting
         ebool oldConsent = encryptedConsent[msg.sender][_trialId];

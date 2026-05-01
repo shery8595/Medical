@@ -70,6 +70,7 @@ export interface ConsentLog {
   status?: string; // For mock data compatibility
   message?: string; // For mock data compatibility
   rawTimestamp?: number; // For sorting
+  expiresAt?: number; // Consent window deadline (unix seconds)
 }
 
 export interface Match {
@@ -84,6 +85,7 @@ export interface Match {
   applicationStatus?: "Pending" | "Accepted" | "Rejected" | "None";
   applicationMessage?: string;
   rawTimestamp?: number; // For sorting
+  expiresAt?: number; // Consent window deadline (unix seconds)
   currentMilestone?: number; // 0 = none, 1-4 for milestones
   isAnonymous?: boolean; // For anonymous applications
   nullifier?: string; // For anonymous applications
@@ -128,6 +130,8 @@ export interface SubgraphConsent {
     name: string;
   };
   granted: boolean;
+  validEpoch?: string;
+  expiresAt?: string;
   lastUpdatedAt: string;
   txHash: string;
 }
@@ -165,3 +169,6 @@ export interface SubgraphApplication {
   updatedAt: string;
   txHash: string;
 }
+
+
+

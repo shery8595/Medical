@@ -7,6 +7,8 @@ import { cn } from "../../lib/utils";
 interface ConsentTableProps {
   logs: ConsentLog[];
   searchQuery?: string;
+  onRevokeTrial?: (trialId: string) => void;
+  revokeBusyTrialId?: string | null;
 }
 
 function shortTrialId(id: string | undefined) {

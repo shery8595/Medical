@@ -241,7 +241,27 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
     } else if (trial.hasConsent && applyStatus === "idle") {
       setApplyStatus("computing");
     }
-  }, [trial.hasComputed, trial.hasConsent]);
+  }, [trial.hasComputed]);
+
+  // When subgraph refetch updates parent `trial`, stay in sync without a full reload
+  useEffect(() => {
+    if (trial.applicationStatus) {
+      setApplyStatus("applied");
+      return;
+    }
+    if (trial.hasComputed) {
+      setApplyStatus((prev) =>
+        prev === "consenting" || prev === "computing" || prev === "applying" ? prev : "success"
+      );
+    }
+  }, [trial.applicationStatus, trial.hasComputed]);
+
+  useEffect(() => {
+    if (isGlass) return;
+    if (applyStatus === "consenting" || applyStatus === "computing" || applyStatus === "applying") {
+      setExpanded(true);
+    }
+  }, [applyStatus, isGlass]);
 
   // Load score from memory store
   useEffect(() => {
@@ -1061,7 +1081,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                 )}
                 onClick={() => setExpanded(!expanded)}
               >
-                {expanded ? "Collapse" : "Protocol Details"}
+                {expanded ? "Collapse" : isGlass ? "Protocol Details" : "Eligibility details"}
                 {expanded ? (
                   <ChevronUp className="ml-2 h-3.5 w-3.5" />
                 ) : (
@@ -1071,7 +1091,172 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
             </div>
           </div>
 
-          {/* Expanded Content */}
+          {/* Patient: apply / consent / status always visible (no expand required) */}
+          {!isGlass && (
+            <div className="px-4 py-4 md:px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-3">Trial actions</p>
+              {!trial.hasConsent && applyStatus !== "applied" && !trial.applicationStatus && (
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 mb-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-2">Consent window</label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={consentDurationSeconds}
+                      onChange={(e) => setConsentDurationSeconds(Number(e.target.value))}
+                      className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200"
+                    >
+                      {CONSENT_DURATION_OPTIONS.map((opt) => (
+                        <option key={opt.seconds} value={opt.seconds}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] text-slate-500 font-medium">{formatDurationLabel(consentDurationSeconds)}</span>
+                  </div>
+                </div>
+              )}
+
+              <Button
+                className={cn(
+                  "w-full shadow-lg gap-2 font-bold h-11",
+                  applyStatus === "applied" || trial.applicationStatus
+                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
+                    : canApplyToSponsor
+                      ? "bg-accent hover:bg-accent/90 shadow-accent/20"
+                      : applyStatus === "error"
+                        ? "bg-rose-600 hover:bg-rose-700 shadow-rose-500/20"
+                        : "shadow-accent/20"
+                )}
+                onClick={handleMainButtonClick}
+                disabled={isMainButtonDisabled}
+              >
+                {getApplyButtonContent()}
+              </Button>
+
+              <AnimatePresence>
+                {trial.applicationStatus && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn(
+                      "mt-3 p-3 rounded-lg border text-xs font-medium",
+                      trial.applicationStatus === "Accepted"
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : trial.applicationStatus === "Rejected"
+                          ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                          : "bg-slate-500/10 border-slate-500/20 text-slate-400"
+                    )}
+                  >
+                    <p className="mb-1">Status: {trial.applicationStatus}</p>
+                    {trial.applicationMessage && (
+                      <p className="text-[10px] opacity-80 leading-relaxed italic">
+                        &ldquo;{trial.applicationMessage}&rdquo;
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+
+                {applyStatus === "success" && isEligibleDecrypted === false && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-3 text-xs text-center text-rose-500 font-medium"
+                  >
+                    You do not meet the eligibility criteria for this trial.
+                  </motion.p>
+                )}
+
+                {applyStatus === "applied" && !trial.applicationStatus && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-3 text-xs text-center text-emerald-500 font-medium"
+                  >
+                    Application submitted to sponsor — syncing status from the network…
+                  </motion.p>
+                )}
+
+                {poolFunded && trial.applicationStatus === "Accepted" && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={cn(
+                      "mt-4 p-4 rounded-[1.5rem] border space-y-3",
+                      trial.incentivePool?.distributed
+                        ? "bg-gradient-to-br from-emerald-500/10 to-blue-500/5 border-emerald-500/20"
+                        : "bg-gradient-to-br from-amber-500/10 to-transparent border-amber-500/20"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "p-1.5 rounded-lg shadow-lg",
+                          trial.incentivePool?.distributed
+                            ? "bg-emerald-500 text-white shadow-emerald-500/20"
+                            : "bg-amber-500 text-white shadow-amber-500/20"
+                        )}>
+                          <Coins className="h-3.5 w-3.5" />
+                        </div>
+                        <h5 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                          {trial.incentivePool?.distributed ? "Payout Secured" : "Incentive Enclave"}
+                        </h5>
+                      </div>
+                      {trial.incentivePool?.distributed ? (
+                        <Badge className="bg-emerald-500 text-white border-0 text-[9px] animate-pulse">Confirmed</Badge>
+                      ) : !isRegistered && (
+                        <Badge variant="outline" className="text-[9px] border-amber-500/30 text-amber-600 bg-amber-500/5">Action Required</Badge>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      {trial.incentivePool?.distributed
+                        ? "Rewards have been deposited into your private reward enclave. You can now reveal and withdraw them from your Medical Vault."
+                        : "This trial has a verified incentive pool. Register to secure your encrypted reward share upon trial completion."}
+                    </p>
+                    {trial.incentivePool?.distributed ? (
+                      <Link to="/patient/vault" className="block w-full">
+                        <Button className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest flex gap-2 shadow-xl shadow-emerald-500/20">
+                          Go to Medical Vault
+                          <ArrowUpRight className="h-3 w-3" />
+                        </Button>
+                      </Link>
+                    ) : !isRegistered ? (
+                      <Button
+                        className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest flex gap-2 shadow-xl shadow-amber-500/20"
+                        onClick={handleRegisterForRewards}
+                        disabled={isRegistering}
+                      >
+                        {isRegistering ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+                        {isRegistering ? "Registering..." : "Join Reward Pool"}
+                      </Button>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-[10px] font-bold">
+                        <CheckCircle className="h-3 w-3" /> Registered for Incentives
+                      </div>
+                    )}
+                    {incentiveStatus && (
+                      <p className={cn(
+                        "text-[9px] font-semibold text-center mt-2",
+                        incentiveStatus.includes("failed") ? "text-rose-500" : "text-blue-500"
+                      )}>
+                        {incentiveStatus}
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+
+                {applyError && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-3 text-xs text-center text-rose-400 font-medium"
+                  >
+                    {applyError}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Expanded Content — optional eligibility breakdown + disclosure copy */}
           <AnimatePresence>
             {expanded && (
               <motion.div
@@ -1135,7 +1320,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                         </div>
                       </div>
 
-                      {isGlass ? (
+                      {isGlass && (
                         <Link to={`/sponsor/trials/${trial.id}`}>
                           <Button className="mt-6 w-full shadow-lg shadow-accent/20">
                             Manage Recruitment

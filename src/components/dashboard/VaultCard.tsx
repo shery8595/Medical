@@ -28,6 +28,9 @@ import { forceConnectFHE, decryptPatientProfile, EncryptedPatientData, Decrypted
 
 interface VaultCardProps {
   report: MedicalReport;
+  signer?: Signer | null;
+  account?: string | null;
+  isFHEReady?: boolean;
 }
 
 const EncryptedField: React.FC<{ label: string; delay?: number }> = ({ label, delay = 0 }) => (
@@ -165,7 +168,6 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(20,184,166,0.06),transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 p-7">
-        {/* ── Header ── */}
         <div className="flex items-start justify-between mb-7">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -307,7 +309,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
               <span className="text-[11px] font-medium">{report.timestamp || "—"}</span>
             </div>
             <a
-              href={etherscanUrl}
+              href={arbiscanUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-slate-500 hover:text-teal-700 transition-colors group/link"

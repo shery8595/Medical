@@ -3,24 +3,22 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShieldCheck, Loader2, Wallet, ArrowRight, FileText, AlertTriangle } from "lucide-react";
 import { useWeb3 } from "../../lib/Web3Context";
-import { useSponsorVerification } from "../../hooks/useSponsorVerification";
 import { Button } from "../ui/Button";
 
 interface SponsorGuardProps {
     children: React.ReactNode;
 }
 
+/** Sponsor routes only require a connected wallet (on-chain registry allowlist not enforced in UI). */
 export function SponsorGuard({ children }: SponsorGuardProps) {
     const { account, connect, isConnecting, error: connectError } = useWeb3();
     const { isVerified, isAdmin, isLoading, error } = useSponsorVerification();
 
-    /* ─── No wallet connected ─────────────────────────────────────────────── */
     if (!account) {
         return (
             <FullScreenGate>
                 <GateIcon
                     icon={<Wallet className="h-8 w-8 text-blue-400" />}
-                    color="teal"
                 />
                 <h1 className="text-2xl font-extrabold text-white mb-2 tracking-tight">
                     Sign in to continue
@@ -111,35 +109,29 @@ export function SponsorGuard({ children }: SponsorGuardProps) {
     return <>{children}</>;
 }
 
-/* ─── Helper: full-screen centred container ───────────────────────────────── */
 function FullScreenGate({ children }: { children: React.ReactNode }) {
     return (
         <div
             className="min-h-screen flex flex-col items-center justify-center px-6"
             style={{ background: "linear-gradient(135deg, #050d18 0%, #0a1628 60%, #050d18 100%)" }}
         >
-            {/* Ambient glow */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full blur-[120px] opacity-8"
+                <div
+                    className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full blur-[120px] opacity-8"
                     style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.08) 0%, transparent 70%)" }}
                 />
             </div>
 
-            <div className="relative z-10 flex flex-col items-center gap-3">
-                {children}
-            </div>
+            <div className="relative z-10 flex flex-col items-center gap-3">{children}</div>
         </div>
     );
 }
 
-/* ─── Helper: icon tile ──────────────────────────────────────────────────── */
-function GateIcon({ icon, color }: { icon: React.ReactNode; color: "teal" | "rose" }) {
-    const glow = color === "teal" ? "bg-blue-500/15" : "bg-rose-500/15";
-    const border = color === "teal" ? "border-blue-500/30" : "border-rose-500/30";
+function GateIcon({ icon }: { icon: React.ReactNode }) {
     return (
         <div className="relative mb-6">
-            <div className={`absolute inset-0 rounded-full ${glow} blur-2xl animate-pulse`} />
-            <div className={`relative flex items-center justify-center h-20 w-20 rounded-2xl bg-slate-800/80 border ${border} backdrop-blur-sm`}>
+            <div className="absolute inset-0 rounded-full bg-blue-500/15 blur-2xl animate-pulse" />
+            <div className="relative flex items-center justify-center h-20 w-20 rounded-2xl bg-slate-800/80 border border-blue-500/30 backdrop-blur-sm">
                 {icon}
             </div>
         </div>

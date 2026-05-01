@@ -10,6 +10,28 @@ import {
   BigInt,
 } from "@graphprotocol/graph-ts";
 
+export class AllConsentRevoked extends ethereum.Event {
+  get params(): AllConsentRevoked__Params {
+    return new AllConsentRevoked__Params(this);
+  }
+}
+
+export class AllConsentRevoked__Params {
+  _event: AllConsentRevoked;
+
+  constructor(event: AllConsentRevoked) {
+    this._event = event;
+  }
+
+  get patient(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+
+  get newConsentEpoch(): BigInt {
+    return this._event.parameters[1].value.toBigInt();
+  }
+}
+
 export class ConsentGranted extends ethereum.Event {
   get params(): ConsentGranted__Params {
     return new ConsentGranted__Params(this);
@@ -29,6 +51,14 @@ export class ConsentGranted__Params {
 
   get trialId(): BigInt {
     return this._event.parameters[1].value.toBigInt();
+  }
+
+  get consentEpoch(): BigInt {
+    return this._event.parameters[2].value.toBigInt();
+  }
+
+  get expiresAt(): BigInt {
+    return this._event.parameters[3].value.toBigInt();
   }
 }
 
@@ -183,6 +213,70 @@ export class ConsentManager extends ethereum.SmartContract {
     }
     let value = result.value;
     return ethereum.CallResult.fromValue(value[0].toBoolean());
+  }
+
+  trialConsentEpoch(param0: Address, param1: BigInt): BigInt {
+    let result = super.call(
+      "trialConsentEpoch",
+      "trialConsentEpoch(address,uint256):(uint256)",
+      [
+        ethereum.Value.fromAddress(param0),
+        ethereum.Value.fromUnsignedBigInt(param1),
+      ],
+    );
+
+    return result[0].toBigInt();
+  }
+
+  try_trialConsentEpoch(
+    param0: Address,
+    param1: BigInt,
+  ): ethereum.CallResult<BigInt> {
+    let result = super.tryCall(
+      "trialConsentEpoch",
+      "trialConsentEpoch(address,uint256):(uint256)",
+      [
+        ethereum.Value.fromAddress(param0),
+        ethereum.Value.fromUnsignedBigInt(param1),
+      ],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBigInt());
+  }
+
+  trialConsentExpiresAt(param0: Address, param1: BigInt): BigInt {
+    let result = super.call(
+      "trialConsentExpiresAt",
+      "trialConsentExpiresAt(address,uint256):(uint256)",
+      [
+        ethereum.Value.fromAddress(param0),
+        ethereum.Value.fromUnsignedBigInt(param1),
+      ],
+    );
+
+    return result[0].toBigInt();
+  }
+
+  try_trialConsentExpiresAt(
+    param0: Address,
+    param1: BigInt,
+  ): ethereum.CallResult<BigInt> {
+    let result = super.tryCall(
+      "trialConsentExpiresAt",
+      "trialConsentExpiresAt(address,uint256):(uint256)",
+      [
+        ethereum.Value.fromAddress(param0),
+        ethereum.Value.fromUnsignedBigInt(param1),
+      ],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBigInt());
   }
 }
 

@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useSubgraph } from './useSubgraph';
-import { Trial, SubgraphTrial, SubgraphConsent, SubgraphEligibilityResult } from '../types';
+import { Trial } from '../types';
 import { useWeb3 } from '../lib/Web3Context';
 import { getEligibilityEngine, getMedVaultAutomation } from '../lib/contracts';
 import { getAnonymousNullifier, recoverAnonymousNullifierIfMissing } from '../lib/semaphore';
 
 const GET_TRIALS_WITH_USER_STATE = `
-  query GetTrialsWithUserState($account: Bytes!) {
+  query GetTrialsWithUserState($account: Bytes!, $accountId: ID!) {
+    patientConsentEpoch(id: $accountId) {
+      epoch
+    }
     trials(orderBy: createdAt, orderDirection: desc) {
       id
       endTime
@@ -24,9 +27,11 @@ const GET_TRIALS_WITH_USER_STATE = `
       minHb
       active
       createdAt
-      consents(where: { patient: $account, granted: true }) {
+      consents(where: { patient: $account }) {
         id
         granted
+        validEpoch
+        expiresAt
       }
       eligibilityResults(where: { patient: $account }) {
         id
@@ -78,9 +83,8 @@ const GET_TRIALS_BY_SPONSOR = `
 
 export function useTrials(account?: string, sponsorAddress?: string) {
   const query = sponsorAddress ? GET_TRIALS_BY_SPONSOR : GET_TRIALS_WITH_USER_STATE;
-  const variables = sponsorAddress
-    ? { sponsor: sponsorAddress.toLowerCase() }
-    : { account: account?.toLowerCase() || "0x0000000000000000000000000000000000000000" };
+  const al = account?.toLowerCase() || "0x0000000000000000000000000000000000000000";
+  const variables = sponsorAddress ? { sponsor: sponsorAddress.toLowerCase() } : { account: al, accountId: al };
 
   const { data, loading: subgraphLoading, error: subgraphError, refetch } = useSubgraph(query, variables);
   const { provider } = useWeb3();
@@ -95,6 +99,10 @@ export function useTrials(account?: string, sponsorAddress?: string) {
 
       setEnriching(true);
       const now = Math.floor(Date.now() / 1000);
+      const patientEpoch =
+        (data as any).patientConsentEpoch?.epoch != null
+          ? String((data as any).patientConsentEpoch.epoch)
+          : "1";
 
       try {
         const automationContract = getMedVaultAutomation(provider as any);
@@ -106,7 +114,7 @@ export function useTrials(account?: string, sponsorAddress?: string) {
             if (sponsorAddress) return true;
 
             const hasInteraction =
-              (t.consents && t.consents.length > 0) ||
+              hasEffectiveConsent ||
               (t.eligibilityResults && t.eligibilityResults.length > 0) ||
               (t.applications && t.applications.length > 0);
 

@@ -41,6 +41,10 @@ import {
     registerAnonymousParticipantByNullifier,
 } from "../lib/contracts/sponsorAdapters";
 
+const eligibilityEngineAddr =
+  (addresses as any).arbitrumSepolia?.EligibilityEngine
+  ?? (addresses as any).sepolia?.EligibilityEngine;
+
 /* ─── Status Configuration ─── */
 const statusConfig = {
     Pending: {

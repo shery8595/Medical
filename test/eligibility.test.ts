@@ -53,7 +53,7 @@ describe("Clinical Trial Eligibility Tests", function () {
         const trialId = 0;
 
         // 3. Patient grants consent
-        await consentManager.connect(patient).grantConsent(trialId);
+        await consentManager.connect(patient).grantConsent(trialId, 0);
 
         // 4. Engine computes eligibility
         await engine.connect(patient).checkEligibility(patient.address, trialId);
@@ -82,7 +82,7 @@ describe("Clinical Trial Eligibility Tests", function () {
         await trialManager.connect(sponsor).createTrial(18, 65, false, 120);
         const trialId = 0;
 
-        await consentManager.connect(patient).grantConsent(trialId);
+        await consentManager.connect(patient).grantConsent(trialId, 0);
         await engine.connect(patient).checkEligibility(patient.address, trialId);
 
         const encryptedResult = await engine.getEncryptedResult(patient.address, trialId);
@@ -108,7 +108,7 @@ describe("Clinical Trial Eligibility Tests", function () {
         await trialManager.connect(sponsor).createTrial(18, 65, false, 120);
         const trialId = 0;
 
-        await consentManager.connect(patient).grantConsent(trialId);
+        await consentManager.connect(patient).grantConsent(trialId, 0);
         await engine.connect(patient).checkEligibility(patient.address, trialId);
 
         const encryptedResult = await engine.getEncryptedResult(patient.address, trialId);
@@ -134,7 +134,7 @@ describe("Clinical Trial Eligibility Tests", function () {
         await trialManager.connect(sponsor).createTrial(18, 65, false, 120);
         const trialId = 0;
 
-        await consentManager.connect(patient).grantConsent(trialId);
+        await consentManager.connect(patient).grantConsent(trialId, 0);
         await engine.connect(patient).checkEligibility(patient.address, trialId);
 
         const encryptedResult = await engine.getEncryptedResult(patient.address, trialId);

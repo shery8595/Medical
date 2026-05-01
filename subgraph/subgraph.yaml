@@ -64,6 +64,7 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - Consent
+        - PatientConsentEpoch
       abis:
         - name: ConsentManager
           file: ./abis/ConsentManager.json
@@ -72,6 +73,8 @@ dataSources:
           handler: handleEncryptedConsentGranted
         - event: ConsentRevoked(indexed address,indexed uint256,bytes32)
           handler: handleConsentRevoked
+        - event: AllConsentRevoked(indexed address,uint256)
+          handler: handleAllConsentRevoked
       file: ./src/mappings/consent-manager.ts
 
   - kind: ethereum

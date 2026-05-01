@@ -19,6 +19,40 @@ export function ConsentLogPage() {
   const { consents, applications, loading, error, refetch } = useConsent(account as string | undefined);
   const [search, setSearch] = useState("");
 
+  const handleRevokeAllConsent = async () => {
+    if (!signer || !account) return;
+    setKillBusy(true);
+    setKillMsg(null);
+    try {
+      const cm = getConsentManager(signer);
+      const tx = await cm.revokeAllConsent();
+      await tx.wait();
+      setKillMsg("All active data-sharing permits were revoked on-chain.");
+      await refetch();
+    } catch (e: any) {
+      setKillMsg(e?.reason || e?.message || "Transaction failed.");
+    } finally {
+      setKillBusy(false);
+    }
+  };
+
+  const handleRevokeTrialConsent = async (trialId: string) => {
+    if (!signer || !account) return;
+    setRevokeBusyTrialId(trialId);
+    setKillMsg(null);
+    try {
+      const cm = getConsentManager(signer);
+      const tx = await cm.revokeConsent(BigInt(trialId));
+      await tx.wait();
+      setKillMsg(`Consent revoked for trial #${trialId}.`);
+      await refetch();
+    } catch (e: any) {
+      setKillMsg(e?.reason || e?.message || "Revoke failed.");
+    } finally {
+      setRevokeBusyTrialId(null);
+    }
+  };
+
   const formattedLogs = useMemo<ConsentLog[]>(() => {
     const trialMap = new Map<string, ConsentLog>();
 

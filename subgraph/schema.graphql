@@ -83,11 +83,21 @@ type AuditLog @entity(immutable: true) {
   txHash: Bytes!
 }
 
+# Current consent epoch for a patient (bumped by revokeAllConsent kill-switch).
+type PatientConsentEpoch @entity(immutable: false) {
+  id: ID!                              # patient address (hex)
+  patient: Bytes!
+  epoch: BigInt!
+  lastUpdatedAt: BigInt!
+}
+
 type Consent @entity(immutable: false) {
   id: ID!                              # patient-trialId (concatenated)
   patient: Bytes!
   trial: Trial!
   granted: Boolean!
+  validEpoch: BigInt!                  # consentEpoch at time of grant; must match PatientConsentEpoch.epoch
+  expiresAt: BigInt!                   # 0 = no time limit; else unix seconds deadline
   lastUpdatedAt: BigInt!
   txHash: Bytes!
 }
