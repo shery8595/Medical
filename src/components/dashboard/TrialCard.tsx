@@ -1320,7 +1320,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
                         </div>
                       </div>
 
-                      {isGlass && (
+                      {isGlass ? (
                         <Link to={`/sponsor/trials/${trial.id}`}>
                           <Button className="mt-6 w-full shadow-lg shadow-accent/20">
                             Manage Recruitment
