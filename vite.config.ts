@@ -49,6 +49,26 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'esnext',
+      sourcemap: false,
+      reportCompressedSize: false,
+      rollupOptions: {
+        maxParallelFileOps: 2,
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('@privy-io')) return 'vendor-privy';
+            if (id.includes('@walletconnect')) return 'vendor-walletconnect';
+            if (id.includes('@react-three') || id.includes('node_modules/three/')) return 'vendor-three';
+            if (id.includes('viem') || id.includes('/ox/')) return 'vendor-viem';
+            if (id.includes('@cofhe') || id.includes('fhevmjs') || id.includes('/tfhe/')) return 'vendor-fhe';
+            if (id.includes('@noir-lang')) return 'vendor-noir';
+            if (id.includes('@semaphore-protocol')) return 'vendor-semaphore';
+            if (id.includes('framer-motion')) return 'vendor-motion';
+            if (id.includes('recharts')) return 'vendor-recharts';
+            return 'vendor';
+          },
+        },
+      },
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
