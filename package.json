@@ -90,6 +90,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
+    "build:vercel": "cross-env NODE_OPTIONS=--max-old-space-size=3072 vite build",
     "preview": "vite preview",
     "clean": "rimraf ./fhevmTemp ./artifacts ./cache ./coverage ./types ./coverage.json ./dist && npm run typechain",
     "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",

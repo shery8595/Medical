@@ -52,7 +52,13 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       reportCompressedSize: false,
       rollupOptions: {
-        maxParallelFileOps: 2,
+        maxParallelFileOps: 1,
+        onwarn(warning, defaultHandler) {
+          const msg = warning.message ?? '';
+          if (msg.includes('annotation that Rollup cannot interpret')) return;
+          if (msg.includes('#__PURE__') && msg.includes('cannot interpret')) return;
+          defaultHandler(warning);
+        },
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
@@ -63,8 +69,19 @@ export default defineConfig(({ mode }) => {
             if (id.includes('@cofhe') || id.includes('fhevmjs') || id.includes('/tfhe/')) return 'vendor-fhe';
             if (id.includes('@noir-lang')) return 'vendor-noir';
             if (id.includes('@semaphore-protocol')) return 'vendor-semaphore';
+            if (id.includes('framer-motion-3d')) return 'vendor-motion-3d';
             if (id.includes('framer-motion')) return 'vendor-motion';
+            if (id.includes('node_modules/motion/')) return 'vendor-motion-primitive';
             if (id.includes('recharts')) return 'vendor-recharts';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('@reclaimprotocol')) return 'vendor-reclaim';
+            if (id.includes('react-router')) return 'vendor-router';
+            if (id.includes('node_modules/react-dom/')) return 'vendor-react';
+            if (id.includes('node_modules/react/')) return 'vendor-react';
+            if (id.includes('node_modules/scheduler/')) return 'vendor-react';
+            if (id.includes('react-is')) return 'vendor-react';
+            if (id.includes('encrypted-types')) return 'vendor-encrypted-types';
+            if (id.includes('@chainlink')) return 'vendor-chainlink';
             return 'vendor';
           },
         },
