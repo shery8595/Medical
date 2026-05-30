@@ -13,6 +13,28 @@ artifacts/
 cache/
 typechain-types/
 fhevmTemp/
+*.dbg.json
+
+# IDE / agent tooling (not part of the product)
+.agents/
+.windsurf/
+.zencoder/
+.cursor/
+skills-lock.json
+
+# Legacy reference copies
+New Frontend Reference/
+landing page/
+
+# Subgraph local noise
+subgraph/build_err.txt
+
+# Noir / bb intermediate artifacts (keep *.json + HonkVerifier.sol in repo if committed)
+circuits/**/target/proof
+circuits/**/target/public_inputs
+circuits/**/target/*.gz
+circuits/**/target/vk.bin
+circuits/**/target/vk/
 
 # Logs and Backups
 deploy_output.txt

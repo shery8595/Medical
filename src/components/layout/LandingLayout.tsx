@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion, useScroll } from "framer-motion";
 import brandLogoUrl from "../../../logo/logo.png";
-import walletIconUrl from "../../../landing page/icon-wallet.svg";
+const walletIconUrl = "/images/icon-wallet.svg";
 
 /** Fixed top-edge scroll progress (MedVault teal → violet). */
 function LandingScrollProgress() {

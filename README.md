@@ -558,7 +558,6 @@ npm run subgraph:deploy:near-head -- <version>
 | Subgraph sync / versions | [docs/SUBGRAPH_SYNC.md](docs/SUBGRAPH_SYNC.md) |
 | New contracts guide | [docs/NEW_CONTRACTS_GUIDE.md](docs/NEW_CONTRACTS_GUIDE.md) |
 | Phased payouts & audit notes | [docs/UPGRADE_V1.1_PHASED_PAYOUTS_AND_AUDIT.md](docs/UPGRADE_V1.1_PHASED_PAYOUTS_AND_AUDIT.md) |
-| Security audit report | [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) |
 
 ---
 
