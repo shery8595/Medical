@@ -45,30 +45,18 @@
         }
         window.Buffer = window.Buffer || { isBuffer: () => false };
 
-        // 3. Error Trapping
+        // 3. Error logging (no full-screen overlay — avoids looking like a total app failure)
         window.addEventListener('error', (event) => {
-            // IGNORE HARMLESS WALLET EXTENSION ERRORS
-            // Some extensions (like Rabby, Phantom, or old MetaMasks) fight over window.ethereum
-            // and throw this error, which Vite catches and crashes the UI. We can safely ignore it.
             if (event.message && event.message.includes('redefine property: ethereum')) {
                 console.warn('[MEDVAULT] Ignored wallet extension inject error:', event.message);
                 return;
             }
-
-            const errorOverlay = document.createElement('div');
-            errorOverlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(3,7,18,0.95);color:#f87171;padding:40px;z-index:99999;font-family:monospace;overflow:auto;line-height:1.6;border:2px solid #ef4444;";
-            errorOverlay.innerHTML = `
-                <h1 style="color:#ef4444;margin-bottom:20px;font-size:24px;">🛑 MedVault Runtime Crash</h1>
-                <div style="background:#111827;padding:20px;border-radius:12px;border:1px solid #374151;">
-                    <p style="color:#fff;font-weight:bold;margin-top:0;">Error: ${event.message}</p>
-                    <p style="color:#9ca3af;font-size:12px;">Location: ${event.filename}:${event.lineno}:${event.colno}</p>
-                    <hr style="border:0;border-top:1px solid #374151;margin:20px 0;">
-                    <pre style="white-space:pre-wrap;color:#fda4af;font-size:13px;">${event.error ? event.error.stack : 'No stack trace available'}</pre>
-                </div>
-                <p style="margin-top:30px;color:#9ca3af;font-size:14px;">Please take a screenshot and report this to the development team.</p>
-                <button onclick="location.reload()" style="margin-top:20px;background:#ef4444;color:white;border:none;padding:12px 24px;border-radius:8px;font-weight:bold;cursor:pointer;">Hard Refresh</button>
-            `;
-            document.body.appendChild(errorOverlay);
+            console.error('[MEDVAULT] Uncaught error:', event.message, event.filename + ':' + event.lineno, event.error || '');
+        });
+        window.addEventListener('unhandledrejection', (event) => {
+            const reason = event.reason;
+            const msg = reason instanceof Error ? reason.message : String(reason);
+            console.error('[MEDVAULT] Unhandled promise rejection:', msg, reason);
         });
     </script>
 </head>

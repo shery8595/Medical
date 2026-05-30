@@ -52,6 +52,7 @@ interface IEligibilityEngine {
         bool _decryptedEligible,
         bytes calldata _decryptSig
     ) external returns (ebool);
+    function cancelStagedAnonymousEligibility(uint256 _nullifier, uint256 _trialId) external;
     function updateAnonymousApplicationStatus(
         uint256 _trialId,
         uint256 _nullifier,
@@ -74,6 +75,7 @@ contract EligibilityEngine {
     ConsentManager public consentManager;
     DataAccessLog public dataAccessLog;
     EncryptedConsentGate public consentGate; // FHENIX: Optional consent gate for FHE composition
+    address public scoreLeaderboard; // EncryptedScoreLeaderboard — FHE.allow on persisted scores
     address public automationContract;
     address public owner;
     address public pendingOwner; // FINDING 11: Two-step ownership transfer
@@ -105,16 +107,15 @@ contract EligibilityEngine {
     mapping(uint256 => mapping(address => Application)) internal applications;
     mapping(uint256 => address[]) internal trialAppliedPatients;
 
-    // Anonymous: nullifier-keyed results (nullifier = Poseidon([scope, secret]) encodes trialId)
-    // MED-5: Internal to prevent leakage of ciphertext handles via auto-generated getters
-    mapping(uint256 => ebool) internal anonymousResults;
-    mapping(uint256 => euint8) internal anonymousScores;
+    // Anonymous: nullifier × trialId keyed results (scope must match trialId per Semaphore proof)
+    mapping(uint256 => mapping(uint256 => ebool)) internal anonymousResults;
+    mapping(uint256 => mapping(uint256 => euint8)) internal anonymousScores;
 
     // Anonymous application tracking by nullifier
     mapping(uint256 => mapping(uint256 => ApplicationStatus)) public anonymousApplications;
 
     // Tracks which address has decrypt rights per nullifier
-    mapping(uint256 => address) private decryptPermitHolder;
+    mapping(uint256 => address) public decryptPermitHolder;
 
     /// @notice Staged FHE eligibility awaiting verified decrypt in finalize (nullifier × trialId).
     struct PendingAnonymous {
@@ -125,6 +126,10 @@ contract EligibilityEngine {
     mapping(uint256 => mapping(uint256 => PendingAnonymous)) internal pendingAnonymousEligibility;
 
     event AnonymousEligibilityStaged(uint256 indexed nullifier, uint256 indexed trialId, bytes32 finalCt);
+    event AnonymousEligibilityStageCancelled(uint256 indexed nullifier, uint256 indexed trialId);
+
+    /// @notice Indexer hook: encrypted euint8 propensity score is persisted for anonymous flow (no score plaintext).
+    event AnonymousEncryptedPropensityCommitted(uint256 indexed nullifier, uint256 indexed trialId);
 
     event EligibilityComputed(address indexed patient, uint256 indexed trialId);
     event EligibilityScoreComputed(address indexed patient, uint256 indexed trialId);
@@ -201,6 +206,14 @@ contract EligibilityEngine {
     }
 
     /**
+     * @notice Set EncryptedScoreLeaderboard for FHE score handle access in blind ranking
+     */
+    function setScoreLeaderboard(address _leaderboard) external onlyOwner {
+        require(_leaderboard != address(0), "Zero address");
+        scoreLeaderboard = _leaderboard;
+    }
+
+    /**
      * @notice Set the HonkVerifier contract used to verify Noir eligibility proofs.
      * @dev Deploy HonkVerifier.sol first (scripts/deploy-verifier.ts), then call this.
      *      Regenerate HonkVerifier.sol with `npm run build:circuit` after circuit changes.
@@ -225,7 +238,7 @@ contract EligibilityEngine {
      *      the applicant self-certified their eligibility without any FHE decryption required.
      *
      * @param _proof       Raw UltraHonk proof bytes (456 * 32 bytes from bb.js)
-     * @param _publicInputs Public inputs as bytes32[] in order: [scope, nullifier, result_hash]
+     * @param _publicInputs Public inputs as bytes32[] in order: [scope, nullifier, result_hash, eligible]
      * @param _trialId     The trial ID (must match scope in proof public inputs)
      * @param _nullifier   The Semaphore nullifier (must match nullifier in proof public inputs)
      * @param _eligible    The claimed eligibility result (true = eligible)
@@ -238,19 +251,23 @@ contract EligibilityEngine {
         bool _eligible
     ) external {
         require(address(eligibilityVerifier) != address(0), "Verifier not set");
-        require(_publicInputs.length == 3, "Expected 3 public inputs: scope, nullifier, result_hash");
+        require(_publicInputs.length == 4, "Expected 4 public inputs: scope, nullifier, result_hash, eligible");
         require(!noirVerifiedResults[_nullifier][_trialId], "Already certified");
 
-        // Public input layout (matches main.nr parameter order after secret/eligibility_result):
+        // Public input layout (matches main.nr pub parameter order):
         //   [0] scope       = trial_id as Field
         //   [1] nullifier   = Poseidon([scope, secret])
         //   [2] result_hash = Poseidon([eligible, scope, secret])
+        //   [3] eligible    = 0 or 1 Field, bound to result_hash inside the Noir proof
 
         // Verify scope matches the claimed trial
         require(uint256(_publicInputs[0]) == _trialId, "Scope mismatch: trial_id");
 
         // Verify nullifier matches the on-chain Semaphore nullifier
         require(uint256(_publicInputs[1]) == _nullifier, "Nullifier mismatch");
+
+        // Verify claimed eligibility matches the proof's public eligible bit
+        require(uint256(_publicInputs[3]) == (_eligible ? 1 : 0), "Eligible mismatch");
 
         // Verify this nullifier has an existing FHE application (prevents spoofing fresh entries)
         require(
@@ -289,10 +306,10 @@ contract EligibilityEngine {
         IAnonymousPatientRegistry.EncryptedPatient memory patient,
         TrialManager.Trial memory trial
     ) private returns (ebool finalResult, euint8 score) {
-        // 1. Age check
+        // 1. Age check (inclusive min/max bounds)
         ebool ageOk = FHE.and(
-            FHE.gt(patient.age, FHE.asEuint8(trial.minAge)),
-            FHE.lt(patient.age, FHE.asEuint8(trial.maxAge))
+            FHE.gte(patient.age, FHE.asEuint8(trial.minAge)),
+            FHE.lte(patient.age, FHE.asEuint8(trial.maxAge))
         );
 
         // 2. Diabetes logic
@@ -491,13 +508,18 @@ contract EligibilityEngine {
 
         FHE.allowThis(finalResult);
         FHE.allowThis(score);
-        anonymousResults[_nullifier] = finalResult;
-        anonymousScores[_nullifier] = score;
+        anonymousResults[_nullifier][_trialId] = finalResult;
+        anonymousScores[_nullifier][_trialId] = score;
         FHE.allow(finalResult, _permitRecipient);
         FHE.allow(score, _permitRecipient);
+        if (scoreLeaderboard != address(0)) {
+            FHE.allow(score, scoreLeaderboard);
+        }
         decryptPermitHolder[_nullifier] = _permitRecipient;
 
         anonymousApplications[_nullifier][_trialId] = ApplicationStatus.Pending;
+
+        emit AnonymousEncryptedPropensityCommitted(_nullifier, _trialId);
 
         if (address(dataAccessLog) != address(0)) {
             dataAccessLog.logAction(
@@ -508,6 +530,17 @@ contract EligibilityEngine {
         }
 
         emit AnonymousApplicationStatusUpdated(_nullifier, _trialId, ApplicationStatus.Pending);
+    }
+
+    /**
+     * @notice Clear staged FHE eligibility when finalize is abandoned (e.g. ineligible decrypt).
+     * @dev Only callable by authorized registry after Semaphore proof verification.
+     */
+    function cancelStagedAnonymousEligibility(uint256 _nullifier, uint256 _trialId) external {
+        require(msg.sender == authorizedRegistry, "Only authorized registry");
+        require(pendingAnonymousEligibility[_nullifier][_trialId].finalCt != bytes32(0), "Nothing staged");
+        delete pendingAnonymousEligibility[_nullifier][_trialId];
+        emit AnonymousEligibilityStageCancelled(_nullifier, _trialId);
     }
 
     // FINDING 2: Decrypt permits are granted during finalize (and score/final allows refreshed there).
@@ -572,14 +605,18 @@ contract EligibilityEngine {
         FHE.allow(gatedResult, _permitRecipient);
         FHE.allow(consented, _permitRecipient);
         FHE.allow(score, _permitRecipient);
+        if (scoreLeaderboard != address(0)) {
+            FHE.allow(score, scoreLeaderboard);
+        }
 
-        // Store the consent-gated result indexed by nullifier (no commitment leak).
-        // Consumers must never read the raw eligibility result as an application outcome.
-        anonymousResults[_nullifier] = gatedResult;
-        anonymousScores[_nullifier] = score;
+        // Store the consent-gated result indexed by nullifier × trialId.
+        anonymousResults[_nullifier][_trialId] = gatedResult;
+        anonymousScores[_nullifier][_trialId] = score;
         anonymousApplications[_nullifier][_trialId] = ApplicationStatus.Pending;
 
         decryptPermitHolder[_nullifier] = _permitRecipient;
+
+        emit AnonymousEncryptedPropensityCommitted(_nullifier, _trialId);
 
         // Step 4: If consentGate is set, forward for additional storage/processing
         if (address(consentGate) != address(0)) {
@@ -617,19 +654,21 @@ contract EligibilityEngine {
     /**
      * @notice Get encrypted eligibility result for anonymous application
      * @param _nullifier The per-trial nullifier = Poseidon([trialId, secret])
+     * @param _trialId The trial ID (must match Semaphore scope)
      * @return The encrypted eligibility result
      */
-    function getAnonymousResult(uint256 _nullifier) external view returns (ebool) {
-        return anonymousResults[_nullifier];
+    function getAnonymousResult(uint256 _nullifier, uint256 _trialId) external view returns (ebool) {
+        return anonymousResults[_nullifier][_trialId];
     }
 
     /**
      * @notice Get encrypted eligibility score for anonymous application
      * @param _nullifier The per-trial nullifier = Poseidon([trialId, secret])
+     * @param _trialId The trial ID (must match Semaphore scope)
      * @return The encrypted eligibility score
      */
-    function getAnonymousScore(uint256 _nullifier) external view returns (euint8) {
-        return anonymousScores[_nullifier];
+    function getAnonymousScore(uint256 _nullifier, uint256 _trialId) external view returns (euint8) {
+        return anonymousScores[_nullifier][_trialId];
     }
 
     /**

@@ -22,6 +22,7 @@ import {
     Gift,
 } from "lucide-react";
 import { ClaimModal } from "../components/ClaimModal";
+import { PatientConnectPrompt } from "../components/dashboard/PatientConnectPrompt";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrials } from "../hooks/useTrials";
 import { useWeb3 } from "../lib/Web3Context";
@@ -37,13 +38,8 @@ import { resolveAnonymousNullifier, getStoredIdentity, getEphemeralSigner } from
 import {
     getEncryptedScoreHandle,
     getMilestonesAndProgress,
-    getPoolFundingAndRegistration,
     registerAnonymousParticipantByNullifier,
 } from "../lib/contracts/sponsorAdapters";
-
-const eligibilityEngineAddr =
-  (addresses as any).arbitrumSepolia?.EligibilityEngine
-  ?? (addresses as any).sepolia?.EligibilityEngine;
 
 /* ─── Status Configuration ─── */
 const statusConfig = {
@@ -106,6 +102,13 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
     const StatusIcon = config.icon;
 
     const hasEnded = trial.endTime && parseInt(trial.endTime) <= Math.floor(Date.now() / 1000);
+    const payoutShareWei = trial.incentivePool?.shareWei ? BigInt(trial.incentivePool.shareWei) : 0n;
+    const canCheckPayout = poolFunded && status === "Accepted" && isRegistered;
+
+    useEffect(() => {
+        setPoolFunded(Boolean(trial.rewardPoolFunded || BigInt(trial.incentivePool?.totalFundedWei || "0") > 0n));
+        setIsRegistered((prev) => prev || Boolean(trial.rewardParticipantRegistered));
+    }, [trial.rewardPoolFunded, trial.rewardParticipantRegistered, trial.incentivePool?.totalFundedWei]);
 
     // Load score from store
     useEffect(() => {
@@ -115,21 +118,6 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
             setDecryptedScore(score);
         }
     }, [account, trial.id, getRevealedScore, engineAddress]);
-
-    // Check incentive pool
-    useEffect(() => {
-        const checkPool = async () => {
-            if (!signer || !trial.id) return;
-            try {
-                const { funded, registered } = await getPoolFundingAndRegistration(signer, trial.id, account || undefined);
-                setPoolFunded(funded);
-                setIsRegistered(registered);
-            } catch (err) {
-                console.error("Error checking pool:", err);
-            }
-        };
-        checkPool();
-    }, [signer, trial.id, account]);
 
     const handleRevealScore = async () => {
         if (!signer || !account) return;
@@ -416,19 +404,14 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                             </Button>
                         )}
 
-                        {poolFunded && status === "Accepted" && isRegistered && !trial.incentivePool?.distributed && (
-                            <div className="flex items-center justify-center gap-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-[10px] font-bold">
-                                <CheckCircle className="h-3 w-3" /> Registered for Incentives
-                            </div>
-                        )}
-
-                        {poolFunded && trial.incentivePool?.distributed && (
+                        {canCheckPayout && (
                             <Button
                                 size="sm"
                                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 shadow-lg shadow-emerald-500/20"
                                 onClick={() => setIsClaimModalOpen(true)}
                             >
-                                <Gift className="h-3 w-3" /> Claim Payout
+                                <Gift className="h-3 w-3" />
+                                {payoutShareWei > 0n ? "Move / Stake Funds" : "Check / Move Funds"}
                             </Button>
                         )}
 
@@ -551,6 +534,8 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                 isOpen={isClaimModalOpen}
                 onClose={() => setIsClaimModalOpen(false)}
                 amountEth={trial.incentivePool?.shareWei ? (Number(trial.incentivePool.shareWei) / 1e18).toString() : "0"}
+                trialId={trial.id}
+                nullifier={trial.nullifier}
             />
         </motion.div>
     );
@@ -560,8 +545,24 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
 export function PatientAppliedTrialsPage() {
     const { account } = useWeb3();
     const { trials, loading } = useTrials(account || undefined);
+    const isConnected = Boolean(account);
 
-    const appliedTrials = trials.filter(t => t.applicationStatus !== null);
+    if (!isConnected) {
+        return (
+            <div className="mx-auto max-w-6xl space-y-8 pb-8">
+                <SectionTopBar title="My Applications" />
+                <p className="-mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
+                    Track every trial you&apos;ve applied to — status updates, sponsor messages, and reward registration in one place.
+                </p>
+                <PatientConnectPrompt
+                    title="Connect to view your applications"
+                    description="Application status, sponsor messages, and rewards are tied to your connected wallet and local anonymous session."
+                />
+            </div>
+        );
+    }
+
+    const appliedTrials = trials.filter(t => t.applicationStatus != null);
     const pending = appliedTrials.filter(t => t.applicationStatus === "Pending").length;
     const accepted = appliedTrials.filter(t => t.applicationStatus === "Accepted").length;
     const rejected = appliedTrials.filter(t => t.applicationStatus === "Rejected").length;
@@ -601,7 +602,7 @@ export function PatientAppliedTrialsPage() {
                 Track every trial you&apos;ve applied to — status updates, sponsor messages, and reward registration in one place.
             </p>
 
-            {loading ? (
+            {loading && trials.length === 0 ? (
                 <div className="py-24 flex flex-col items-center justify-center space-y-4">
                     <div className="relative">
                         <div className="h-16 w-16 rounded-full border-t-2 border-r-2 border-teal-500 animate-spin" />

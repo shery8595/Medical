@@ -6,9 +6,9 @@
  * places for Hardhat (HonkVerifier.sol) and the frontend
  * (eligibility_proof.json consumed by src/lib/noir.ts).
  *
- * Prerequisites:
- *   - nargo 0.36.0  ->  noirup --version 0.36.0
- *   - bb   0.58.0   ->  bbup -v 0.58.0   (installed automatically below)
+ * Prerequisites (Noir v1 + Keccak bb — matches package.json):
+ *   - nargo 1.0.0-beta.21  ->  noirup --version 1.0.0-beta.21
+ *   - bb    5.0.0-nightly.20260324  ->  bbup -v 5.0.0-nightly.20260324
  *
  * Usage (also available as npm run build:circuit):
  *   node scripts/compile-circuit.js
@@ -18,10 +18,9 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-// bb version that matches @aztec/bb.js@0.58.0 (used by @noir-lang/backend_barretenberg@0.36.0)
-// UltraHonk commands: write_vk_ultra_honk + contract_ultra_honk
-// (matches UltraHonkBackend used in src/lib/noir.ts)
-const BB_VERSION = "0.58.0";
+// Pinned to match @noir-lang/noir v1.0.0-beta.21 install_bb.sh and @aztec/bb.js in package.json
+const NOIR_VERSION = "1.0.0-beta.21";
+const BB_VERSION = "5.0.0-nightly.20260324";
 const BB_INSTALL_SCRIPT =
     "curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/cpp/installation/install | bash";
 
@@ -34,10 +33,38 @@ const HONK_VERIFIER_SRC = path.join(TARGET_DIR, "HonkVerifier.sol");
 const HONK_VERIFIER_DST = path.join(__dirname, "../contracts/HonkVerifier.sol");
 const FRONTEND_CIRCUITS_DIR = path.join(__dirname, "../src/lib/circuits");
 const FRONTEND_JSON_DST = path.join(FRONTEND_CIRCUITS_DIR, "eligibility_proof.json");
+const VK_FINGERPRINT_DST = path.join(FRONTEND_CIRCUITS_DIR, "vk_fingerprint.json");
 
-function run(cmd, cwd) {
+function run(cmd, cwd, opts = {}) {
     console.log(`\n> ${cmd}`);
-    execSync(cmd, { cwd, stdio: "inherit", shell: true });
+    execSync(cmd, { cwd, stdio: "inherit", shell: opts.shell !== false });
+}
+
+/** WSL inherits a Windows PATH with parentheses — use a minimal env for bash -lc. */
+const WSL_ENV_PREFIX =
+    "env -i HOME=$HOME USER=$USER PATH=$HOME/.nargo/bin:$HOME/.bb:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+function toWslPath(winPath) {
+    const resolved = path.resolve(winPath);
+    const m = /^([A-Za-z]):[\\/](.*)$/.exec(resolved);
+    if (!m) return resolved.replace(/\\/g, "/");
+    return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, "/")}`;
+}
+
+function runInWsl(shellCmd, cwd) {
+    const wslCwd = toWslPath(cwd);
+    const escaped = shellCmd.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const wslCmd =
+        `wsl.exe bash -lc "${WSL_ENV_PREFIX} cd \\"${wslCwd}\\" && ${escaped}"`;
+    run(wslCmd, cwd, { shell: false });
+}
+
+function runTool(cmd, cwd) {
+    if (process.platform === "win32") {
+        runInWsl(cmd, cwd);
+    } else {
+        run(cmd, cwd);
+    }
 }
 
 function tryExec(cmd) {
@@ -116,45 +143,70 @@ function ensureBb() {
 }
 
 async function main() {
-    // ── Step 1: Check nargo is installed ─────────────────────────────────────
-    const nargoVer = tryExec("nargo --version");
-    if (!nargoVer) {
-        console.error("\n✗ nargo not found. Install via noirup:");
-        console.error("    curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash");
-        console.error("    noirup --version 0.36.0");
-        process.exit(1);
+    if (process.platform === "win32") {
+        console.log("\n── Noir 1.x circuit build (WSL + bb.js verifier) ───────────────");
+        const wslScript = toWslPath(path.join(__dirname, "compile-circuit-wsl.sh"));
+        run(`wsl.exe sed -i "s/\\r$//" ${wslScript}`, __dirname, { shell: false });
+        run(`wsl.exe bash ${wslScript}`, __dirname, { shell: false });
+        console.log("\n── Generating HonkVerifier.sol (bb.js evm-no-zk) ───────────────");
+        run("npm run generate:honk-verifier", path.join(__dirname, ".."), { shell: true });
+        printDone();
+        return;
     }
-    console.log(`✓ nargo found: ${nargoVer}`);
+
+    // ── Step 1: Ensure nargo (Noir 1.x) ──────────────────────────────────────
+    console.log("\n── Noir toolchain ──────────────────────────────────────────────");
+    {
+        const nargoVer = tryExec("nargo --version");
+        if (!nargoVer) {
+            console.error("\n✗ nargo not found. Install: noirup --version " + NOIR_VERSION);
+            process.exit(1);
+        }
+        console.log(`✓ nargo found: ${nargoVer}`);
+    }
 
     // ── Step 2: Compile the circuit ──────────────────────────────────────────
     console.log("\n── Compiling Noir circuit ──────────────────────────────────────");
-    run("nargo compile", CIRCUIT_DIR);
+    runTool("nargo compile", CIRCUIT_DIR);
     console.log("✓ Circuit compiled -> target/eligibility_proof.json");
 
     // ── Step 3: Run tests ────────────────────────────────────────────────────
     console.log("\n── Running Noir tests ──────────────────────────────────────────");
-    run("nargo test", CIRCUIT_DIR);
+    runTool("nargo test", CIRCUIT_DIR);
     console.log("✓ All Noir tests passed");
 
     // ── Step 4: Ensure bb CLI is present ─────────────────────────────────────
     console.log("\n── Checking bb (Barretenberg) CLI ──────────────────────────────");
-    const bbCmd = ensureBb();
+    let bbCmd;
+    if (process.platform === "win32") {
+        runInWsl(`command -v bb >/dev/null || (curl -sL https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/cpp/installation/install | bash)`, CIRCUIT_DIR);
+        runInWsl(`bbup -v ${BB_VERSION}`, CIRCUIT_DIR);
+        bbCmd = "bb";
+    } else {
+        bbCmd = ensureBb();
+    }
 
-    // ── Step 5: Write verification key ───────────────────────────────────────
-    console.log("\n── Writing verification key ────────────────────────────────────");
-    // UltraHonk variant: matches UltraHonkBackend used in src/lib/noir.ts
-    if (fs.existsSync(VK_FILE)) fs.unlinkSync(VK_FILE); // remove stale file
-    run(`${bbCmd} write_vk_ultra_honk -b "${COMPILED_JSON}" -o "${VK_FILE}"`, CIRCUIT_DIR);
+    // ── Step 5: Write Keccak verification key (EVM / Solidity transcript) ─────
+    console.log("\n── Writing Keccak UltraHonk verification key ───────────────────");
+    if (fs.existsSync(VK_FILE)) fs.unlinkSync(VK_FILE);
+    const vkCmd =
+        `${bbCmd} write_vk_ultra_keccak_honk -b target/eligibility_proof.json -o target/vk_honk.bin`;
+    const runBb = (c) => runTool(c, CIRCUIT_DIR);
+    try {
+        runBb(vkCmd);
+    } catch {
+        console.log("  write_vk_ultra_keccak_honk unavailable; falling back to --oracle_hash keccak");
+        runBb(`${bbCmd} write_vk_ultra_honk -b target/eligibility_proof.json -o target/vk_honk.bin --oracle_hash keccak`);
+    }
     if (!fs.existsSync(VK_FILE)) {
         console.error(`\n✗ VK file not found at ${VK_FILE}`);
         process.exit(1);
     }
-    console.log("✓ UltraHonk verification key written -> target/vk_honk.bin");
+    console.log("✓ Keccak verification key written -> target/vk_honk.bin");
 
     // ── Step 6: Generate HonkVerifier.sol ────────────────────────────────────
     console.log("\n── Generating HonkVerifier.sol ─────────────────────────────────");
-    // UltraHonk verifier (-k = VK file, -o = output Solidity file)
-    run(`${bbCmd} contract_ultra_honk -k "${VK_FILE}" -o "${HONK_VERIFIER_SRC}"`, CIRCUIT_DIR);
+    runBb(`${bbCmd} contract_ultra_honk -k target/vk_honk.bin -o target/HonkVerifier.sol`);
     if (!fs.existsSync(HONK_VERIFIER_SRC)) {
         console.error(`\n✗ HonkVerifier.sol not found at ${HONK_VERIFIER_SRC}`);
         process.exit(1);
@@ -174,7 +226,28 @@ async function main() {
     fs.copyFileSync(COMPILED_JSON, FRONTEND_JSON_DST);
     console.log(`✓ Copied to src/lib/circuits/eligibility_proof.json`);
 
-    // ── Done ──────────────────────────────────────────────────────────────────
+    // ── Step 9: VK fingerprint for frontend preflight ─────────────────────────
+    const crypto = require("crypto");
+    const vkHash = crypto.createHash("sha256").update(fs.readFileSync(VK_FILE)).digest("hex");
+    const fingerprint = {
+        sha256: vkHash,
+        circuitSize: 1024,
+        publicInputs: 4,
+        verifierTarget: "evm-no-zk",
+        noirVersion: NOIR_VERSION,
+        bbVersion: BB_VERSION,
+        generatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(VK_FINGERPRINT_DST, JSON.stringify(fingerprint, null, 2));
+    console.log(`✓ VK fingerprint -> src/lib/circuits/vk_fingerprint.json (${vkHash.slice(0, 12)}…)`);
+
+    console.log("\n── Generating HonkVerifier.sol (bb.js evm-no-zk) ───────────────");
+    run("npm run generate:honk-verifier", path.join(__dirname, ".."));
+
+    printDone();
+}
+
+function printDone() {
     console.log("\n================================================================");
     console.log("  CIRCUIT BUILD COMPLETE");
     console.log("================================================================");

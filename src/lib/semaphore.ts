@@ -1,14 +1,25 @@
 import { Identity } from '@semaphore-protocol/identity';
 import { Group } from '@semaphore-protocol/group';
 import { generateProof, verifyProof, SemaphoreProof } from '@semaphore-protocol/proof';
+import { keccak256 } from 'ethers/crypto';
+import { toBeHex } from 'ethers/utils';
 import { ethers } from 'ethers';
 import { getMedVaultRegistry, getEligibilityEngine } from './contracts';
+import { parseFieldElement, parseTrialId } from './field';
 import { FheTypes, decryptBoolForTxWithPermit } from './fhe';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const IDENTITY_STORAGE_KEY = 'medvault_identity';
 const ANON_NULLIFIERS_STORAGE_KEY = "medvault_anon_nullifiers";
+
+/**
+ * Scope field fed into the Semaphore v4 circuit (keccak256 truncated to BN254 scalar).
+ * Matches @semaphore-protocol/proof `hash()` — must be used for nullifier derivation in Noir.
+ */
+export function semaphoreScopeField(scope: bigint): bigint {
+    return BigInt(keccak256(toBeHex(scope, 32))) >> 8n;
+}
 
 // ── Ephemeral Address Generation (H-2) ─────────────────────────────────────
 
@@ -116,6 +127,77 @@ export function clearIdentity(): void {
     localStorage.removeItem(IDENTITY_STORAGE_KEY);
 }
 
+/** JSON shape written by PatientIdentityPage “Download identity backup”. */
+export type IdentityBackupFile = {
+    version?: number;
+    exportedAt?: string;
+    identity: string;
+    anonymousNullifiers?: Record<string, string>;
+    note?: string;
+};
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+    if (!value || typeof value !== "object") return false;
+    return Object.values(value as Record<string, unknown>).every((v) => typeof v === "string");
+}
+
+/**
+ * Validates backup JSON from disk (supports v1 export bundle or a raw identity export string).
+ */
+export function parseIdentityBackupPayload(raw: unknown): IdentityBackupFile {
+    if (typeof raw === "string") {
+        const trimmed = raw.trim();
+        if (!trimmed) throw new Error("Backup file is empty.");
+        try {
+            return parseIdentityBackupPayload(JSON.parse(trimmed));
+        } catch {
+            return { identity: trimmed };
+        }
+    }
+    if (!raw || typeof raw !== "object") {
+        throw new Error("Backup file must be JSON.");
+    }
+    const o = raw as Record<string, unknown>;
+    if (typeof o.identity !== "string" || !o.identity.trim()) {
+        throw new Error('Backup file is missing an "identity" field.');
+    }
+    if (o.anonymousNullifiers !== undefined && !isStringRecord(o.anonymousNullifiers)) {
+        throw new Error('"anonymousNullifiers" must be a map of trial id → nullifier string.');
+    }
+    return {
+        version: typeof o.version === "number" ? o.version : undefined,
+        exportedAt: typeof o.exportedAt === "string" ? o.exportedAt : undefined,
+        identity: o.identity.trim(),
+        anonymousNullifiers: o.anonymousNullifiers as Record<string, string> | undefined,
+        note: typeof o.note === "string" ? o.note : undefined,
+    };
+}
+
+export type RestoreIdentityOptions = {
+    /** When true, keep existing trial nullifiers and add any from the backup. Default: replace with backup only. */
+    mergeNullifiers?: boolean;
+};
+
+/**
+ * Restores Semaphore identity (and optional anonymous nullifiers) into localStorage.
+ */
+export function restoreIdentityFromBackup(
+    backup: IdentityBackupFile,
+    options: RestoreIdentityOptions = {}
+): Identity {
+    const identity = importStoredIdentity(backup.identity);
+    localStorage.setItem(IDENTITY_STORAGE_KEY, identity.export());
+
+    if (backup.anonymousNullifiers && Object.keys(backup.anonymousNullifiers).length > 0) {
+        const next = options.mergeNullifiers
+            ? { ...readNullifierMap(), ...backup.anonymousNullifiers }
+            : backup.anonymousNullifiers;
+        localStorage.setItem(ANON_NULLIFIERS_STORAGE_KEY, JSON.stringify(next));
+    }
+
+    return identity;
+}
+
 type StoredNullifierMap = Record<string, string>;
 type RecoveryCheckedMap = Record<string, boolean>;
 const ANON_NULLIFIER_RECOVERY_CHECKED_KEY = "medvault_anon_nullifier_recovery_checked";
@@ -140,36 +222,41 @@ function readRecoveryCheckedMap(): RecoveryCheckedMap {
     }
 }
 
-function markRecoveryChecked(trialId: number | bigint): void {
-    const key = BigInt(trialId).toString();
+function markRecoveryChecked(trialId: number | bigint | string): void {
+    const key = parseTrialId(trialId).toString();
     const map = readRecoveryCheckedMap();
     map[key] = true;
     localStorage.setItem(ANON_NULLIFIER_RECOVERY_CHECKED_KEY, JSON.stringify(map));
 }
 
-function wasRecoveryChecked(trialId: number | bigint): boolean {
-    const key = BigInt(trialId).toString();
+function wasRecoveryChecked(trialId: number | bigint | string): boolean {
+    const key = parseTrialId(trialId).toString();
     const map = readRecoveryCheckedMap();
     return !!map[key];
 }
 
 export function storeAnonymousNullifier(trialId: number | bigint, nullifier: bigint): void {
-    const key = BigInt(trialId).toString();
+    const key = parseTrialId(trialId).toString();
     const map = readNullifierMap();
     map[key] = nullifier.toString();
     localStorage.setItem(ANON_NULLIFIERS_STORAGE_KEY, JSON.stringify(map));
 }
 
-export function getAnonymousNullifier(trialId: number | bigint): bigint | null {
-    const key = BigInt(trialId).toString();
+export function getAnonymousNullifier(trialId: number | bigint | string): bigint | null {
+    const key = parseTrialId(trialId).toString();
     const map = readNullifierMap();
     const value = map[key];
     if (!value) return null;
     try {
-        return BigInt(value);
+        return parseFieldElement(value);
     } catch {
         return null;
     }
+}
+
+/** All trial IDs with a locally stored anonymous nullifier. */
+export function listStoredAnonymousTrialIds(): string[] {
+    return Object.keys(readNullifierMap());
 }
 
 /**
@@ -201,8 +288,7 @@ export async function recoverAnonymousNullifierIfMissing(
         markRecoveryChecked(trialId);
         return proof.nullifier;
     } catch (err) {
-        // Do not spam proof generation attempts on every render for non-applied trials.
-        markRecoveryChecked(trialId);
+        console.warn("Anonymous nullifier recovery failed:", err);
         return null;
     }
 }
@@ -298,36 +384,32 @@ export async function isMemberRegistered(
 // ── Group Management ──────────────────────────────────────────────────────
 
 /**
- * Fetches all registered commitments from chain and builds a Semaphore Group.
- * Required for generating valid proofs.
+ * Fetches registered commitments from chain and builds a Semaphore Group.
+ * Verifies each candidate with on-chain `hasMember` before inclusion.
  */
 export async function fetchGroup(
     provider: ethers.Provider,
     fromBlock?: number
 ): Promise<Group> {
-    // Use public RPC for group fetch to bypass Alchemy free tier limits
-    const PUBLIC_RPC = "https://sepolia-rollup.arbitrum.io/rpc";
-    const publicProvider = new ethers.JsonRpcProvider(PUBLIC_RPC);
+    const chainId = await provider.getNetwork().then((n) => Number(n.chainId)).catch(() => undefined);
+    const registry = getMedVaultRegistry(provider, chainId);
+    const latestBlock = await provider.getBlockNumber();
+    const startBlock = fromBlock ?? Math.max(0, latestBlock - 2_000_000);
 
-    const registry = getMedVaultRegistry(publicProvider);
-
-    // Updated deployment block for contracts redeployed with nullifier-only identity fix
-    const DEPLOYMENT_BLOCK = 262185000;
-
-    // Query events for all registered commitments from deployment
     const filter = registry.filters.PatientRegistered();
-    const events = await registry.queryFilter(filter, DEPLOYMENT_BLOCK);
+    const events = await registry.queryFilter(filter, startBlock, latestBlock);
 
-    // Add all commitments to the group (as BigInt)
-    // Event now emits PatientRegistered(uint256 indexed commitment) — no wallet field
-    const commitments = events.map(e => {
-        const args = (e as any).args;
-        return BigInt(args.commitment);
-    });
+    const uniqueCommitments = [...new Set(
+        events.map((e) => BigInt((e as any).args.commitment))
+    )];
 
-    // Create group with members
-    const group = new Group(commitments);
-    return group;
+    const verified: bigint[] = [];
+    for (const commitment of uniqueCommitments) {
+        const isMember = await registry.isRegisteredMember(commitment);
+        if (isMember) verified.push(commitment);
+    }
+
+    return new Group(verified);
 }
 
 // ── Proof Generation ────────────────────────────────────────────────────────
@@ -532,14 +614,18 @@ export async function decryptEligibilityResult(
     nullifier: bigint,
     trialId: number | bigint
 ): Promise<{ isEligible: boolean; score: bigint }> {
-    // Ensure permit exists for the connected ephemeral identity wallet.
-    const permit = await client.permits.getOrCreateSelfPermit();
+    const identity = getStoredIdentity();
+    if (!identity) {
+        throw new Error("No Semaphore identity found for ephemeral decrypt.");
+    }
 
-    // Fetch ciphertext handles by nullifier (per-trial, unlinkable)
-    const resultHandle = await eligibilityEngine.getAnonymousResult(nullifier);
-    const scoreHandle = await eligibilityEngine.getAnonymousScore(nullifier);
+    const ephemeralSigner = getEphemeralSigner(identity, client.publicClient as ethers.Provider);
+    const permit = await client.permits.getOrCreateSelfPermit(ephemeralSigner.address);
 
-    // Decrypt locally — never leaves the client
+    const trialIdBig = BigInt(trialId);
+    const resultHandle = await eligibilityEngine.getAnonymousResult(nullifier, trialIdBig);
+    const scoreHandle = await eligibilityEngine.getAnonymousScore(nullifier, trialIdBig);
+
     const isEligible: boolean = await client
         .decryptForView(resultHandle, FheTypes.Bool)
         .withPermit(permit)
@@ -551,6 +637,37 @@ export async function decryptEligibilityResult(
         .execute();
 
     return { isEligible, score };
+}
+
+/**
+ * Cancel orphaned FHE staging after an ineligible decrypt aborts finalize.
+ */
+export async function cancelAnonymousApplyStage(
+    signer: ethers.Signer,
+    trialId: number | bigint,
+    proof: SemaphoreProof,
+    commitment: bigint,
+    permitRecipient: string
+): Promise<string> {
+    const chainId = signer.provider
+        ? await signer.provider.getNetwork().then((n) => Number(n.chainId))
+        : undefined;
+    const registry = getMedVaultRegistry(signer, chainId);
+    const tx = await registry.cancelAnonymousApplyStage(
+        BigInt(trialId),
+        {
+            merkleTreeDepth: proof.merkleTreeDepth,
+            merkleTreeRoot: proof.merkleTreeRoot,
+            nullifier: proof.nullifier,
+            message: proof.message,
+            scope: proof.scope,
+            points: proof.points,
+        },
+        commitment,
+        permitRecipient
+    );
+    await tx.wait();
+    return tx.hash;
 }
 
 export type { Identity, Group, SemaphoreProof };

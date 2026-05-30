@@ -2,29 +2,39 @@ import { useState, useCallback, useEffect } from "react";
 import { useWeb3 } from "../lib/Web3Context";
 import { getConfidentialETH } from "../lib/contracts";
 import { ethers } from "ethers";
-import { getFHEClient, FheTypes, reencryptUint64 } from "../lib/fhe";
-import { Encryptable, isCofheError, CofheErrorCode } from "@cofhe/sdk";
+import {
+    decryptForTxWithPermit,
+    ensureFHEConnected,
+    forceConnectFHE,
+    reencryptUint64,
+    restoreMainFheSession,
+} from "../lib/fhe";
+import { isCofheError } from "@cofhe/sdk";
+import { generateEphemeralAddress, getEphemeralSigner, getStoredIdentity } from "../lib/semaphore";
 
 export function useConfidentialBalance() {
     const { signer, account } = useWeb3();
     const [balanceMwei, setBalanceMwei] = useState<number | null>(null);
     const [balanceEth, setBalanceEth] = useState<string | null>(null);
+    const [walletBalanceEth, setWalletBalanceEth] = useState<string | null>(null);
+    const [rewardBalanceEth, setRewardBalanceEth] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isRevealed, setIsRevealed] = useState(false);
 
-    const fetchEncryptedBalance = useCallback(async () => {
-        if (!signer || !account) return null;
+    const fetchEncryptedBalance = useCallback(async (address?: string | null) => {
+        if (!signer || !address) return null;
         try {
             const contract = getConfidentialETH(signer);
-            // Returns an euint32 handle
-            const handle = await contract.getBalance(account);
+            const handle = await contract.getBalance(address);
             return handle.toString();
         } catch (err: any) {
             console.error("Failed to fetch encrypted balance:", err);
             return null;
         }
-    }, [signer, account]);
+    }, [signer]);
+
+    const formatUnitsAsEth = (units: number) => (units / 1_000_000).toFixed(6);
 
     const revealBalance = useCallback(async () => {
         if (!signer || !account) {
@@ -36,29 +46,48 @@ export function useConfidentialBalance() {
             setLoading(true);
             setError(null);
 
-            const handle = await fetchEncryptedBalance();
-
-            // Uninitialized handles in fhEVM return 0. Attempting to decrypt a 0 handle throws an authorization error.
-            if (!handle || BigInt(handle) === 0n) {
-                setBalanceMwei(0);
-                setBalanceEth("0.00");
-                setIsRevealed(true);
-                return;
-            }
-
             const contract = getConfidentialETH(signer);
             const contractAddress = await contract.getAddress();
 
-            // Re-encrypt to user's public key (requires signature)
-            const decryptedValue = await reencryptUint64(contractAddress, account, handle);
+            const provider = signer.provider;
+            if (!provider) {
+                throw new Error("Wallet provider not available");
+            }
 
-            // The value is in units (1 unit = 1e12 wei = 1 micro-ETH)
-            const units = Number(decryptedValue);
+            const walletHandle = await fetchEncryptedBalance(account);
+            let walletUnits = 0;
+            if (walletHandle && BigInt(walletHandle) !== 0n) {
+                await ensureFHEConnected(provider, signer);
+                const decryptedValue = await reencryptUint64(contractAddress, account, walletHandle);
+                walletUnits = Number(decryptedValue);
+            }
+
+            let rewardUnits = 0;
+            const identity = getStoredIdentity();
+            if (identity && provider) {
+                const ephemeralAddress = await generateEphemeralAddress(identity);
+                const rewardHandle = await fetchEncryptedBalance(ephemeralAddress);
+                if (rewardHandle && BigInt(rewardHandle) !== 0n) {
+                    const ephemeralSigner = getEphemeralSigner(identity, provider);
+                    await forceConnectFHE(provider, ephemeralSigner);
+                    try {
+                        const decryptedRewardValue = await reencryptUint64(
+                            contractAddress,
+                            ephemeralAddress,
+                            rewardHandle
+                        );
+                        rewardUnits = Number(decryptedRewardValue);
+                    } finally {
+                        await restoreMainFheSession(provider, signer);
+                    }
+                }
+            }
+
+            const units = walletUnits + rewardUnits;
             setBalanceMwei(units);
-
-            // Convert units to ETH (units * 1e12 / 1e18) = units / 1e6
-            const ethValue = (units / 1_000_000).toFixed(6);
-            setBalanceEth(ethValue);
+            setWalletBalanceEth(formatUnitsAsEth(walletUnits));
+            setRewardBalanceEth(formatUnitsAsEth(rewardUnits));
+            setBalanceEth(formatUnitsAsEth(units));
             setIsRevealed(true);
 
         } catch (err: any) {
@@ -81,6 +110,8 @@ export function useConfidentialBalance() {
         setIsRevealed(false);
         setBalanceMwei(null);
         setBalanceEth(null);
+        setWalletBalanceEth(null);
+        setRewardBalanceEth(null);
     };
 
     const deposit = async (amountEth: string) => {
@@ -127,21 +158,16 @@ export function useConfidentialBalance() {
         }
 
         try {
-            const c = await getFHEClient();
+            const provider = signer.provider;
+            if (!provider) {
+                throw new Error("Wallet provider not available");
+            }
+
             const handle = typeof balanceHandle === "string" ? BigInt(balanceHandle) : balanceHandle;
-            
-            // Use CoFHE SDK's decryptForTx to generate on-chain verifiable signature
-            // This signature proves knowledge of the plaintext balance at the specific handle
-            const result = await c
-                .decryptForTx(handle)
-                .withoutPermit()
-                .execute();
-            
-            // The signature from decryptForTx is already a Threshold Network signature
-            // that proves knowledge of the plaintext at this ctHash
+            const result = await decryptForTxWithPermit(handle, provider, signer);
             return {
                 signature: result.signature,
-                balance: result.decryptedValue
+                balance: result.decryptedValue,
             };
         } catch (err: any) {
             console.error("Failed to generate withdrawal signature:", err);
@@ -194,6 +220,8 @@ export function useConfidentialBalance() {
 
     return {
         balanceEth,
+        walletBalanceEth,
+        rewardBalanceEth,
         isRevealed,
         loading,
         error,

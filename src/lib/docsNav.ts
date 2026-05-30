@@ -5,8 +5,12 @@
 export type DocsTabId =
     | "getting-started"
     | "protocol"
+    | "fhenix"
+    | "semaphore"
+    | "noir"
     | "clients"
     | "operations"
+    | "testing"
     | "security";
 
 export interface DocsTab {
@@ -24,7 +28,22 @@ export const DOCS_TABS: DocsTab[] = [
     {
         id: "protocol",
         label: "Protocol & contracts",
-        subtitle: "Architecture, FHE on fhEVM, eligibility engine, and on-chain reference.",
+        subtitle: "Architecture, eligibility engine, contract reference, and automation.",
+    },
+    {
+        id: "fhenix",
+        label: "Fhenix / CoFHE",
+        subtitle: "How CoFHE is used on Arbitrum Sepolia: SDK, coprocessor, ACL, and proof accounts.",
+    },
+    {
+        id: "semaphore",
+        label: "Semaphore",
+        subtitle: "Anonymous identity, nullifiers, ephemeral decrypt wallet, and apply flow.",
+    },
+    {
+        id: "noir",
+        label: "Noir / Honk",
+        subtitle: "Eligibility ZK circuit, browser proving, and HonkVerifier on-chain.",
     },
     {
         id: "clients",
@@ -34,7 +53,12 @@ export const DOCS_TABS: DocsTab[] = [
     {
         id: "operations",
         label: "Operations",
-        subtitle: "Workflows, staking, testing, deployment, and release notes.",
+        subtitle: "Workflows, staking, deployment, and release notes.",
+    },
+    {
+        id: "testing",
+        label: "Tests & verification",
+        subtitle: "Hardhat suite, CoFHE mocks, test matrix, fixtures, and CI.",
     },
     {
         id: "security",
@@ -89,27 +113,66 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
         tabId: "protocol",
         section: "Core concepts",
         keywords: ["system", "layers", "diagram", "registry"],
-        pageTitle: "Architecture & fhEVM integration",
+        pageTitle: "Architecture & CoFHE integration",
         pageDescription:
-            "How the client, contracts, coprocessor, and indexing fit together on Arbitrum Sepolia.",
+            "How the client, contracts, CoFHE coprocessor, Semaphore identity, and indexing fit together on Arbitrum Sepolia.",
+    },
+    {
+        title: "Overview",
+        href: "/docs/fhenix-cofhe",
+        tabId: "fhenix",
+        section: "CoFHE",
+        keywords: ["fhenix", "cofhe", "coprocessor", "sdk", "vrf", "encrypt", "decrypt", "arb sepolia"],
+        pageTitle: "How Fhenix & CoFHE are used",
+        pageDescription:
+            "CoFHE on Arbitrum Sepolia: browser SDK, proof accounts, coprocessor, ACL, ephemeral decrypt, and Hardhat mocks.",
     },
     {
         title: "FHE primitives",
         href: "/docs/fhe-primitives",
-        tabId: "protocol",
-        section: "Core concepts",
-        keywords: ["euint", "cofhe", "encrypt", "coprocessor"],
-        pageTitle: "Fhenix fhEVM primitives & FHE operations",
-        pageDescription: "Encrypted types, ACL, and the operations available in MedVault contracts.",
+        tabId: "fhenix",
+        section: "CoFHE",
+        keywords: ["euint", "cofhe", "encrypt", "coprocessor", "cmux", "acl"],
+        pageTitle: "CoFHE primitives & FHE operations",
+        pageDescription: "Encrypted types (euint/ebool), ACL, proof accounts, and operations used in MedVault contracts.",
+    },
+    {
+        title: "Client encryption",
+        href: "/docs/client-encryption",
+        tabId: "fhenix",
+        section: "CoFHE",
+        keywords: ["sdk", "browser", "encrypt", "decrypt"],
+        pageTitle: "Client-side encryption with @cofhe/sdk",
+        pageDescription: "Encrypting inputs in the browser, viewing keys, and what never leaves the client in plaintext.",
+    },
+    {
+        title: "Overview",
+        href: "/docs/semaphore",
+        tabId: "semaphore",
+        section: "Identity",
+        keywords: ["semaphore", "anonymous", "nullifier", "commitment", "ephemeral", "group", "zk"],
+        pageTitle: "Semaphore anonymous identity",
+        pageDescription:
+            "Identity commitments, anonymous apply, nullifiers, ephemeral permit wallet, and relayer stage/finalize.",
+    },
+    {
+        title: "Overview",
+        href: "/docs/noir",
+        tabId: "noir",
+        section: "Proofs",
+        keywords: ["noir", "honk", "ultrahonk", "circuit", "verifier", "zk", "barretenberg"],
+        pageTitle: "Noir eligibility proofs & Honk verifier",
+        pageDescription:
+            "eligibility_proof circuit, browser proving, HonkVerifier.sol, and verifyEligibilityProof on-chain.",
     },
     {
         title: "Eligibility engine",
         href: "/docs/engine",
-        tabId: "protocol",
-        section: "Smart contracts",
-        keywords: ["score", "matching", "cmux", "criteria"],
+        tabId: "noir",
+        section: "Proofs",
+        keywords: ["verifyEligibilityProof", "score", "fhe"],
         pageTitle: "Eligibility engine mechanics",
-        pageDescription: "Scoring model, thresholds, and how encrypted criteria are evaluated.",
+        pageDescription: "Scoring model and verifyEligibilityProof integration with HonkVerifier.",
     },
     {
         title: "Contract reference",
@@ -149,15 +212,6 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
         pageTitle: "Chainlink Automation (MedVaultAutomation)",
         pageDescription:
             "Keeper upkeep for trial finalization: checkUpkeep/performUpkeep, vault distribution, and TrialManager hooks.",
-    },
-    {
-        title: "Client encryption",
-        href: "/docs/client-encryption",
-        tabId: "clients",
-        section: "Integration",
-        keywords: ["sdk", "cofhe", "browser", "encrypt"],
-        pageTitle: "Client-side encryption with @cofhe/sdk",
-        pageDescription: "Encrypting inputs in the browser, viewing keys, and what never leaves the client in plaintext.",
     },
     {
         title: "Subgraph indexing",
@@ -204,9 +258,9 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
             "decrypt for tx",
             "stage finalize",
         ],
-        pageTitle: "Identity, relayer, private faucet & proofs",
+        pageTitle: "Identity, relayer & tooling hub",
         pageDescription:
-            "Privy, arb-sepolia-faucet, HTTP relayer (stage/finalize), Semaphore, ephemeral permit wallet, Reclaim, Noir/Honk, links to Chainlink Automation.",
+            "Privy, faucet, HTTP relayer — with deep dives in Semaphore, Noir, and Fhenix/CoFHE docs.",
     },
     {
         title: "Private staking",
@@ -218,13 +272,42 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
         pageDescription: "How ConfidentialETH interacts with staking routes and yield expectations on testnet.",
     },
     {
-        title: "Testing & verification",
+        title: "Overview",
         href: "/docs/testing",
-        tabId: "operations",
-        section: "Runbooks",
-        keywords: ["hardhat", "tests", "ci", "verify"],
-        pageTitle: "Testing & verification",
-        pageDescription: "Hardhat tests, local fhEVM mocks, and checks before shipping contract changes.",
+        tabId: "testing",
+        section: "Suite",
+        keywords: ["hardhat", "tests", "ci", "verify", "191", "mocha"],
+        pageTitle: "Contract test suite overview",
+        pageDescription:
+            "191+ Hardhat tests with CoFHE mocks: suite breakdown, pillars, and quick start commands.",
+    },
+    {
+        title: "Test matrix",
+        href: "/docs/testing/matrix",
+        tabId: "testing",
+        section: "Suite",
+        keywords: ["matrix", "case id", "EE", "MVR", "SIV", "SMOKE"],
+        pageTitle: "Test matrix & case IDs",
+        pageDescription: "Full catalog of test files, case ID prefixes, pillars, and audit traceability.",
+    },
+    {
+        title: "Infrastructure & fixtures",
+        href: "/docs/testing/infrastructure",
+        tabId: "testing",
+        section: "Suite",
+        keywords: ["deployMedVaultStack", "fhe", "cofhe", "semaphore", "impersonate"],
+        pageTitle: "Test infrastructure & fixtures",
+        pageDescription:
+            "test-support helpers: deployments, CoFHE 0.5 encryption, consent overloads, and MockSemaphore.",
+    },
+    {
+        title: "CI & commands",
+        href: "/docs/testing/ci",
+        tabId: "testing",
+        section: "Suite",
+        keywords: ["npm test", "github actions", "coverage", "honk"],
+        pageTitle: "Running tests & CI",
+        pageDescription: "npm scripts, GitHub Actions workflow, troubleshooting, and optional Honk pipeline.",
     },
     {
         title: "Deployment guide",
@@ -277,6 +360,18 @@ export function getDocNavItem(href: string): DocsNavItem | undefined {
 const DEFAULT_TAB: DocsTabId = "getting-started";
 
 export function getTabForPath(pathname: string): DocsTabId {
+    if (pathname.startsWith("/docs/testing")) {
+        return "testing";
+    }
+    if (pathname.startsWith("/docs/fhenix-cofhe")) {
+        return "fhenix";
+    }
+    if (pathname.startsWith("/docs/semaphore")) {
+        return "semaphore";
+    }
+    if (pathname.startsWith("/docs/noir")) {
+        return "noir";
+    }
     return pathToTab.get(pathname) ?? DEFAULT_TAB;
 }
 

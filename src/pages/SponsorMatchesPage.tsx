@@ -1,6 +1,6 @@
 import { useMatches } from "../hooks/useMatches";
 import { useWeb3 } from "../lib/Web3Context";
-import { Card, CardContent } from "../components/ui/Card";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Link } from "react-router-dom";
@@ -11,32 +11,61 @@ import {
   UserCheck,
   Loader2,
   ShieldCheck,
-  BadgeCheck,
   ArrowRight,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { cn } from "../lib/utils";
+import { sponsorCardHeader, sponsorCardShell } from "../lib/sponsorUi";
 import { SectionTopBar } from "../components/layout/SectionTopBar";
 import { useSponsorApplicationActions } from "../hooks/useSponsorApplicationActions";
-import { useIsNullifierCertified } from "../hooks/useEligibilityProof";
+import { useAnonymousCertification } from "../hooks/useAnonymousCertification";
+import { ZkCertifyBadge } from "../components/zk/ZkCertifyBadge";
+import { Match } from "../types";
+import { formatRelativeTimeFromUnix } from "../lib/formatRelativeTime";
 import { AnimatePresence, motion } from "framer-motion";
 
-const cardShell =
-  "rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_12px_-2px_rgba(15,23,42,0.05)]";
+function fheMatchLabel(match: Match): { text: string; dotClass: string } {
+  if (!match.isAnonymous) {
+    const score = match.matchScore ?? 0;
+    if (score === 100) {
+      return { text: "Verified 100%", dotClass: "bg-emerald-500" };
+    }
+    return { text: "Processing", dotClass: "bg-slate-400" };
+  }
+  if (match.fhePropensityCommittedAt) {
+    const ts = Number(match.fhePropensityCommittedAt);
+    const rel = Number.isFinite(ts) ? formatRelativeTimeFromUnix(ts) : "";
+    return {
+      text: rel ? `FHE committed · ${rel}` : "FHE committed",
+      dotClass: "bg-teal-500",
+    };
+  }
+  return { text: "Encrypted match", dotClass: "bg-teal-500" };
+}
 
 function MatchRow({
   match,
   trialId,
   onSelect,
 }: {
-  match: any;
+  match: Match;
   trialId: string;
-  onSelect: (match: any) => void;
+  onSelect: (match: Match) => void;
 }) {
-  const { certified } = useIsNullifierCertified(
+  const { certified, eligible, fheCommitted } = useAnonymousCertification(
     match.isAnonymous ? match.nullifier : undefined,
-    match.isAnonymous ? trialId : undefined
+    match.isAnonymous ? trialId : undefined,
+    match.isAnonymous
+      ? {
+          noirCertified: match.noirCertified,
+          noirEligible: match.noirEligible,
+          fhePropensityCommittedAt: match.fhePropensityCommittedAt,
+        }
+      : undefined
   );
+
+  const fheLabel = fheMatchLabel(match);
+  const showFheCommitted = match.isAnonymous && (fheCommitted || match.fhePropensityCommittedAt);
 
   return (
     <div
@@ -70,25 +99,20 @@ function MatchRow({
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
             {match.isAnonymous ? "Anonymous" : "Verified"}
           </p>
-          {certified && (
-            <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700">
-              <BadgeCheck className="h-3 w-3" />
-              Noir certified
-            </span>
-          )}
+          {certified ? (
+            <ZkCertifyBadge variant="certified" size="sm" className="mt-1" eligible={eligible} />
+          ) : null}
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span
-          className={cn(
-            "h-1.5 w-1.5 shrink-0 rounded-full",
-            (match.matchScore || 0) === 100 ? "bg-emerald-500" : "bg-slate-400"
-          )}
-        />
-        <span className="text-xs font-medium text-slate-600">
-          {(match.matchScore || 0) === 100 ? "Verified 100%" : "Processing"}
-        </span>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", fheLabel.dotClass)} />
+          <span className="text-xs font-medium text-slate-600">{fheLabel.text}</span>
+        </div>
+        {showFheCommitted && !certified ? (
+          <span className="text-[10px] text-teal-700/80 pl-3.5">FHE pipeline on ciphertext</span>
+        ) : null}
       </div>
 
       <div>
@@ -129,18 +153,16 @@ function MatchRow({
             >
               {match.status}
             </Badge>
-            {certified && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-700">
-                <BadgeCheck className="h-3 w-3" />
-                Noir proof
-              </span>
-            )}
+            {certified ? (
+              <ZkCertifyBadge variant="certified" size="sm" eligible={eligible} />
+            ) : null}
           </div>
         ) : match.isAnonymous ? (
-          <Badge className="border border-violet-200 bg-violet-50 text-[10px] font-semibold text-violet-900">
-            <ShieldCheck className="mr-1 inline h-3 w-3" />
-            ZK verified
-          </Badge>
+          certified ? (
+            <ZkCertifyBadge variant="certified" size="sm" eligible={eligible} />
+          ) : (
+            <span className="text-[10px] font-medium text-teal-700">FHE · awaiting seal</span>
+          )
         ) : match.status === "Pending" ? (
           <Button
             size="sm"
@@ -266,8 +288,8 @@ export function SponsorMatchesPage() {
 
       <div
         className={cn(
-          cardShell,
-          "flex flex-col gap-3 border-0 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+          sponsorCardShell,
+          "flex flex-col gap-3 border-0 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5",
         )}
       >
         <p className="text-sm text-slate-600">
@@ -280,8 +302,14 @@ export function SponsorMatchesPage() {
         </Link>
       </div>
 
-      <Card className={`${cardShell} overflow-hidden border-0`}>
-        <CardContent className="p-4 md:p-6">
+      <Card className={cn(sponsorCardShell, "overflow-hidden border-0")}>
+        <CardHeader className={cn(sponsorCardHeader, "px-5 py-4 md:px-6")}>
+          <CardTitle className="font-display text-base font-semibold text-slate-900">
+            Candidate queue
+          </CardTitle>
+          <p className="mt-0.5 text-xs text-slate-500">Grouped by protocol · review and update status</p>
+        </CardHeader>
+        <CardContent className="p-4 md:p-6 pt-5">
           {error && (
             <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
               {error}

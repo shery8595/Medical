@@ -42,7 +42,7 @@ export function DocsLayout({ children }: DocsLayoutProps) {
                         aria-label="Close menu"
                         onClick={() => setMobileNavOpen(false)}
                     />
-                    <div className="relative h-full w-[min(280px,100vw)] shadow-2xl">
+                    <div className="relative h-full w-[min(212px,88vw)] shadow-2xl">
                         <DocsSidebar onNavigate={() => setMobileNavOpen(false)} />
                     </div>
                 </div>
@@ -69,8 +69,8 @@ export function DocsLayout({ children }: DocsLayoutProps) {
                             transition={{ duration: 0.25, ease: "easeOut" }}
                             className="w-full"
                         >
-                            <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10 pb-28">
-                                <DocsPageToolbar />
+                            <div className="w-full max-w-6xl mx-auto px-4 sm:px-5 lg:px-6 py-4 md:py-5 pb-16">
+                                {location.pathname !== "/docs" && <DocsPageToolbar />}
                                 <div id="docs-article-body">{children}</div>
                             </div>
                             <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">

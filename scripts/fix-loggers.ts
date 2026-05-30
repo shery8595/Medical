@@ -6,7 +6,7 @@ const path = require("path");
 async function main() {
     const addressesPath = path.join(__dirname, "../src/lib/contracts/addresses.json");
     const addresses = JSON.parse(fs.readFileSync(addressesPath, "utf8"));
-    const network = "arbSepolia";
+    const network = hre.network.name === "arbitrumSepolia" ? "arbSepolia" : hre.network.name;
     const netAddresses = addresses[network];
 
     if (!netAddresses) {
@@ -17,11 +17,18 @@ async function main() {
 
     const DataAccessLog = await ethers.getContractFactory("DataAccessLog");
     const dataAccessLog = DataAccessLog.attach(netAddresses.DataAccessLog);
+    const [signer] = await ethers.getSigners();
+    const owner = await dataAccessLog.owner();
+    if (signer.address.toLowerCase() !== owner.toLowerCase()) {
+        throw new Error(`Configured signer ${signer.address} is not DataAccessLog owner ${owner}`);
+    }
 
     const loggersToAuthorize = [
+        { name: "MedVaultRegistry", address: netAddresses.MedVaultRegistry },
         { name: "AnonymousPatientRegistry", address: netAddresses.AnonymousPatientRegistry },
+        { name: "EligibilityEngine", address: netAddresses.EligibilityEngine },
         { name: "SponsorIncentiveVault", address: netAddresses.SponsorIncentiveVault }
-    ];
+    ].filter((logger) => !!logger.address);
 
     for (const logger of loggersToAuthorize) {
         console.log(`Checking ${logger.name} (${logger.address})...`);

@@ -1,36 +1,67 @@
 import { useState, useEffect } from "react";
+import { useWeb3 } from "../lib/Web3Context";
+import { fetchAaveWethSupplyAprPercent } from "../lib/aaveLiquidity";
+
+const ARBITRUM_SEPOLIA = 421614n;
+
+/** Conservative static headline when RPC / pool reads fail — not randomly jittered (clearly labeled in UI). */
+export const FALLBACK_REFERENCE_APY_PCT = 2.92;
+
+export type AaveYieldSource = "protocol" | "fallback" | "wrong_chain";
 
 export function useAaveYield() {
+    const { readOnlyProvider, chainId } = useWeb3();
     const [apy, setApy] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [source, setSource] = useState<AaveYieldSource>("protocol");
+    const [lastUpdatedMs, setLastUpdatedMs] = useState<number | null>(null);
 
     useEffect(() => {
-        const fetchApy = async () => {
+        const load = async () => {
+            if (!readOnlyProvider) {
+                setApy(null);
+                setLoading(false);
+                setError(null);
+                setSource("fallback");
+                return;
+            }
+
             try {
                 setLoading(true);
-                // Aave V3 Sepolia WETH Supply APY
-                // For a robust implementation, we'd query the Aave Protocol Data Provider or their API.
-                // In this context, we'll fetch from a reliable real-time source or use a realistic dynamic value.
-                // Aave's official Sepolia APY for WETH is typically around 2-4%.
-
-                // Simulated fetch with realistic data for demo
-                const baseApy = 3.25;
-                const jitter = (Math.random() - 0.5) * 0.1;
-                setApy(parseFloat((baseApy + jitter).toFixed(2)));
                 setError(null);
+
+                if (chainId !== null && chainId !== ARBITRUM_SEPOLIA) {
+                    setApy(FALLBACK_REFERENCE_APY_PCT);
+                    setSource("wrong_chain");
+                    setLastUpdatedMs(Date.now());
+                    return;
+                }
+
+                const pct = await fetchAaveWethSupplyAprPercent(readOnlyProvider);
+                if (pct != null && Number.isFinite(pct)) {
+                    setApy(Math.round(pct * 100) / 100);
+                    setSource("protocol");
+                } else {
+                    setApy(FALLBACK_REFERENCE_APY_PCT);
+                    setSource("fallback");
+                    setError(null);
+                }
+                setLastUpdatedMs(Date.now());
             } catch (err) {
                 console.error("Failed to fetch Aave yield:", err);
-                setError("Failed to load yield data");
+                setApy(FALLBACK_REFERENCE_APY_PCT);
+                setSource("fallback");
+                setError("Pool read failed — showing conservative reference rate.");
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchApy();
-        const interval = setInterval(fetchApy, 60000); // Update every minute
+        void load();
+        const interval = setInterval(load, 120_000);
         return () => clearInterval(interval);
-    }, []);
+    }, [readOnlyProvider, chainId]);
 
-    return { apy, loading, error };
+    return { apy, loading, error, source, lastUpdatedMs };
 }

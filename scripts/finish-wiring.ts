@@ -1,49 +1,36 @@
-const { ethers } = require("hardhat");
-const fs = require("fs");
-const path = require("path");
+import hre from "hardhat";
+import { ethers } from "hardhat";
+import { loadAddresses, networkKeyFromHardhatName } from "./lib/networkAddresses";
 
 async function main() {
-    const addressesPath = path.join(__dirname, "../src/lib/contracts/addresses.json");
-    const addresses = JSON.parse(fs.readFileSync(addressesPath, "utf8"));
-    const network = "sepolia";
+  const key = networkKeyFromHardhatName(hre.network.name);
+  const addresses = loadAddresses(key);
 
-    const incentiveVaultAddress = addresses[network].SponsorIncentiveVault;
-    const dataAccessLogAddress = addresses[network].DataAccessLog;
-    const milestoneManagerAddress = addresses[network].TrialMilestoneManager;
-    const trialManagerAddress = addresses[network].TrialManager;
-    const automationAddress = addresses[network].MedVaultAutomation;
+  const vault = await ethers.getContractAt("SponsorIncentiveVault", addresses.SponsorIncentiveVault);
+  console.log(`Wiring vault ${addresses.SponsorIncentiveVault} on ${hre.network.name}...`);
 
-    console.log(`Wiring Vault at: ${incentiveVaultAddress}`);
-    const SponsorIncentiveVault = await ethers.getContractFactory("SponsorIncentiveVault");
-    const vault = SponsorIncentiveVault.attach(incentiveVaultAddress);
+  await (await vault.setDataAccessLog(addresses.DataAccessLog)).wait();
+  await (await vault.setMilestoneManager(addresses.TrialMilestoneManager)).wait();
+  await (await vault.setAutomationContract(addresses.MedVaultAutomation)).wait();
+  console.log("✓ Vault internal wiring");
 
-    // Wiring
-    console.log("Setting DataAccessLog...");
-    await (await vault.setDataAccessLog(dataAccessLogAddress)).wait();
+  const trialManager = await ethers.getContractAt("TrialManager", addresses.TrialManager);
+  await (await trialManager.setAutomationContract(addresses.MedVaultAutomation)).wait();
+  console.log("✓ TrialManager automation");
 
-    console.log("Setting MilestoneManager...");
-    await (await vault.setMilestoneManager(milestoneManagerAddress)).wait();
+  const milestoneManager = await ethers.getContractAt(
+    "TrialMilestoneManager",
+    addresses.TrialMilestoneManager
+  );
+  await (await milestoneManager.setVault(addresses.SponsorIncentiveVault)).wait();
+  console.log("✓ TrialMilestoneManager.setVault");
 
-    console.log("Setting AutomationContract on Vault...");
-    await (await vault.setAutomationContract(automationAddress)).wait();
-
-    console.log("Setting AutomationContract on TrialManager...");
-    const TrialManager = await ethers.getContractFactory("TrialManager");
-    const trialManager = TrialManager.attach(trialManagerAddress);
-    await (await trialManager.setAutomationContract(automationAddress)).wait();
-
-    console.log("✓ Vault internal wiring complete.");
-
-    // Update Automation contract's vault pointer
-    console.log("Updating MedVaultAutomation pointer...");
-    const MedVaultAutomation = await ethers.getContractFactory("MedVaultAutomation");
-    const automation = MedVaultAutomation.attach(automationAddress);
-    await (await automation.setVault(incentiveVaultAddress)).wait();
-
-    console.log("✓ MedVaultAutomation sync complete.");
+  const automation = await ethers.getContractAt("MedVaultAutomation", addresses.MedVaultAutomation);
+  await (await automation.setVault(addresses.SponsorIncentiveVault)).wait();
+  console.log("✓ MedVaultAutomation.setVault");
 }
 
 main().catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
+  console.error(error);
+  process.exitCode = 1;
 });

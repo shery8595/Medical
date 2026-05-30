@@ -12,7 +12,9 @@ import { PatientVaultPage } from "./pages/PatientVaultPage";
 import { PatientTrialsPage } from "./pages/PatientTrialsPage";
 import { PatientAppliedTrialsPage } from "./pages/PatientAppliedTrialsPage";
 import { PatientResultsPage } from "./pages/PatientResultsPage";
+import { PatientPrivacyTourPage } from "./pages/PatientPrivacyTourPage";
 import { PatientIdentityPage } from "./pages/PatientIdentityPage";
+import { PatientSettingsPage } from "./pages/PatientSettingsPage";
 import { SponsorDashboard } from "./pages/SponsorDashboard";
 import { SponsorTrialsPage } from "./pages/SponsorTrialsPage";
 import { SponsorCreateTrialPage } from "./pages/SponsorCreateTrialPage";
@@ -20,6 +22,7 @@ import { SponsorTrialDetailsPage } from "./pages/SponsorTrialDetailsPage";
 import { SponsorMatchesPage } from "./pages/SponsorMatchesPage";
 import { SponsorAnalyticsPage } from "./pages/SponsorAnalyticsPage";
 import { SponsorSettingsPage } from "./pages/SponsorSettingsPage";
+import { SponsorVerificationPage } from "./pages/SponsorVerificationPage";
 import { SponsorAuditLogPage } from './pages/SponsorAuditLogPage';
 import { ConsentLogPage } from "./pages/ConsentLogPage";
 import { TechnologyPage } from "./pages/TechnologyPage";
@@ -39,12 +42,18 @@ import { FrontendArchitectureDoc } from "./pages/docs/FrontendArchitectureDoc";
 import { UserGuideDoc } from "./pages/docs/UserGuideDoc";
 import { DeploymentGuideDoc } from "./pages/docs/DeploymentGuideDoc";
 import { PrivateStakingDoc } from "./pages/docs/PrivateStakingDoc";
-import { TestingVerificationDoc } from "./pages/docs/TestingVerificationDoc";
+import { TestingOverviewDoc } from "./pages/docs/testing/TestingOverviewDoc";
+import { TestingMatrixDoc } from "./pages/docs/testing/TestingMatrixDoc";
+import { TestingInfrastructureDoc } from "./pages/docs/testing/TestingInfrastructureDoc";
+import { TestingCiDoc } from "./pages/docs/testing/TestingCiDoc";
 import { SecurityModelDoc } from "./pages/docs/SecurityModelDoc";
 import { ComplianceDoc } from "./pages/docs/ComplianceDoc";
 import { FaqDoc } from "./pages/docs/FaqDoc";
 import { ChangelogDoc } from "./pages/docs/ChangelogDoc";
 import { IdentityPrivacyDoc } from "./pages/docs/IdentityPrivacyDoc";
+import { SemaphoreDoc } from "./pages/docs/SemaphoreDoc";
+import { NoirDoc } from "./pages/docs/NoirDoc";
+import { FhenixCofheDoc } from "./pages/docs/FhenixCofheDoc";
 import { ChainlinkAutomationDoc } from "./pages/docs/ChainlinkAutomationDoc";
 
 import { PrivyProvider } from "@privy-io/react-auth";
@@ -121,6 +130,7 @@ function MedVaultRoutes() {
               }
             />
 
+            <Route path="/how-it-works" element={<Navigate to="/docs" replace />} />
             <Route
               path="/technology"
               element={
@@ -148,7 +158,8 @@ function MedVaultRoutes() {
               <Route path="applications" element={<PatientAppliedTrialsPage />} />
               <Route path="results" element={<PatientResultsPage />} />
               <Route path="identity" element={<PatientIdentityPage />} />
-              <Route path="settings" element={<Navigate to="/patient/dashboard" replace />} />
+              <Route path="privacy-tour" element={<PatientPrivacyTourPage />} />
+              <Route path="settings" element={<PatientSettingsPage />} />
               {/* Legacy aliases */}
               <Route path="vault" element={<Navigate to="/patient/medical-vault" replace />} />
               <Route path="trials" element={<Navigate to="/patient/find-trials" replace />} />
@@ -165,7 +176,7 @@ function MedVaultRoutes() {
               <Route path="analytics" element={<SponsorAnalyticsPage />} />
               <Route path="audit-logs" element={<SponsorAuditLogPage />} />
               <Route path="profile-settings" element={<SponsorSettingsPage />} />
-              <Route path="verification" element={<Navigate to="/sponsor/profile-settings" replace />} />
+              <Route path="verification" element={<SponsorVerificationPage />} />
               <Route path="trials/create" element={<SponsorCreateTrialPage />} />
               <Route path="trials/:id" element={<SponsorTrialDetailsPage />} />
               {/* Legacy aliases */}
@@ -293,7 +304,31 @@ function MedVaultRoutes() {
               path="/docs/testing"
               element={
                 <DocsLayout>
-                  <TestingVerificationDoc />
+                  <TestingOverviewDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/testing/matrix"
+              element={
+                <DocsLayout>
+                  <TestingMatrixDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/testing/infrastructure"
+              element={
+                <DocsLayout>
+                  <TestingInfrastructureDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/testing/ci"
+              element={
+                <DocsLayout>
+                  <TestingCiDoc />
                 </DocsLayout>
               }
             />
@@ -334,6 +369,30 @@ function MedVaultRoutes() {
               element={
                 <DocsLayout>
                   <IdentityPrivacyDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/fhenix-cofhe"
+              element={
+                <DocsLayout>
+                  <FhenixCofheDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/semaphore"
+              element={
+                <DocsLayout>
+                  <SemaphoreDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/noir"
+              element={
+                <DocsLayout>
+                  <NoirDoc />
                 </DocsLayout>
               }
             />

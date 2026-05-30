@@ -19,3 +19,6 @@ deploy_output.txt
 test_output.txt
 *.bak
 metadata.json
+
+.vercel
+.env*.local

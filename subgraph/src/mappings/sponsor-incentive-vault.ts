@@ -46,6 +46,15 @@ export function handleRewardsDistributed(event: RewardsDistributed): void {
         pool.distributedAt = event.block.timestamp
         pool.save()
     }
+
+    // Trial-end screening (distribute()) emits RewardsDistributed, not MilestoneRewardsDistributed.
+    // Mark milestone 0 paid when phased payouts exist so the UI/subgraph match on-chain screening.
+    let screeningMilestoneId = poolId + "-0"
+    let screeningMilestone = TrialMilestone.load(screeningMilestoneId)
+    if (screeningMilestone) {
+        screeningMilestone.distributed = true
+        screeningMilestone.save()
+    }
 }
 
 export function handleMilestoneRewardsDistributed(event: MilestoneRewardsDistributed): void {

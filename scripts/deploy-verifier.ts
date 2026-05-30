@@ -2,6 +2,10 @@ const hre = require("hardhat");
 const { ethers } = hre;
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+
+const VK_FILE = path.join(__dirname, "../circuits/eligibility_proof/target/vk_honk.bin");
+const VK_FINGERPRINT_FILE = path.join(__dirname, "../src/lib/circuits/vk_fingerprint.json");
 
 async function main() {
     console.log("Deploying Eligibility Verifier contract...\n");
@@ -30,6 +34,21 @@ async function main() {
         existingAddresses[networkName] = {};
     }
     existingAddresses[networkName].EligibilityVerifier = verifierAddress;
+    existingAddresses[networkName].HonkVerifier = verifierAddress;
+
+    let vkFingerprint: string | undefined;
+    if (fs.existsSync(VK_FINGERPRINT_FILE)) {
+        vkFingerprint = JSON.parse(fs.readFileSync(VK_FINGERPRINT_FILE, "utf8")).sha256;
+    } else if (fs.existsSync(VK_FILE)) {
+        vkFingerprint = crypto.createHash("sha256").update(fs.readFileSync(VK_FILE)).digest("hex");
+    }
+    if (vkFingerprint) {
+        existingAddresses[networkName].HonkVerifierVkFingerprint = vkFingerprint;
+        console.log(`✓ VK fingerprint: ${vkFingerprint.slice(0, 16)}…`);
+    } else {
+        console.warn("⚠ No vk_honk.bin — run npm run build:circuit before deploying.");
+    }
+
     fs.writeFileSync(addressesPath, JSON.stringify(existingAddresses, null, 4));
     console.log(`✓ Updated addresses.json with verifier address\n`);
 

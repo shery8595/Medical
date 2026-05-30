@@ -43,10 +43,14 @@ const GET_CONSENTS = `
 
 export function useConsent(address?: string) {
   const al = address?.toLowerCase() || "0x0000000000000000000000000000000000000000";
-  const { data, loading, error, refetch } = useSubgraph(GET_CONSENTS, {
-    patient: al,
-    patientId: al,
-  });
+  const { data, loading, error, refetch } = useSubgraph(
+    GET_CONSENTS,
+    {
+      patient: al,
+      patientId: al,
+    },
+    { enabled: !!address }
+  );
 
   const patientEpoch =
     data?.patientConsentEpoch?.epoch != null ? String(data.patientConsentEpoch.epoch) : "1";

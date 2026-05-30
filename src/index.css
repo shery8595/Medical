@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@1,400;1,700&display=swap');
 @import "tailwindcss";
+@source "../node_modules/@tremor/**/*.{js,ts,jsx,tsx}";
 /* Class-based dark mode only. Default OS dark preference was applying `dark:` tokens on a
    light `bg-slate-50` shell (e.g. sponsor dashboard), which looked like a gray wash/overlay. */
 @custom-variant dark (&:where(.dark, .dark *));

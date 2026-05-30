@@ -10,16 +10,16 @@ import {
   BigInt,
 } from "@graphprotocol/graph-ts";
 
-export class AllConsentRevoked extends ethereum.Event {
-  get params(): AllConsentRevoked__Params {
-    return new AllConsentRevoked__Params(this);
+export class ConsentEpochRevoked extends ethereum.Event {
+  get params(): ConsentEpochRevoked__Params {
+    return new ConsentEpochRevoked__Params(this);
   }
 }
 
-export class AllConsentRevoked__Params {
-  _event: AllConsentRevoked;
+export class ConsentEpochRevoked__Params {
+  _event: ConsentEpochRevoked;
 
-  constructor(event: AllConsentRevoked) {
+  constructor(event: ConsentEpochRevoked) {
     this._event = event;
   }
 
@@ -27,7 +27,7 @@ export class AllConsentRevoked__Params {
     return this._event.parameters[0].value.toAddress();
   }
 
-  get newConsentEpoch(): BigInt {
+  get newEpoch(): BigInt {
     return this._event.parameters[1].value.toBigInt();
   }
 }
@@ -51,14 +51,6 @@ export class ConsentGranted__Params {
 
   get trialId(): BigInt {
     return this._event.parameters[1].value.toBigInt();
-  }
-
-  get consentEpoch(): BigInt {
-    return this._event.parameters[2].value.toBigInt();
-  }
-
-  get expiresAt(): BigInt {
-    return this._event.parameters[3].value.toBigInt();
   }
 }
 
@@ -117,6 +109,29 @@ export class EncryptedConsentGranted__Params {
 export class ConsentManager extends ethereum.SmartContract {
   static bind(address: Address): ConsentManager {
     return new ConsentManager("ConsentManager", address);
+  }
+
+  eligibilityEngine(): Address {
+    let result = super.call(
+      "eligibilityEngine",
+      "eligibilityEngine():(address)",
+      [],
+    );
+
+    return result[0].toAddress();
+  }
+
+  try_eligibilityEngine(): ethereum.CallResult<Address> {
+    let result = super.tryCall(
+      "eligibilityEngine",
+      "eligibilityEngine():(address)",
+      [],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toAddress());
   }
 
   getActiveConsent(_patient: Address, _trialId: BigInt): Bytes {
@@ -183,6 +198,29 @@ export class ConsentManager extends ethereum.SmartContract {
     return ethereum.CallResult.fromValue(value[0].toBytes());
   }
 
+  getPatientConsentEpoch(_patient: Address): BigInt {
+    let result = super.call(
+      "getPatientConsentEpoch",
+      "getPatientConsentEpoch(address):(uint256)",
+      [ethereum.Value.fromAddress(_patient)],
+    );
+
+    return result[0].toBigInt();
+  }
+
+  try_getPatientConsentEpoch(_patient: Address): ethereum.CallResult<BigInt> {
+    let result = super.tryCall(
+      "getPatientConsentEpoch",
+      "getPatientConsentEpoch(address):(uint256)",
+      [ethereum.Value.fromAddress(_patient)],
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBigInt());
+  }
+
   hasConsentRecord(_patient: Address, _trialId: BigInt): boolean {
     let result = super.call(
       "hasConsentRecord",
@@ -215,62 +253,21 @@ export class ConsentManager extends ethereum.SmartContract {
     return ethereum.CallResult.fromValue(value[0].toBoolean());
   }
 
-  trialConsentEpoch(param0: Address, param1: BigInt): BigInt {
+  patientConsentEpoch(param0: Address): BigInt {
     let result = super.call(
-      "trialConsentEpoch",
-      "trialConsentEpoch(address,uint256):(uint256)",
-      [
-        ethereum.Value.fromAddress(param0),
-        ethereum.Value.fromUnsignedBigInt(param1),
-      ],
+      "patientConsentEpoch",
+      "patientConsentEpoch(address):(uint256)",
+      [ethereum.Value.fromAddress(param0)],
     );
 
     return result[0].toBigInt();
   }
 
-  try_trialConsentEpoch(
-    param0: Address,
-    param1: BigInt,
-  ): ethereum.CallResult<BigInt> {
+  try_patientConsentEpoch(param0: Address): ethereum.CallResult<BigInt> {
     let result = super.tryCall(
-      "trialConsentEpoch",
-      "trialConsentEpoch(address,uint256):(uint256)",
-      [
-        ethereum.Value.fromAddress(param0),
-        ethereum.Value.fromUnsignedBigInt(param1),
-      ],
-    );
-    if (result.reverted) {
-      return new ethereum.CallResult();
-    }
-    let value = result.value;
-    return ethereum.CallResult.fromValue(value[0].toBigInt());
-  }
-
-  trialConsentExpiresAt(param0: Address, param1: BigInt): BigInt {
-    let result = super.call(
-      "trialConsentExpiresAt",
-      "trialConsentExpiresAt(address,uint256):(uint256)",
-      [
-        ethereum.Value.fromAddress(param0),
-        ethereum.Value.fromUnsignedBigInt(param1),
-      ],
-    );
-
-    return result[0].toBigInt();
-  }
-
-  try_trialConsentExpiresAt(
-    param0: Address,
-    param1: BigInt,
-  ): ethereum.CallResult<BigInt> {
-    let result = super.tryCall(
-      "trialConsentExpiresAt",
-      "trialConsentExpiresAt(address,uint256):(uint256)",
-      [
-        ethereum.Value.fromAddress(param0),
-        ethereum.Value.fromUnsignedBigInt(param1),
-      ],
+      "patientConsentEpoch",
+      "patientConsentEpoch(address):(uint256)",
+      [ethereum.Value.fromAddress(param0)],
     );
     if (result.reverted) {
       return new ethereum.CallResult();
@@ -372,6 +369,66 @@ export class GrantConsentCall_consentStruct extends ethereum.Tuple {
   }
 }
 
+export class GrantConsent1Call extends ethereum.Call {
+  get inputs(): GrantConsent1Call__Inputs {
+    return new GrantConsent1Call__Inputs(this);
+  }
+
+  get outputs(): GrantConsent1Call__Outputs {
+    return new GrantConsent1Call__Outputs(this);
+  }
+}
+
+export class GrantConsent1Call__Inputs {
+  _call: GrantConsent1Call;
+
+  constructor(call: GrantConsent1Call) {
+    this._call = call;
+  }
+
+  get _trialId(): BigInt {
+    return this._call.inputValues[0].value.toBigInt();
+  }
+
+  get value1(): BigInt {
+    return this._call.inputValues[1].value.toBigInt();
+  }
+}
+
+export class GrantConsent1Call__Outputs {
+  _call: GrantConsent1Call;
+
+  constructor(call: GrantConsent1Call) {
+    this._call = call;
+  }
+}
+
+export class RevokeAllConsentCall extends ethereum.Call {
+  get inputs(): RevokeAllConsentCall__Inputs {
+    return new RevokeAllConsentCall__Inputs(this);
+  }
+
+  get outputs(): RevokeAllConsentCall__Outputs {
+    return new RevokeAllConsentCall__Outputs(this);
+  }
+}
+
+export class RevokeAllConsentCall__Inputs {
+  _call: RevokeAllConsentCall;
+
+  constructor(call: RevokeAllConsentCall) {
+    this._call = call;
+  }
+}
+
+export class RevokeAllConsentCall__Outputs {
+  _call: RevokeAllConsentCall;
+
+  constructor(call: RevokeAllConsentCall) {
+    this._call = call;
+  }
+}
+
 export class RevokeConsentCall extends ethereum.Call {
   get inputs(): RevokeConsentCall__Inputs {
     return new RevokeConsentCall__Inputs(this);
@@ -398,6 +455,36 @@ export class RevokeConsentCall__Outputs {
   _call: RevokeConsentCall;
 
   constructor(call: RevokeConsentCall) {
+    this._call = call;
+  }
+}
+
+export class SetEligibilityEngineCall extends ethereum.Call {
+  get inputs(): SetEligibilityEngineCall__Inputs {
+    return new SetEligibilityEngineCall__Inputs(this);
+  }
+
+  get outputs(): SetEligibilityEngineCall__Outputs {
+    return new SetEligibilityEngineCall__Outputs(this);
+  }
+}
+
+export class SetEligibilityEngineCall__Inputs {
+  _call: SetEligibilityEngineCall;
+
+  constructor(call: SetEligibilityEngineCall) {
+    this._call = call;
+  }
+
+  get _engine(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+}
+
+export class SetEligibilityEngineCall__Outputs {
+  _call: SetEligibilityEngineCall;
+
+  constructor(call: SetEligibilityEngineCall) {
     this._call = call;
   }
 }

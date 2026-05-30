@@ -2,7 +2,7 @@
 name = "eligibility_proof"
 type = "bin"
 authors = ["MedVault"]
-compiler_version = ">=0.36.0"
+compiler_version = ">=1.0.0"
 
 # No external dependencies — Poseidon is in the Noir stdlib:
 #   std::hash::poseidon::bn254::hash_1 / hash_2 / hash_3
@@ -17,3 +17,4 @@ compiler_version = ">=0.36.0"
 # Or use the project shortcut:
 #   npm run build:circuit
 [dependencies]
+poseidon = { tag = "v0.3.0", git = "https://github.com/noir-lang/poseidon" }

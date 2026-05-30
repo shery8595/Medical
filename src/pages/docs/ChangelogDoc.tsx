@@ -4,6 +4,18 @@ import { motion } from "framer-motion";
 
 const entries: { date: string; title: string; items: string[] }[] = [
     {
+        date: "2026-05",
+        title: "One-week incorporation wave",
+        items: [
+            "Eligibility engine emits indexer-only AnonymousEncryptedPropensityCommitted hooks; subgraph aggregates TrialPropensitySignals for operators who redeploy.",
+            "Sponsor analytics: aggregate representation prompts plus Aave pool–backed APR snapshots with explicit fallback modes.",
+            "Patient vault: MVP FHIR R4 JSON importer for Patient/Observation/Condition subsets with form prefill.",
+            "Reclaim attestation categories (lab/provider/general) with client-side TTL and migration from legacy session keys.",
+            "ConsentManager legacy grantConsent(uint256,uint256) path restored for tests/SDK flows alongside encrypted proofs.",
+            "Explicit roadmap deferrals: confidential training, MPC custody, cross-chain hub, DAO transition — documented in Compliance + README.",
+        ],
+    },
+    {
         date: "2026-04",
         title: "Documentation & routing",
         items: [

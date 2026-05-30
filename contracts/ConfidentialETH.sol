@@ -108,16 +108,16 @@ contract ConfidentialETH {
      * @notice Withdraw by providing the plaintext amount and a Threshold Network signature
      * @dev CRIT-3: Requires a TN signature proving plaintext(balance) >= units.
      *      This prevents free ETH extraction via FHE underflow edge cases.
-     * @dev C-2: Signature must cover (ctHash, balance, msg.sender, units, nonce) to prevent replay
+     * @dev C-2: Replay protection uses (balanceSig, msg.sender, units, nonce) in proofKey.
+     *      FHE.verifyDecryptResult only binds ciphertext handle to plaintext balance — not units.
      * @param units The amount to withdraw in micro-ETH units
-     * @param balanceSig Threshold Network ECDSA signature over (ctHash, balance, caller, units, nonce)
+     * @param balanceSig Threshold Network signature for verifyDecryptResult(bal, balance, balanceSig)
      * @param balance The claimed plaintext balance (must match signature)
      */
     function withdraw(uint64 units, bytes calldata balanceSig, uint64 balance) external nonReentrant {
         require(units > 0, "Amount must be > 0");
         
-        // C-2: Include caller, units, and nonce in proof key for replay protection
-        // The Threshold Network signature must cover: (ctHash, balance, msg.sender, units, nonce)
+        // C-2: Include caller, units, and nonce in proof key for replay protection (off-chain convention)
         uint256 currentNonce = withdrawNonces[msg.sender];
         bytes32 proofKey = keccak256(abi.encodePacked(balanceSig, msg.sender, units, currentNonce));
         require(!usedWithdrawProofs[proofKey], "Proof already used");
@@ -154,7 +154,8 @@ contract ConfidentialETH {
     /**
      * @notice Withdraw on behalf with Threshold Network signature verification
      * @dev CRIT-3: Same protection as withdraw() but for authorized contract usage
-     * @dev C-2: Signature must cover (ctHash, balance, user, destination, units, nonce) to prevent replay
+     * @dev C-2: Replay protection uses (balanceSig, user, destination, units, nonce) in proofKey.
+     *      WARNING: verifyDecryptResult does NOT bind destination or units — only handle to balance.
      */
     function withdrawTo(
         address user,
@@ -165,8 +166,7 @@ contract ConfidentialETH {
     ) external onlyAuthorized nonReentrant {
         require(units > 0, "Amount must be > 0");
         
-        // C-2: Include user, destination, units, and nonce in proof key for replay protection
-        // The Threshold Network signature must cover: (ctHash, balance, user, destination, units, nonce)
+        // C-2: Include user, destination, units, and nonce in proof key for replay protection (off-chain convention)
         uint256 currentNonce = withdrawNonces[user];
         bytes32 proofKey = keccak256(abi.encodePacked(balanceSig, user, destination, units, currentNonce));
         require(!usedWithdrawProofs[proofKey], "Proof already used");

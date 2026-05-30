@@ -1,113 +1,63 @@
 /**
- * MedVault Noir Integration — Client-side ZK proof generation
+ * MedVault Noir integration — browser UltraHonk proofs for HonkVerifier.sol (EVM / Keccak).
  *
- * Generates UltraHonk eligibility proofs using @noir-lang/noir_js +
- * @noir-lang/backend_barretenberg (both v0.36.0, already installed).
- *
- * The circuit (circuits/eligibility_proof/src/main.nr) proves:
- *   - Nullifier: Poseidon([scope, secret]) == nullifier
- *   - Result:    Poseidon([eligible, scope, secret]) == result_hash
- *
- * All Poseidon calls use poseidon-lite (transitive dep of @semaphore-protocol/identity),
- * which implements BN254-Poseidon with the same parameters as Noir's stdlib.
- *
- * Usage in hooks:  see src/hooks/useEligibilityProof.ts
+ * Stack (Noir v1.0.0-beta.21): @noir-lang/noir_js + @aztec/bb.js 5.x with verifierTarget `evm-no-zk`.
  */
 
+import { Barretenberg, UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import { BarretenbergBackend } from "@noir-lang/backend_barretenberg";
 import { Identity } from "@semaphore-protocol/identity";
-// poseidon-lite is a transitive dependency of @semaphore-protocol/identity v4.x
 import { poseidon2, poseidon3 } from "poseidon-lite";
-import { getAnonymousNullifier } from "./semaphore";
+import { fieldFromBytes32, parseFieldElement } from "./field";
+import { ensureNoirWasmInitialized } from "./noirInit";
+import { getAnonymousNullifier, semaphoreScopeField } from "./semaphore";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+/** Keccak transcript + non-ZK — matches Solidity HonkVerifier from `npm run build:circuit`. */
+export const EVM_HONK_PROVE_OPTIONS = { verifierTarget: "evm-no-zk" as const };
 
 export interface EligibilityProofInputs {
-    /** Semaphore V4 identity secret as BigInt — derives all public values */
     secret: bigint;
-    /** The eligibility result to certify */
     eligibilityResult: boolean;
-    /** Trial ID (= scope / externalNullifier used in Semaphore proof) */
     scope: bigint;
-    /** Semaphore nullifier = Poseidon([scope, secret]) — only public per-trial identifier */
     nullifier: bigint;
-    /** Result hash = Poseidon([eligible, scope, secret]) */
+    scopeInternal: bigint;
     resultHash: bigint;
 }
 
 export interface EligibilityProofData {
-    /** Raw UltraHonk proof bytes for the contract */
     proofBytes: `0x${string}`;
-    /** Public inputs as bytes32[] for HonkVerifier.verify() */
     publicInputs: `0x${string}`[];
-    /** The inputs that were proven */
     inputs: EligibilityProofInputs;
 }
 
-// ── Circuit loading ───────────────────────────────────────────────────────────
+type CompiledCircuit = { bytecode: string };
 
-let _compiledCircuit: object | null = null;
+let _compiledCircuit: CompiledCircuit | null = null;
 
-/**
- * Loads the compiled circuit artifact from src/lib/circuits/eligibility_proof.json.
- * The artifact is produced by `npm run build:circuit` (nargo compile + copy).
- * Cached in memory after first load.
- */
-export async function loadCircuit(): Promise<object> {
+export async function loadCircuit(): Promise<CompiledCircuit> {
     if (_compiledCircuit) return _compiledCircuit;
-
-    try {
-        // Vite's dynamic import for JSON (the file is placed by compile-circuit.js)
-        const circuit = await import("./circuits/eligibility_proof.json");
-        _compiledCircuit = circuit.default ?? circuit;
-        return _compiledCircuit!;
-    } catch {
-        throw new Error(
-            "Circuit artifact not found at src/lib/circuits/eligibility_proof.json.\n" +
-            "Run `npm run build:circuit` to compile the Noir circuit first."
-        );
+    const circuit = await import("./circuits/eligibility_proof.json");
+    _compiledCircuit = (circuit.default ?? circuit) as CompiledCircuit;
+    if (!_compiledCircuit.bytecode) {
+        throw new Error("Circuit artifact missing bytecode. Run `npm run build:circuit`.");
     }
+    return _compiledCircuit;
 }
 
-// ── Public input computation (off-chain, matches the circuit constraints) ────
-
-/**
- * Derives all public inputs from the Semaphore V4 identity and trial context.
- * Uses poseidon-lite (same BN254-Poseidon as Noir stdlib) for hash compatibility.
- *
- * @param identity  Semaphore V4 Identity object from getStoredIdentity()
- * @param trialId   On-chain trial ID (used as scope / externalNullifier)
- * @param eligible  The eligibility result to certify
- */
 export function deriveProofInputs(
     identity: Identity,
     trialId: bigint,
     eligible: boolean
 ): EligibilityProofInputs {
-    // Semaphore v4 exposes the scalar used by its identity/nullifier math.
-    // Do not use identity.toString(); it serializes to "[object Object]" in v4.
     const secret = identity.secretScalar;
     const scope = trialId;
-
-    // Semaphore V4 nullifier: Poseidon([scope, secret]) — same order as the V4 circuit
-    const nullifier = poseidon2([scope, secret]);
-
-    // Result hash binds the eligibility claim to this identity and trial
+    const scopeInternal = semaphoreScopeField(trialId);
+    const nullifier = poseidon2([scopeInternal, secret]);
     const eligibleField = eligible ? 1n : 0n;
     const resultHash = poseidon3([eligibleField, scope, secret]);
-
-    return { secret, eligibilityResult: eligible, scope, nullifier, resultHash };
+    return { secret, eligibilityResult: eligible, scope, nullifier, resultHash, scopeInternal };
 }
 
-/**
- * Derives proof inputs by reading the stored Semaphore nullifier for the trial.
- * If no stored nullifier exists (patient hasn't applied yet), throws.
- *
- * @param identity  Semaphore V4 Identity object
- * @param trialId   On-chain trial ID
- * @param eligible  The eligibility result to certify
- */
 export function deriveProofInputsWithStoredNullifier(
     identity: Identity,
     trialId: bigint,
@@ -116,110 +66,151 @@ export function deriveProofInputsWithStoredNullifier(
     const storedNullifier = getAnonymousNullifier(trialId);
     if (storedNullifier === null) {
         throw new Error(
-            `No stored Semaphore nullifier found for trial ${trialId}. ` +
-            "The patient must have applied to this trial before certifying a result."
+            `No stored Semaphore nullifier for trial ${trialId}. Apply to the trial before certifying.`
         );
     }
-
     const inputs = deriveProofInputs(identity, trialId, eligible);
-
     if (inputs.nullifier !== storedNullifier) {
         throw new Error(
-            "Stored Semaphore nullifier does not match the Noir witness inputs. " +
-            "Regenerate the anonymous application proof before certifying this result."
+            "Stored Semaphore nullifier does not match witness inputs. Re-apply anonymously first."
         );
     }
-
     return inputs;
 }
 
-// ── Proof generation ──────────────────────────────────────────────────────────
-
-/**
- * Generates a UltraHonk eligibility proof using the Barretenberg backend.
- *
- * @param identity        Semaphore V4 Identity (get from getStoredIdentity())
- * @param trialId         On-chain trial ID
- * @param eligibleResult  The eligibility result to certify
- * @returns               Proof bytes and public inputs ready for the contract
- */
 export async function generateEligibilityProof(
     identity: Identity,
     trialId: bigint,
     eligibleResult: boolean
 ): Promise<EligibilityProofData> {
-    const compiledCircuit = await loadCircuit();
+    await ensureNoirWasmInitialized();
 
-    // ── Derive inputs ────────────────────────────────────────────────────────
+    const compiledCircuit = await loadCircuit();
     const inputs = deriveProofInputsWithStoredNullifier(identity, trialId, eligibleResult);
 
-    // ── Build Noir execution inputs ──────────────────────────────────────────
-    // noir_js expects Field/bool inputs as decimal strings or booleans.
-    // commitment is no longer a public input — it stays private inside ZK.
     const noirInputs: Record<string, string | boolean> = {
-        secret:             inputs.secret.toString(),
+        secret: inputs.secret.toString(),
+        scope_internal: inputs.scopeInternal.toString(),
         eligibility_result: inputs.eligibilityResult,
-        scope:              inputs.scope.toString(),
-        nullifier:          inputs.nullifier.toString(),
-        result_hash:        inputs.resultHash.toString(),
+        scope: inputs.scope.toString(),
+        nullifier: inputs.nullifier.toString(),
+        result_hash: inputs.resultHash.toString(),
+        eligible: inputs.eligibilityResult ? "1" : "0",
     };
 
-    // ── Execute witness + generate proof ─────────────────────────────────────
-    const backend = new BarretenbergBackend(compiledCircuit as any, { threads: 4 });
-    const noir = new Noir(compiledCircuit as any);
+    const api = await Barretenberg.new({ threads: 4 });
+    const backend = new UltraHonkBackend(compiledCircuit.bytecode, api);
+    const noir = new Noir(compiledCircuit as object);
 
     const { witness } = await noir.execute(noirInputs);
-    const { proof, publicInputs } = await backend.generateProof(witness);
+    const { proof, publicInputs: rawPublicInputs } = await backend.generateProof(
+        witness,
+        EVM_HONK_PROVE_OPTIONS
+    );
 
-    // ── Format for Solidity (HonkVerifier.verify) ────────────────────────────
-    const proofBytes = formatProofBytes(proof);
-    const solidityPublicInputs = formatPublicInputs(publicInputs);
+    assertProofPublicInputsMatchInputs(rawPublicInputs, inputs);
+    const solidityPublicInputs = buildContractPublicInputsFromRaw(rawPublicInputs);
 
-    await backend.destroy();
+    const localValid = await backend.verifyProof(
+        { proof, publicInputs: rawPublicInputs },
+        EVM_HONK_PROVE_OPTIONS
+    );
+    await api.destroy();
 
-    return {
-        proofBytes,
-        publicInputs: solidityPublicInputs,
-        inputs,
-    };
+    if (!localValid) {
+        throw new Error(
+            "Proof failed local verification. Run `npm run build:circuit` and redeploy HonkVerifier."
+        );
+    }
+
+    const proofBytes = formatProofBytesForSolidity(proof);
+    assertSolidityProofMetadata(proofBytes);
+
+    return { proofBytes, publicInputs: solidityPublicInputs, inputs };
 }
 
-// ── Formatting helpers ────────────────────────────────────────────────────────
-
-/**
- * Converts a Uint8Array proof to a hex-encoded bytes string for Solidity calldata.
- */
-function formatProofBytes(proof: Uint8Array): `0x${string}` {
+export function formatProofBytesForSolidity(proof: Uint8Array): `0x${string}` {
     return ("0x" + Buffer.from(proof).toString("hex")) as `0x${string}`;
 }
 
-/**
- * Converts public inputs (string[] from noir_js) to bytes32[] for HonkVerifier.verify().
- * Each public input is a hex-encoded field element, left-padded to 32 bytes.
- */
-function formatPublicInputs(publicInputs: string[]): `0x${string}`[] {
-    return publicInputs.map((pi) => {
-        const hex = pi.startsWith("0x") ? pi.slice(2) : pi;
-        return ("0x" + hex.padStart(64, "0")) as `0x${string}`;
-    });
+/** bb 5.x HonkVerifier (LOG_N=11): proof is flat field elements, ~188 × 32 bytes. */
+const MIN_SOLIDITY_PROOF_BYTES = 6_000;
+const EXPECTED_SOLIDITY_PROOF_FIELDS = 188;
+
+export function readSolidityProofMetadata(proofBytes: `0x${string}`): {
+    circuitSize: bigint;
+    publicInputsSize: bigint;
+    publicInputsOffset: bigint;
+} {
+    const hex = proofBytes.startsWith("0x") ? proofBytes.slice(2) : proofBytes;
+    const readWord = (index: number) => BigInt(`0x${hex.slice(index * 64, index * 64 + 64)}`);
+    return {
+        circuitSize: readWord(0),
+        publicInputsSize: readWord(1),
+        publicInputsOffset: readWord(2),
+    };
 }
 
-/**
- * Verifies a proof locally (without on-chain call) using the Barretenberg backend.
- * Useful for testing before submitting to the contract.
- */
-export async function verifyProofLocally(proofData: EligibilityProofData): Promise<boolean> {
+export function assertSolidityProofMetadata(proofBytes: `0x${string}`): void {
+    const byteLen = (proofBytes.length - 2) / 2;
+    if (byteLen < MIN_SOLIDITY_PROOF_BYTES) {
+        throw new Error(
+            `Proof too short (${byteLen} bytes). Expected ~${EXPECTED_SOLIDITY_PROOF_FIELDS * 32} for bb 5.x HonkVerifier.`
+        );
+    }
+    if (byteLen % 32 !== 0) {
+        throw new Error("Proof length must be a multiple of 32 bytes (BN254 field elements).");
+    }
+}
+
+export function buildContractPublicInputs(inputs: EligibilityProofInputs): `0x${string}`[] {
+    const eligibleField = inputs.eligibilityResult ? 1n : 0n;
+    return [
+        fieldToBytes32(inputs.scope),
+        fieldToBytes32(inputs.nullifier),
+        fieldToBytes32(inputs.resultHash),
+        fieldToBytes32(eligibleField),
+    ];
+}
+
+export function buildContractPublicInputsFromRaw(rawPublicInputs: string[]): `0x${string}`[] {
+    return rawPublicInputs.map((pi) => fieldToBytes32(parseFieldElement(pi)));
+}
+
+function fieldToBytes32(value: bigint): `0x${string}` {
+    return ("0x" + value.toString(16).padStart(64, "0")) as `0x${string}`;
+}
+
+export { fieldFromBytes32, parseFieldElement } from "./field";
+
+function assertProofPublicInputsMatchInputs(
+    rawPublicInputs: string[],
+    inputs: EligibilityProofInputs
+): void {
+    const eligibleField = inputs.eligibilityResult ? 1n : 0n;
+    const expected = new Set<bigint>([inputs.scope, inputs.nullifier, inputs.resultHash, eligibleField]);
+    const actual = rawPublicInputs.map((pi) => parseFieldElement(pi));
+    if (actual.length !== 4) {
+        throw new Error(`Expected 4 public inputs, got ${actual.length}.`);
+    }
+    for (const value of expected) {
+        if (!actual.some((a) => a === value)) {
+            throw new Error("Proof public inputs do not match eligibility witness.");
+        }
+    }
+}
+
+export async function verifyProofLocally(
+    proof: Uint8Array,
+    rawPublicInputs: string[]
+): Promise<boolean> {
     const compiledCircuit = await loadCircuit();
-    const backend = new BarretenbergBackend(compiledCircuit as any);
-
-    const proofBytes = Buffer.from(proofData.proofBytes.slice(2), "hex");
-    const publicInputs = proofData.publicInputs.map((pi) => pi.slice(2)); // strip 0x
-
-    const valid = await backend.verifyProof({
-        proof: proofBytes,
-        publicInputs,
-    });
-
-    await backend.destroy();
+    const api = await Barretenberg.new({ threads: 1 });
+    const backend = new UltraHonkBackend(compiledCircuit.bytecode, api);
+    const valid = await backend.verifyProof(
+        { proof, publicInputs: rawPublicInputs },
+        EVM_HONK_PROVE_OPTIONS
+    );
+    await api.destroy();
     return valid;
 }

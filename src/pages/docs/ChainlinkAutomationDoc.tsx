@@ -36,12 +36,12 @@ export function ChainlinkAutomationDoc() {
                     </li>
                 </ul>
 
-                <Callout type="info" title="Not milestone-by-milestone in this contract">
-                    Milestone-specific payouts and pagination live on <strong>SponsorIncentiveVault</strong> /{" "}
-                    <strong>TrialMilestoneManager</strong> flows; docs elsewhere describe sponsor-triggered distribution.
-                    This automation contract focuses on <strong>trial expiry finalization</strong> (pool sweep attempt +
-                    deactivate). Product copy that says “Chainlink pays milestone N” may refer to the broader protocol
-                    story — verify against the Solidity you deployed.
+                <Callout type="info" title="Screening (milestone 0) only">
+                    At trial end, <code>performUpkeep</code> calls <code>vault.distribute(trialId)</code>, which pays{" "}
+                    <strong>milestone 0 (screening)</strong> to all registered participants and emits{" "}
+                    <code>MilestoneRewardsDistributed</code> for index <code>0</code>. Later milestones are released by
+                    the sponsor via <code>distributePartial</code> / <code>distributeMilestoneToParticipant</code> on{" "}
+                    <strong>SponsorIncentiveVault</strong>.
                 </Callout>
 
                 <h2>Chainlink forwarder</h2>
@@ -72,8 +72,24 @@ export function ChainlinkAutomationDoc() {
                         Register an upkeep in the Chainlink Automation UI for this contract (
                         <code>checkUpkeep</code>/<code>performUpkeep</code>) on Arbitrum Sepolia (or your network).
                     </li>
-                    <li>Set <code>setChainlinkForwarder</code> to the network&apos;s forwarder from Chainlink docs.</li>
+                    <li>
+                        After registration, copy the <strong>Forwarder address</strong> from your upkeep&apos;s Details page
+                        (per-upkeep, not a global network address) and call{" "}
+                        <code>setChainlinkForwarder(forwarder)</code> on <code>MedVaultAutomation</code>. Until this is set,
+                        Chainlink&apos;s simulated <code>performUpkeep</code> reverts and the upkeep never shows a run date.
+                    </li>
+                    <li>
+                        <code>checkData</code> can be empty (<code>0x</code>) — the contract ignores it.
+                    </li>
                 </ul>
+
+                <Callout type="warning" title="Upkeep not running?">
+                    Run <code>npx hardhat run scripts/diagnose-automation-upkeep.ts --network arbitrumSepolia</code>.
+                    If <code>checkUpkeep</code> is <code>true</code> but <code>chainlinkForwarder</code> is{" "}
+                    <code>0x000…000</code>, set the forwarder from the Chainlink UI with{" "}
+                    <code>scripts/set-chainlink-forwarder.ts</code>. The contract owner may also call{" "}
+                    <code>performUpkeep</code> manually to finalize one expired trial per transaction while testing.
+                </Callout>
 
                 <CodeBlock
                     language="text"

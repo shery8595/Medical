@@ -576,6 +576,100 @@ export class Trial extends Entity {
       "anonymousSubmissions",
     );
   }
+
+  get propensitySignals(): TrialPropensitySignalsLoader {
+    return new TrialPropensitySignalsLoader(
+      "Trial",
+      this.get("id")!.toString(),
+      "propensitySignals",
+    );
+  }
+}
+
+export class TrialPropensitySignals extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(
+      id != null,
+      "Cannot save TrialPropensitySignals entity without an ID",
+    );
+    if (id) {
+      assert(
+        id.kind == ValueKind.STRING,
+        `Entities of type TrialPropensitySignals must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`,
+      );
+      store.set("TrialPropensitySignals", id.toString(), this);
+    }
+  }
+
+  static loadInBlock(id: string): TrialPropensitySignals | null {
+    return changetype<TrialPropensitySignals | null>(
+      store.get_in_block("TrialPropensitySignals", id),
+    );
+  }
+
+  static load(id: string): TrialPropensitySignals | null {
+    return changetype<TrialPropensitySignals | null>(
+      store.get("TrialPropensitySignals", id),
+    );
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get trial(): string {
+    let value = this.get("trial");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set trial(value: string) {
+    this.set("trial", Value.fromString(value));
+  }
+
+  get signalCount(): i32 {
+    let value = this.get("signalCount");
+    if (!value || value.kind == ValueKind.NULL) {
+      return 0;
+    } else {
+      return value.toI32();
+    }
+  }
+
+  set signalCount(value: i32) {
+    this.set("signalCount", Value.fromI32(value));
+  }
+
+  get lastSignalAt(): BigInt {
+    let value = this.get("lastSignalAt");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set lastSignalAt(value: BigInt) {
+    this.set("lastSignalAt", Value.fromBigInt(value));
+  }
 }
 
 export class TrialMilestone extends Entity {
@@ -2215,6 +2309,66 @@ export class AnonymousSubmission extends Entity {
       this.set("finalCt", Value.fromBytes(<Bytes>value));
     }
   }
+
+  get fhePropensityCommittedAt(): BigInt | null {
+    let value = this.get("fhePropensityCommittedAt");
+    if (!value || value.kind == ValueKind.NULL) {
+      return null;
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set fhePropensityCommittedAt(value: BigInt | null) {
+    if (!value) {
+      this.unset("fhePropensityCommittedAt");
+    } else {
+      this.set("fhePropensityCommittedAt", Value.fromBigInt(<BigInt>value));
+    }
+  }
+
+  get noirCertified(): boolean {
+    let value = this.get("noirCertified");
+    if (!value || value.kind == ValueKind.NULL) {
+      return false;
+    } else {
+      return value.toBoolean();
+    }
+  }
+
+  set noirCertified(value: boolean) {
+    this.set("noirCertified", Value.fromBoolean(value));
+  }
+
+  get noirEligible(): boolean {
+    let value = this.get("noirEligible");
+    if (!value || value.kind == ValueKind.NULL) {
+      return false;
+    } else {
+      return value.toBoolean();
+    }
+  }
+
+  set noirEligible(value: boolean) {
+    this.set("noirEligible", Value.fromBoolean(value));
+  }
+
+  get noirCertifiedAt(): BigInt | null {
+    let value = this.get("noirCertifiedAt");
+    if (!value || value.kind == ValueKind.NULL) {
+      return null;
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set noirCertifiedAt(value: BigInt | null) {
+    if (!value) {
+      this.unset("noirCertifiedAt");
+    } else {
+      this.set("noirCertifiedAt", Value.fromBigInt(<BigInt>value));
+    }
+  }
 }
 
 export class TrialLoader extends Entity {
@@ -2358,6 +2512,24 @@ export class AnonymousSubmissionLoader extends Entity {
   load(): AnonymousSubmission[] {
     let value = store.loadRelated(this._entity, this._id, this._field);
     return changetype<AnonymousSubmission[]>(value);
+  }
+}
+
+export class TrialPropensitySignalsLoader extends Entity {
+  _entity: string;
+  _field: string;
+  _id: string;
+
+  constructor(entity: string, id: string, field: string) {
+    super();
+    this._entity = entity;
+    this._id = id;
+    this._field = field;
+  }
+
+  load(): TrialPropensitySignals[] {
+    let value = store.loadRelated(this._entity, this._id, this._field);
+    return changetype<TrialPropensitySignals[]>(value);
   }
 }
 

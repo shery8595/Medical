@@ -2,9 +2,11 @@ import {
     EligibilityComputed,
     AppliedToTrial,
     ApplicationStatusUpdated,
-    AnonymousApplicationStatusUpdated
+    AnonymousApplicationStatusUpdated,
+    AnonymousEncryptedPropensityCommitted,
+    EligibilityProofVerified,
 } from "../../generated/EligibilityEngine/EligibilityEngine"
-import { EligibilityResult, Application, AnonymousSubmission } from "../../generated/schema"
+import { EligibilityResult, Application, AnonymousSubmission, Trial, TrialPropensitySignals } from "../../generated/schema"
 
 export function handleEligibilityComputed(event: EligibilityComputed): void {
     let id = event.params.patient.toHex() + "-" + event.params.trialId.toString()
@@ -58,6 +60,43 @@ export function handleAnonymousApplicationStatusUpdated(event: AnonymousApplicat
                       event.params.status === 2 ? "Accepted" : "Rejected"
         application.status = status
         application.statusUpdatedAt = event.block.timestamp
+        application.save()
+    }
+}
+
+export function handleAnonymousEncryptedPropensityCommitted(event: AnonymousEncryptedPropensityCommitted): void {
+    let trialId = event.params.trialId.toString()
+    if (!Trial.load(trialId)) {
+        return
+    }
+
+    let applicationId = event.params.nullifier.toString() + "-" + trialId
+    let application = AnonymousSubmission.load(applicationId)
+    if (application) {
+        application.fhePropensityCommittedAt = event.block.timestamp
+        application.save()
+    }
+
+    let id = trialId
+    let agg = TrialPropensitySignals.load(id)
+    if (!agg) {
+        agg = new TrialPropensitySignals(id)
+        agg.trial = trialId
+        agg.signalCount = 0
+    }
+    agg.signalCount = agg.signalCount + 1
+    agg.lastSignalAt = event.block.timestamp
+    agg.save()
+}
+
+export function handleEligibilityProofVerified(event: EligibilityProofVerified): void {
+    let trialId = event.params.trialId.toString()
+    let applicationId = event.params.nullifier.toString() + "-" + trialId
+    let application = AnonymousSubmission.load(applicationId)
+    if (application) {
+        application.noirCertified = true
+        application.noirEligible = event.params.eligible
+        application.noirCertifiedAt = event.block.timestamp
         application.save()
     }
 }

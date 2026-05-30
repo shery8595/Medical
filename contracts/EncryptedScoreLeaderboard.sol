@@ -166,8 +166,8 @@ contract EncryptedScoreLeaderboard {
         uint256 _nullifierB
     ) internal returns (ebool) {
         // Get encrypted scores from EligibilityEngine (nullifier-keyed)
-        euint8 scoreA = eligibilityEngine.getAnonymousScore(_nullifierA);
-        euint8 scoreB = eligibilityEngine.getAnonymousScore(_nullifierB);
+        euint8 scoreA = eligibilityEngine.getAnonymousScore(_nullifierA, _trialId);
+        euint8 scoreB = eligibilityEngine.getAnonymousScore(_nullifierB, _trialId);
 
         // FHENIX: Encrypted comparison - returns encrypted boolean
         ebool aGreaterThanB = FHE.gt(scoreA, scoreB);

@@ -8,17 +8,16 @@ const startBlocksPath = path.join(__dirname, '../subgraph/arbSepolia-start-block
 const addresses = JSON.parse(fs.readFileSync(addressesPath, 'utf8'))['arbSepolia'];
 let subgraphYaml = fs.readFileSync(subgraphYamlPath, 'utf8');
 
+/** Indexed in subgraph.yaml. Audit logs + staking use RPC in the app (see useAuditLogs, useStaking). */
 const mapping = {
-  "AnonymousPatientRegistry": addresses.AnonymousPatientRegistry,
-  "TrialManager": addresses.TrialManager,
-  "ConsentManager": addresses.ConsentManager,
-  "EligibilityEngine": addresses.EligibilityEngine,
-  "SponsorIncentiveVault": addresses.SponsorIncentiveVault,
-  "DataAccessLog": addresses.DataAccessLog,
-  "TrialMilestoneManager": addresses.TrialMilestoneManager,
-  "SponsorRegistry": addresses.SponsorRegistry,
-  "StakingManager": addresses.StakingManager,
-  "MedVaultRegistry": addresses.MedVaultRegistry
+  AnonymousPatientRegistry: addresses.AnonymousPatientRegistry,
+  TrialManager: addresses.TrialManager,
+  ConsentManager: addresses.ConsentManager,
+  EligibilityEngine: addresses.EligibilityEngine,
+  SponsorIncentiveVault: addresses.SponsorIncentiveVault,
+  TrialMilestoneManager: addresses.TrialMilestoneManager,
+  SponsorRegistry: addresses.SponsorRegistry,
+  MedVaultRegistry: addresses.MedVaultRegistry,
 };
 
 // Written by `npx hardhat run scripts/deploy.ts --network arbitrumSepolia`. Fallback: previous deploy.

@@ -49,8 +49,16 @@ type Trial @entity(immutable: false) {
   milestones: [TrialMilestone!]! @derivedFrom(field: "trial")
   progress: [ParticipantProgress!]! @derivedFrom(field: "trial")
   anonymousSubmissions: [AnonymousSubmission!]! @derivedFrom(field: "trial")
+  propensitySignals: [TrialPropensitySignals!]! @derivedFrom(field: "trial")
 }
 
+# Aggregate indexer-visible signals for encrypted propensity commits (no score plaintext).
+type TrialPropensitySignals @entity(immutable: false) {
+  id: ID!
+  trial: Trial!
+  signalCount: Int!
+  lastSignalAt: BigInt!
+}
 type TrialMilestone @entity(immutable: false) {
   id: ID!                              # trialId-index
   trial: Trial!
@@ -187,4 +195,8 @@ type AnonymousSubmission @entity(immutable: false) {
   statusUpdatedAt: BigInt
   stagedAt: BigInt                     # set when AnonymousApplyStaged fires
   finalCt: Bytes                       # ebool ct hash from staging (bytes32)
+  fhePropensityCommittedAt: BigInt     # AnonymousEncryptedPropensityCommitted
+  noirCertified: Boolean!
+  noirEligible: Boolean                # from EligibilityProofVerified
+  noirCertifiedAt: BigInt
 }

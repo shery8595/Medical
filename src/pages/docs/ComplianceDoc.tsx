@@ -78,6 +78,21 @@ export function ComplianceDoc() {
 
                 <hr className="my-12 border-slate-200" />
 
+                <Callout type="info" title="Roadmap & deferred scope">
+                    <p className="m-0 text-sm leading-relaxed">
+                        Confidential model training pipelines, MPC key custody across hospitals, confidential cross-chain settlement hubs,
+                        and on-chain DAO migration remain <strong>out of scope</strong> for the current incorporation sprint. Interfaces and documentation
+                        call out advisory analytics only — no fairness enforcement executes on-chain in this MVP.
+                    </p>
+                    <ul className="mt-4 mb-0 pl-5 space-y-1 text-sm opacity-95">
+                        <li>Patients can optionally import FHIR JSON for faster profile entry — manual validation still required before encrypting.</li>
+                        <li>Sponsor dashboards surface aggregate funnel metrics derived from indexer events rather than PHI.</li>
+                        <li>Stakeholders deploying new contracts must regenerate ABIs/subgraphs so encrypted propensity events stay aligned.</li>
+                    </ul>
+                </Callout>
+
+                <hr className="my-12 border-slate-200" />
+
                 {/* ═════════════ HIPAA ═════════════ */}
                 <h2>I. HIPAA Technical Safeguard Mapping</h2>
                 <p>

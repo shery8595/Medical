@@ -7,6 +7,24 @@
       "inputs": [
         {
           "internalType": "uint256",
+          "name": "_nullifier",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_trialId",
+          "type": "uint256"
+        }
+      ],
+      "name": "cancelStagedAnonymousEligibility",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
           "name": "_commitment",
           "type": "uint256"
         },

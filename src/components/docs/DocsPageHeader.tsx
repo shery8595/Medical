@@ -13,16 +13,16 @@ export interface DocsPageHeaderProps {
 /** Title block for doc pages. Use with [`DocsPageToolbar`](./DocsPageToolbar.tsx) in the layout for copy actions. */
 export function DocsPageHeader({ eyebrow, title, description, className }: DocsPageHeaderProps) {
     return (
-        <div className={cn("not-prose flex flex-col gap-3 mb-6 pb-6 border-b border-slate-200/90", className)}>
+        <div className={cn("not-prose flex flex-col gap-1.5 mb-4 pb-3 border-b border-slate-200/90", className)}>
             <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#00685f] mb-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#00685f] mb-1">
                     {eyebrow}
                 </p>
-                <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-tight text-slate-900 m-0">
+                <h1 className="text-xl sm:text-2xl font-display font-bold tracking-tight text-slate-900 m-0">
                     {title}
                 </h1>
                 {description && (
-                    <p className="text-base text-slate-500 mt-3 max-w-2xl m-0 leading-relaxed">
+                    <p className="text-sm text-slate-500 mt-1.5 max-w-2xl m-0 leading-snug">
                         {description}
                     </p>
                 )}

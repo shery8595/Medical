@@ -708,6 +708,56 @@ export class AcceptOwnershipCall__Outputs {
   }
 }
 
+export class ClaimParticipantRewardsCall extends ethereum.Call {
+  get inputs(): ClaimParticipantRewardsCall__Inputs {
+    return new ClaimParticipantRewardsCall__Inputs(this);
+  }
+
+  get outputs(): ClaimParticipantRewardsCall__Outputs {
+    return new ClaimParticipantRewardsCall__Outputs(this);
+  }
+}
+
+export class ClaimParticipantRewardsCall__Inputs {
+  _call: ClaimParticipantRewardsCall;
+
+  constructor(call: ClaimParticipantRewardsCall) {
+    this._call = call;
+  }
+
+  get _trialId(): BigInt {
+    return this._call.inputValues[0].value.toBigInt();
+  }
+
+  get _nullifier(): BigInt {
+    return this._call.inputValues[1].value.toBigInt();
+  }
+
+  get _destination(): Address {
+    return this._call.inputValues[2].value.toAddress();
+  }
+
+  get units(): BigInt {
+    return this._call.inputValues[3].value.toBigInt();
+  }
+
+  get balanceSig(): Bytes {
+    return this._call.inputValues[4].value.toBytes();
+  }
+
+  get balance(): BigInt {
+    return this._call.inputValues[5].value.toBigInt();
+  }
+}
+
+export class ClaimParticipantRewardsCall__Outputs {
+  _call: ClaimParticipantRewardsCall;
+
+  constructor(call: ClaimParticipantRewardsCall) {
+    this._call = call;
+  }
+}
+
 export class DistributeCall extends ethereum.Call {
   get inputs(): DistributeCall__Inputs {
     return new DistributeCall__Inputs(this);

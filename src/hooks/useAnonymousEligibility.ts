@@ -1,13 +1,12 @@
 import { useState, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { getEligibilityEngine } from '../lib/contracts';
-import { publicDecrypt } from '../lib/fhe';
-import { getAnonymousNullifier } from '../lib/semaphore';
+import { getEligibilityEngine, resolveChainIdFrom } from '../lib/contracts';
+import { FheTypes, getFHEClient, resetFheClient } from '../lib/fhe';
+import { getAnonymousNullifier, getStoredIdentity, getEphemeralSigner } from '../lib/semaphore';
 
 /**
  * Hook for anonymous patients to decrypt their eligibility results.
- * Uses the per-trial nullifier (Poseidon([trialId, secret])) to look up results,
- * which is unlinkable across trials.
+ * Uses ephemeral permit recipient (derived from Semaphore identity secret).
  */
 export function useAnonymousEligibility() {
     const [decrypting, setDecrypting] = useState<Record<string, boolean>>({});
@@ -15,11 +14,6 @@ export function useAnonymousEligibility() {
     const [scores, setScores] = useState<Record<string, number>>({});
     const [error, setError] = useState<string | null>(null);
 
-    /**
-     * Decrypt eligibility result for a specific trial using the stored nullifier.
-     * @param trialId The trial ID
-     * @param signer The signer for the FHE decryption
-     */
     const decryptResult = useCallback(async (trialId: string, signer: ethers.Signer) => {
         const nullifier = getAnonymousNullifier(BigInt(trialId));
         if (!nullifier) {
@@ -27,21 +21,33 @@ export function useAnonymousEligibility() {
             return null;
         }
 
+        const identity = getStoredIdentity();
+        if (!identity || !signer.provider) {
+            setError('Anonymous decrypt requires the local Semaphore identity.');
+            return null;
+        }
+
         try {
             setDecrypting(prev => ({ ...prev, [trialId]: true }));
             setError(null);
 
-            const engine = getEligibilityEngine(signer);
+            const chainId = await resolveChainIdFrom(signer);
+            const engine = getEligibilityEngine(signer, chainId);
+            const encryptedResult = await engine.getAnonymousResult(nullifier, BigInt(trialId));
 
-            // Lookup by nullifier — unlinkable across trials
-            const encryptedResult = await engine.getAnonymousResult(nullifier);
+            const ephemeralSigner = getEphemeralSigner(identity, signer.provider);
+            const client = await getFHEClient();
+            await client.connect({ provider: signer.provider, signer: ephemeralSigner });
+            const permit = await client.permits.getOrCreateSelfPermit(ephemeralSigner.address);
 
-            // Decrypt using FHENIX
-            const decrypted = await publicDecrypt(encryptedResult);
+            const isEligible: boolean = await client
+                .decryptForView(encryptedResult, FheTypes.Bool)
+                .setAccount(ephemeralSigner.address)
+                .setChainId(Number(chainId ?? 421614n))
+                .withPermit(permit)
+                .execute();
 
-            const isEligible = decrypted.decryptedValue === 1n;
             setResults(prev => ({ ...prev, [trialId]: isEligible }));
-
             return isEligible;
         } catch (err: any) {
             const message = err.message || 'Failed to decrypt result';
@@ -49,15 +55,11 @@ export function useAnonymousEligibility() {
             console.error('Decryption failed:', err);
             return null;
         } finally {
+            resetFheClient();
             setDecrypting(prev => ({ ...prev, [trialId]: false }));
         }
     }, []);
 
-    /**
-     * Decrypt eligibility score for a specific trial using the stored nullifier.
-     * @param trialId The trial ID
-     * @param signer The signer for the FHE decryption
-     */
     const decryptScore = useCallback(async (trialId: string, signer: ethers.Signer) => {
         const nullifier = getAnonymousNullifier(BigInt(trialId));
         if (!nullifier) {
@@ -65,21 +67,34 @@ export function useAnonymousEligibility() {
             return null;
         }
 
+        const identity = getStoredIdentity();
+        if (!identity || !signer.provider) {
+            setError('Anonymous decrypt requires the local Semaphore identity.');
+            return null;
+        }
+
         try {
             setDecrypting(prev => ({ ...prev, [trialId]: true }));
             setError(null);
 
-            const engine = getEligibilityEngine(signer);
+            const chainId = await resolveChainIdFrom(signer);
+            const engine = getEligibilityEngine(signer, chainId);
+            const encryptedScore = await engine.getAnonymousScore(nullifier, BigInt(trialId));
 
-            // Lookup by nullifier — unlinkable across trials
-            const encryptedScore = await engine.getAnonymousScore(nullifier);
+            const ephemeralSigner = getEphemeralSigner(identity, signer.provider);
+            const client = await getFHEClient();
+            await client.connect({ provider: signer.provider, signer: ephemeralSigner });
+            const permit = await client.permits.getOrCreateSelfPermit(ephemeralSigner.address);
 
-            // Decrypt using FHENIX
-            const decrypted = await publicDecrypt(encryptedScore);
+            const scoreVal: bigint = await client
+                .decryptForView(encryptedScore, FheTypes.Uint8)
+                .setAccount(ephemeralSigner.address)
+                .setChainId(Number(chainId ?? 421614n))
+                .withPermit(permit)
+                .execute();
 
-            const score = Number(decrypted.decryptedValue);
+            const score = Number(scoreVal);
             setScores(prev => ({ ...prev, [trialId]: score }));
-
             return score;
         } catch (err: any) {
             const message = err.message || 'Failed to decrypt score';
@@ -87,23 +102,19 @@ export function useAnonymousEligibility() {
             console.error('Score decryption failed:', err);
             return null;
         } finally {
+            resetFheClient();
             setDecrypting(prev => ({ ...prev, [trialId]: false }));
         }
     }, []);
 
-    /**
-     * Get application status by nullifier (for checking status without decrypting)
-     * @param trialId The trial ID
-     * @param nullifier The nullifier hash from the Semaphore proof
-     * @param provider Provider to read from contract
-     */
     const getApplicationStatus = useCallback(async (
         trialId: string,
         nullifier: string,
         provider: ethers.Provider
     ): Promise<number | null> => {
         try {
-            const engine = getEligibilityEngine(provider);
+            const chainId = await resolveChainIdFrom(provider);
+            const engine = getEligibilityEngine(provider, chainId);
             const status = await engine.getAnonymousApplicationStatus(nullifier, trialId);
             return Number(status);
         } catch (err: any) {
@@ -113,12 +124,9 @@ export function useAnonymousEligibility() {
     }, []);
 
     return {
-        // Decryption methods
         decryptResult,
         decryptScore,
         getApplicationStatus,
-
-        // State
         results,
         scores,
         decrypting,
@@ -126,21 +134,13 @@ export function useAnonymousEligibility() {
     };
 }
 
-/**
- * Hook for sponsors to view anonymous application status
- * @dev Uses nullifier (not wallet address) to lookup status
- */
 export function useSponsorAnonymousView(provider?: ethers.Provider) {
-    /**
-     * Get application status for a nullifier
-     * @param nullifier The nullifier hash
-     * @param trialId The trial ID
-     */
     const getStatus = useCallback(async (nullifier: string, trialId: string): Promise<string> => {
         if (!provider) return 'Unknown';
 
         try {
-            const engine = getEligibilityEngine(provider);
+            const chainId = await resolveChainIdFrom(provider);
+            const engine = getEligibilityEngine(provider, chainId);
             const status = await engine.getAnonymousApplicationStatus(nullifier, trialId);
 
             switch (Number(status)) {

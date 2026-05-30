@@ -54,6 +54,7 @@ interface TrialCardProps {
   trial: Trial;
   index?: number;
   variant?: "default" | "glass" | "discover";
+  onApplySuccess?: () => void | Promise<void>;
 }
 
 const ZERO_HANDLE = "0x" + "0".repeat(64);
@@ -103,11 +104,13 @@ function AnonymousApplyFeedback({
   );
 }
 
-export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardProps) {
+export function TrialCard({ trial, index = 0, variant = "default", onApplySuccess }: TrialCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [discoverBookmarked, setDiscoverBookmarked] = useState(false);
   const isGlass = variant === "glass";
   const isDiscover = variant === "discover" && !isGlass;
+  /** Wallet-linked sponsor apply is deprecated; anonymous apply is the supported path. */
+  const canApplyToSponsor = false;
 
   const { signer, account } = useWeb3();
   const { setRevealedScore, getRevealedScore } = useEncryptedData();
@@ -169,7 +172,17 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
         setPoolFunded(funded);
 
         if (account) {
-          const registered = await vault.isParticipantRegistered(BigInt(trial.id), account);
+          let participantAddress = account;
+          const nullifier = signer.provider
+            ? await resolveAnonymousNullifier(signer.provider, BigInt(trial.id))
+            : null;
+          if (nullifier) {
+            const holder = await getEligibilityEngine(signer).decryptPermitHolder(nullifier);
+            if (holder && holder !== ethers.ZeroAddress) {
+              participantAddress = holder;
+            }
+          }
+          const registered = await vault.isParticipantRegistered(BigInt(trial.id), participantAddress);
           if (cancelled) return;
           setIsRegistered(registered);
         }
@@ -271,45 +284,6 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
     }
   }, [account, trial.id, getRevealedScore, engineAddress]);
 
-  // FIX 1: Pre-fetch eligibility bool + signature when eligibility is computed
-  // so the Apply button works without requiring score reveal first
-  useEffect(() => {
-    if (applyStatus !== "success" || !signer || !account || !trial.id) return;
-    if (isEligibleDecrypted !== null) return; // already fetched
-    if (trial.applicationStatus) return; // already applied
-
-    const prefetchEligibility = async () => {
-      setIsFetchingEligibility(true);
-      try {
-        const eligibilityEngine = getEligibilityEngine(signer);
-        const handle = await eligibilityEngine.encryptedResults(account, BigInt(trial.id));
-
-        // FIX 4: Zero handle guard
-        if (!handle || handle === ZERO_HANDLE) {
-          console.warn("Eligibility handle is zero — checkEligibility may not have run yet.");
-          return;
-        }
-
-        const c = await getFHEClient();
-
-        // FIX 2: Cast handle to bigint before passing to decryptForTx
-        const handleBig = typeof handle === "string" ? BigInt(handle) : handle;
-        const result = await c.decryptForTx(handleBig).withoutPermit().execute();
-
-        const eligible = result.decryptedValue === 1n || result.decryptedValue === true;
-        setIsEligibleDecrypted(eligible);
-        setEligibilitySignature(result.signature);
-      } catch (err) {
-        console.error("Failed to pre-fetch eligibility:", err);
-        // Non-fatal — user can still retry via apply button
-      } finally {
-        setIsFetchingEligibility(false);
-      }
-    };
-
-    prefetchEligibility();
-  }, [applyStatus, signer, account, trial.id, trial.applicationStatus]);
-
   const handleRevealScore = async () => {
     if (!signer || !account || !engineAddress) return;
     setIsDecrypting(true);
@@ -324,7 +298,7 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
       let usedAnonymousHandle = false;
       if (nullifier) {
         // Primary: nullifier-keyed lookup (unlinkable across trials)
-        handle = await eligibilityEngine.getAnonymousScore(nullifier);
+        handle = await eligibilityEngine.getAnonymousScore(nullifier, BigInt(trial.id));
         usedAnonymousHandle = !!handle && handle !== ZERO_HANDLE;
       }
 
@@ -410,6 +384,8 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
       // Atomic call handles proof generation + submission internally
       const trialIdNum = parseInt(trial.id);
       await submitApplication(trialIdNum);
+      setApplyStatus("applied");
+      await onApplySuccess?.();
     } catch (err: any) {
       console.error('Semaphore apply failed:', err);
       setRegistrationError(err.reason || err.message || 'Anonymous application failed.');
@@ -422,23 +398,91 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
     if (!signer || !account || !trial.id) return;
     setIsRegistering(true);
     setIncentiveStatus("Registering for confidential rewards...");
+    console.log("[Rewards] register:start", {
+      trialId: trial.id,
+      account,
+      appStatus: trial.applicationStatus,
+      poolFunded,
+    });
     try {
       if (!signer.provider) {
         throw new Error("Wallet provider unavailable. Please reconnect and retry.");
       }
       const vault = getSponsorIncentiveVault(signer);
+      const eligibilityEngine = getEligibilityEngine(signer);
       const nullifier = await resolveAnonymousNullifier(signer.provider, BigInt(trial.id));
+      console.log("[Rewards] register:nullifier", {
+        trialId: trial.id,
+        nullifier: nullifier?.toString() ?? null,
+      });
       if (!nullifier) {
         throw new Error("Unable to recover anonymous application nullifier for this trial. Re-open the original browser profile used during apply and retry.");
       }
+      const permitHolder = await eligibilityEngine.decryptPermitHolder(nullifier);
+      if (!permitHolder || permitHolder === ethers.ZeroAddress) {
+        throw new Error("No reward permit holder found for this anonymous application.");
+      }
+      try {
+        const [funded, statusRaw, alreadyRegistered] = await Promise.all([
+          vault.isPoolFunded(BigInt(trial.id)),
+          eligibilityEngine.getAnonymousApplicationStatus(nullifier, BigInt(trial.id)),
+          vault.isParticipantRegistered(BigInt(trial.id), permitHolder),
+        ]);
+        const statusNum = Number(statusRaw);
+        console.log("[Rewards] register:precheck", {
+          trialId: trial.id,
+          nullifier: nullifier.toString(),
+          permitHolder,
+          funded: Boolean(funded),
+          appStatusRaw: statusNum,
+          alreadyRegistered: Boolean(alreadyRegistered),
+        });
+        if (!funded) {
+          setIncentiveStatus("Registration blocked: incentive pool is not funded yet.");
+          return;
+        }
+        if (alreadyRegistered) {
+          setIsRegistered(true);
+          setIncentiveStatus("You’re already registered for this pool.");
+          return;
+        }
+        if (statusNum !== 2) {
+          const statusLabel =
+            statusNum === 1 ? "Pending" : statusNum === 3 ? "Rejected" : "None";
+          setIncentiveStatus(
+            `Registration blocked: anonymous application status is ${statusLabel}. Sponsor must set it to Accepted first.`
+          );
+          return;
+        }
+      } catch (precheckErr) {
+        console.warn("[Rewards] register:precheck_failed", precheckErr);
+      }
       const tx = await vault.registerAnonymousParticipant(BigInt(trial.id), nullifier);
+      console.log("[Rewards] register:tx_submitted", {
+        trialId: trial.id,
+        txHash: tx.hash,
+      });
       await tx.wait();
       setIsRegistered(true);
       setIncentiveStatus("Successfully registered in reward enclave!");
+      console.log("[Rewards] register:tx_confirmed", {
+        trialId: trial.id,
+        txHash: tx.hash,
+      });
     } catch (err: any) {
       console.error("Registration failed:", err);
+      console.error("[Rewards] register:error_detail", {
+        reason: err?.reason,
+        shortMessage: err?.shortMessage,
+        message: err?.message,
+        data: err?.data,
+      });
       const raw = `${err?.reason || ""} ${err?.message || ""} ${err?.shortMessage || ""}`.toLowerCase();
-      if (raw.includes("already registered") || raw.includes("nullifier already used")) {
+      if (
+        raw.includes("already registered") ||
+        raw.includes("nullifier already used") ||
+        (err?.code === "CALL_EXCEPTION" && err?.data == null && raw.includes("missing revert data"))
+      ) {
         setIsRegistered(true);
         setIncentiveStatus("You’re already registered for this pool.");
         return;
@@ -1095,24 +1139,10 @@ export function TrialCard({ trial, index = 0, variant = "default" }: TrialCardPr
           {!isGlass && (
             <div className="px-4 py-4 md:px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-3">Trial actions</p>
-              {!trial.hasConsent && applyStatus !== "applied" && !trial.applicationStatus && (
-                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 mb-3">
-                  <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-2">Consent window</label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={consentDurationSeconds}
-                      onChange={(e) => setConsentDurationSeconds(Number(e.target.value))}
-                      className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200"
-                    >
-                      {CONSENT_DURATION_OPTIONS.map((opt) => (
-                        <option key={opt.seconds} value={opt.seconds}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-[10px] text-slate-500 font-medium">{formatDurationLabel(consentDurationSeconds)}</span>
-                  </div>
-                </div>
+              {!trial.hasConsent && applyStatus !== "applied" && !trial.applicationStatus && !isDiscover && (
+                <p className="text-xs text-slate-500 mb-3">
+                  Anonymous apply embeds consent in your Semaphore proof — no separate consent transaction required.
+                </p>
               )}
 
               <Button

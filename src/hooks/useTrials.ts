@@ -1,14 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useSubgraph } from './useSubgraph';
 import { Trial } from '../types';
-import { useWeb3 } from '../lib/Web3Context';
-import { getEligibilityEngine, getMedVaultAutomation } from '../lib/contracts';
-import { getAnonymousNullifier, recoverAnonymousNullifierIfMissing } from '../lib/semaphore';
+import { generateEphemeralAddress, getAnonymousNullifier, getStoredIdentity, listStoredAnonymousTrialIds } from '../lib/semaphore';
+import { filterSponsorVisibleSubmissions } from '../lib/anonymousApplicationStatus';
 
 const GET_TRIALS_WITH_USER_STATE = `
-  query GetTrialsWithUserState($account: Bytes!, $accountId: ID!) {
+  query GetTrialsWithUserState($account: Bytes!, $accountId: ID!, $anonymousNullifiers: [BigInt!]!) {
     patientConsentEpoch(id: $accountId) {
       epoch
+    }
+    anonymousSubmissions(where: { nullifier_in: $anonymousNullifiers }) {
+      id
+      nullifier
+      status
+      submittedAt
+      statusUpdatedAt
+      finalCt
+      trial {
+        id
+      }
     }
     trials(orderBy: createdAt, orderDirection: desc) {
       id
@@ -47,6 +57,10 @@ const GET_TRIALS_WITH_USER_STATE = `
         distributed
         totalFundedWei
         shareWei
+        participantCount
+        participants {
+          patient
+        }
       }
     }
   }
@@ -74,6 +88,30 @@ const GET_TRIALS_BY_SPONSOR = `
       eligibilityResults {
         id
       }
+      applications {
+        id
+        status
+        updatedAt
+      }
+      anonymousSubmissions {
+        id
+        status
+        statusUpdatedAt
+        submittedAt
+        stagedAt
+      }
+      incentivePool {
+        id
+        totalFundedWei
+        distributed
+        participantCount
+        shareWei
+      }
+      milestones {
+        index
+        weightBps
+        distributed
+      }
       consents {
         id
       }
@@ -81,13 +119,89 @@ const GET_TRIALS_BY_SPONSOR = `
   }
 `;
 
+function enrichSponsorTrialRow(t: any, now: number): Trial {
+  const walletApps = t.applications ?? [];
+  const anonApps = filterSponsorVisibleSubmissions(t.anonymousSubmissions);
+  const apps = [...walletApps, ...anonApps];
+  const accepted = apps.filter((a: any) => a.status === "Accepted").length;
+  const pendingApplicationCount = apps.filter((a: any) => a.status === "Pending").length;
+  const screened = (t.eligibilityResults ?? []).length;
+  const poolDistributed = Boolean(t.incentivePool?.distributed);
+  const milestones = (t.milestones ?? []).map((m: any) => {
+    const index = Number(m.index ?? 0);
+    const distributed = Boolean(m.distributed) || (poolDistributed && index === 0);
+    return {
+      index,
+      weightBps: Number(m.weightBps ?? 0),
+      distributed,
+    };
+  });
+  const distributedWeight = milestones.filter((m) => m.distributed).reduce((acc, m) => acc + m.weightBps, 0);
+  const milestoneProgressPct = milestones.length > 0 ? Math.round(distributedWeight / 100) : 0;
+
+  let updatedAtSec = Number(t.createdAt ?? 0);
+  for (const a of apps) {
+    const ts = Number(
+      a.updatedAt ?? a.statusUpdatedAt ?? a.submittedAt ?? a.stagedAt ?? 0,
+    );
+    if (ts > updatedAtSec) updatedAtSec = ts;
+  }
+
+  const poolFundedWei = t.incentivePool?.totalFundedWei ?? "0";
+  const createdAtSec = Number(t.createdAt ?? 0);
+  const applicants = apps.length;
+  const enrollmentPct = applicants > 0 ? Math.round((accepted / applicants) * 100) : 0;
+
+  return {
+    ...t,
+    hasConsent: (t.consents ?? []).length > 0,
+    hasComputed: screened > 0 || applicants > 0,
+    matchCount: screened,
+    applicantCount: applicants,
+    acceptedCount: accepted,
+    pendingApplicationCount,
+    screenedCount: screened,
+    updatedAtSec,
+    poolFundedWei,
+    milestoneProgressPct,
+    milestones,
+    enrollmentPct,
+    isNew: createdAtSec > 0 && now - createdAtSec < 14 * 24 * 3600,
+    isExpired: t.endTime ? parseInt(String(t.endTime), 10) <= now : false,
+    isFinalized: Boolean(t.incentivePool?.distributed),
+    rewardPoolFunded: BigInt(poolFundedWei || "0") > 0n,
+    rewardParticipantRegistered: false,
+  };
+}
+
 export function useTrials(account?: string, sponsorAddress?: string) {
   const query = sponsorAddress ? GET_TRIALS_BY_SPONSOR : GET_TRIALS_WITH_USER_STATE;
   const al = account?.toLowerCase() || "0x0000000000000000000000000000000000000000";
-  const variables = sponsorAddress ? { sponsor: sponsorAddress.toLowerCase() } : { account: al, accountId: al };
+  /** Local anonymous apply state only applies after wallet connect (avoids ghost UI when logged out). */
+  const storedAnonymousTrialIds = useMemo(
+    () => (account ? listStoredAnonymousTrialIds() : []),
+    [account]
+  );
+  const storedAnonymousNullifiers = useMemo(
+    () =>
+      storedAnonymousTrialIds
+        .map((trialId) => getAnonymousNullifier(trialId)?.toString())
+        .filter((value): value is string => !!value),
+    [storedAnonymousTrialIds]
+  );
+  const variables = useMemo(
+    () =>
+      sponsorAddress
+        ? { sponsor: sponsorAddress.toLowerCase() }
+        : {
+            account: al,
+            accountId: al,
+            anonymousNullifiers: storedAnonymousNullifiers.length > 0 ? storedAnonymousNullifiers : ["0"],
+          },
+    [al, sponsorAddress, storedAnonymousNullifiers]
+  );
 
   const { data, loading: subgraphLoading, error: subgraphError, refetch } = useSubgraph(query, variables);
-  const { provider } = useWeb3();
   const [enrichedTrials, setEnrichedTrials] = useState<Trial[]>([]);
   const [enriching, setEnriching] = useState(false);
 
@@ -95,7 +209,7 @@ export function useTrials(account?: string, sponsorAddress?: string) {
     let mounted = true;
 
     const enrichTrials = async () => {
-      if (!data?.trials || !provider) return;
+      if (!data?.trials) return;
 
       setEnriching(true);
       const now = Math.floor(Date.now() / 1000);
@@ -105,7 +219,23 @@ export function useTrials(account?: string, sponsorAddress?: string) {
           : "1";
 
       try {
-        const automationContract = getMedVaultAutomation(provider as any);
+        const anonymousTrialIds = new Set(storedAnonymousTrialIds);
+        const anonymousSubmissionByTrialId = new Map<string, any>();
+        for (const submission of ((data as any).anonymousSubmissions || [])) {
+          anonymousSubmissionByTrialId.set(String(submission.trial.id), submission);
+        }
+        const identity = getStoredIdentity();
+        const ephemeralAddress = identity ? (await generateEphemeralAddress(identity)).toLowerCase() : null;
+        const accountAddress = account?.toLowerCase() ?? null;
+
+        if (sponsorAddress) {
+          const sponsorRows = data.trials.map((t: any) => enrichSponsorTrialRow(t, now));
+          if (mounted) {
+            setEnrichedTrials(sponsorRows);
+            setEnriching(false);
+          }
+          return;
+        }
 
         const processed: Trial[] = await Promise.all(
           data.trials.filter((t: any) => {
@@ -113,10 +243,18 @@ export function useTrials(account?: string, sponsorAddress?: string) {
             // recruitment detail pages remain accessible.
             if (sponsorAddress) return true;
 
+            const consent = t.consents && t.consents.length > 0 ? t.consents[0] : null;
+            const hasEffectiveConsent =
+              !!consent &&
+              consent.granted === true &&
+              String(consent.validEpoch ?? "0") === patientEpoch &&
+              (String(consent.expiresAt ?? "0") === "0" || parseInt(String(consent.expiresAt), 10) > now);
+
             const hasInteraction =
               hasEffectiveConsent ||
               (t.eligibilityResults && t.eligibilityResults.length > 0) ||
-              (t.applications && t.applications.length > 0);
+              (t.applications && t.applications.length > 0) ||
+              anonymousTrialIds.has(String(t.id));
 
             if (hasInteraction) return true;
             const isExpired = t.endTime && parseInt(t.endTime) <= now;
@@ -125,42 +263,30 @@ export function useTrials(account?: string, sponsorAddress?: string) {
             const app = t.applications && t.applications.length > 0 ? t.applications[0] : null;
             const isExpired = t.endTime && parseInt(t.endTime) <= now;
 
-            // Fetch on-chain finalized status (MedVaultAutomation: mapping(uint256 => bool) public finalized)
-            let isFinalized = false;
-            try {
-              isFinalized = await automationContract.finalized(BigInt(t.id));
-            } catch (err) {
-              console.warn(`Failed to fetch finalized status for trial ${t.id}`, err);
-            }
-
-            // For anonymous flows, status is keyed by nullifier (not wallet),
-            // so subgraph wallet-filtered applications can be empty.
+            // Anonymous flows are keyed by nullifier, so read the indexed
+            // AnonymousSubmission instead of doing per-trial RPC calls.
             let anonymousStatus: string | null = null;
             let anonymousNullifier: string | null = null;
-            try {
-              let nullifier = getAnonymousNullifier(t.id);
-              if (!nullifier && !app && account) {
-                // Backfill historical anonymous applications submitted before
-                // local nullifier persistence existed in the frontend.
-                nullifier = await recoverAnonymousNullifierIfMissing(provider as any, t.id);
+            const localNullifier = getAnonymousNullifier(t.id);
+            const anonymousSubmission = anonymousSubmissionByTrialId.get(String(t.id));
+            if (localNullifier) {
+              anonymousNullifier = localNullifier.toString();
+              const indexedStatus = anonymousSubmission?.status;
+              if (indexedStatus === "Accepted" || indexedStatus === "Rejected" || indexedStatus === "Pending") {
+                anonymousStatus = indexedStatus;
+              } else if (indexedStatus === "Staged" || indexedStatus === "None") {
+                anonymousStatus = "Pending";
+              } else {
+                anonymousStatus = "Pending";
               }
-              if (nullifier) {
-                anonymousNullifier = nullifier.toString();
-                const eligibilityEngine = getEligibilityEngine(provider as any);
-                const rawStatus = await eligibilityEngine.getAnonymousApplicationStatus(
-                  nullifier,
-                  BigInt(t.id)
-                );
-                const statusNum = Number(rawStatus);
-                if (statusNum === 1) anonymousStatus = "Pending";
-                else if (statusNum === 2) anonymousStatus = "Accepted";
-                else if (statusNum === 3) anonymousStatus = "Rejected";
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch anonymous status for trial ${t.id}`, err);
             }
 
             const effectiveStatus = app ? app.status : anonymousStatus;
+            const participants = (t.incentivePool?.participants || []) as { patient: string }[];
+            const rewardParticipantRegistered = participants.some((p) => {
+              const patient = String(p.patient).toLowerCase();
+              return patient === accountAddress || patient === ephemeralAddress;
+            });
 
             // Anonymous applies don't create wallet-keyed subgraph eligibility rows — use chain status.
             // Wallet-keyed applications always merit score reveal when present.
@@ -179,7 +305,9 @@ export function useTrials(account?: string, sponsorAddress?: string) {
               eligibilityScore: null,
               matchCount: t.eligibilityResults ? t.eligibilityResults.length : 0,
               isExpired,
-              isFinalized // New field
+              isFinalized: Boolean(t.incentivePool?.distributed),
+              rewardPoolFunded: BigInt(t.incentivePool?.totalFundedWei || "0") > 0n,
+              rewardParticipantRegistered
             };
           })
         );
@@ -201,11 +329,12 @@ export function useTrials(account?: string, sponsorAddress?: string) {
     }
 
     return () => { mounted = false; };
-  }, [account, data, provider, subgraphLoading, sponsorAddress]);
+  }, [account, data, subgraphLoading, sponsorAddress, storedAnonymousTrialIds]);
 
   return {
     trials: enrichedTrials,
-    loading: subgraphLoading || enriching,
+    loading: subgraphLoading && enrichedTrials.length === 0,
+    refreshing: enriching || (subgraphLoading && enrichedTrials.length > 0),
     error: subgraphError,
     refetch
   };

@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useMatches } from "../hooks/useMatches";
 import { cn } from "../lib/utils";
+import { sponsorCardShell } from "../lib/sponsorUi";
 import { useTrials } from "../hooks/useTrials";
 import { useWeb3 } from "../lib/Web3Context";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
@@ -10,6 +11,7 @@ import { Input } from "../components/ui/Input";
 import { useState, useEffect } from "react";
 import { CriteriaBuilder } from "../components/dashboard/CriteriaBuilder";
 import { AutomationHeartbeat } from "../components/dashboard/AutomationHeartbeat";
+import { BlindRankingPanel } from "../components/dashboard/BlindRankingPanel";
 import {
     ArrowLeft,
     Users,
@@ -34,7 +36,9 @@ import { motion } from "framer-motion";
 import {
     distributePartialMilestone,
     fundTrialPool,
+    getAnonymousParticipantMilestoneState,
     getTrialPoolAndMilestones,
+    promoteAnonymousParticipantAndDistribute,
     promoteParticipantAndDistribute,
     resetMilestonePagination,
     setTrialMilestones,
@@ -43,13 +47,14 @@ import {
 
 export function SponsorTrialDetailsPage() {
     const { id } = useParams();
-    const { account, signer } = useWeb3();
+    const { account, signer, readOnlyProvider } = useWeb3();
     const { trials, loading: trialsLoading } = useTrials(account || undefined, account || undefined);
-    const { matches, loading: matchesLoading } = useMatches(account || undefined);
+    const { matches, loading: matchesLoading, refetch: refetchMatches } = useMatches(account || undefined);
 
     const trial = trials.find(t => t.id === id);
     const trialMatches = matches.filter(m => m.trialId === id && !m.isAnonymous);
-    const anonymousMatchCount = matches.filter(m => m.trialId === id && m.isAnonymous).length;
+    const anonymousMatches = matches.filter(m => m.trialId === id && m.isAnonymous);
+    const anonymousMatchCount = anonymousMatches.length;
 
     const [fundingAmount, setFundingAmount] = useState("");
     const [fundingStatus, setFundingStatus] = useState<string | null>(null);
@@ -62,6 +67,9 @@ export function SponsorTrialDetailsPage() {
     const [milestonesLoading, setMilestonesLoading] = useState(true);
     const [milestoneStatus, setMilestoneStatus] = useState<string | null>(null);
     const [isDefiningMilestones, setIsDefiningMilestones] = useState(false);
+    const [anonymousMilestoneState, setAnonymousMilestoneState] = useState<
+        Record<string, { participant: string; registered: boolean; progress: number; paid: boolean[] }>
+    >({});
     const [newMilestones, setNewMilestones] = useState([
         { name: "Screening", weight: 2500, deadline: Math.floor(Date.now() / 1000) + 86400 * 7 },
         { name: "Week 4", weight: 2500, deadline: Math.floor(Date.now() / 1000) + 86400 * 30 },
@@ -89,6 +97,43 @@ export function SponsorTrialDetailsPage() {
         };
         fetchProtocolData();
     }, [signer, id]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadAnonymousMilestoneState = async () => {
+            if (!signer || !id || milestones.length === 0 || anonymousMatches.length === 0) {
+                setAnonymousMilestoneState({});
+                return;
+            }
+
+            const entries = await Promise.all(
+                anonymousMatches
+                    .filter((match) => match.nullifier)
+                    .map(async (match) => {
+                        try {
+                            const state = await getAnonymousParticipantMilestoneState(
+                                signer,
+                                id,
+                                match.nullifier!,
+                                milestones.length
+                            );
+                            return state ? [match.nullifier!, state] as const : null;
+                        } catch {
+                            return null;
+                        }
+                    })
+            );
+
+            if (!cancelled) {
+                setAnonymousMilestoneState(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, { participant: string; registered: boolean; progress: number; paid: boolean[] }]>));
+            }
+        };
+
+        void loadAnonymousMilestoneState();
+        return () => {
+            cancelled = true;
+        };
+    }, [signer, id, milestones.length, anonymousMatches.map((match) => match.nullifier).join("|")]);
 
     const handleUpdateStatus = async (patientAddress: string, newStatus: number) => {
         if (!signer || !id) return;
@@ -142,9 +187,75 @@ export function SponsorTrialDetailsPage() {
             setMilestoneStatus(`Success! Phase ${index + 1} rewards distributed.`);
             // Update local state
             setMilestones(prev => prev.map((m, i) => i === index ? { ...m, distributed: true } : m));
+            if (anonymousMatches.length > 0) {
+                const entries = await Promise.all(
+                    anonymousMatches
+                        .filter((match) => match.nullifier)
+                        .map(async (match) => {
+                            try {
+                                const state = await getAnonymousParticipantMilestoneState(
+                                    signer,
+                                    id,
+                                    match.nullifier!,
+                                    milestones.length
+                                );
+                                return state ? [match.nullifier!, state] as const : null;
+                            } catch {
+                                return null;
+                            }
+                        })
+                );
+                setAnonymousMilestoneState(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, { participant: string; registered: boolean; progress: number; paid: boolean[] }]>));
+            }
         } catch (err: any) {
             console.error(err);
+            const raw = `${err.reason || ""} ${err.message || ""} ${err.shortMessage || ""}`.toLowerCase();
+            if (
+                raw.includes("no eligible participants") ||
+                raw.includes("missing revert data") ||
+                (err.code === "CALL_EXCEPTION" && err.data == null)
+            ) {
+                setMilestoneStatus(
+                    `Error: No unpaid participants are eligible for Phase ${index + 1}. They may need promotion first, or this phase may already be released.`
+                );
+                return;
+            }
             setMilestoneStatus(`Error: ${err.reason || err.message || "Payout failed"}`);
+        }
+    };
+
+    const handlePromoteAnonymous = async (nullifier: string, milestoneIndex: number, milestoneName: string) => {
+        if (!signer || !id) return;
+        setDecisionStatus(`Promoting anonymous participant to ${milestoneName}...`);
+        try {
+            const result = await promoteAnonymousParticipantAndDistribute(
+                signer,
+                id,
+                nullifier,
+                milestoneIndex
+            );
+            if (result.alreadyPaid) {
+                setDecisionStatus(`Success! ${milestoneName} promoted. Reward was already released for this phase.`);
+            } else {
+                setDecisionStatus(`Success! Promoted anonymous participant to ${milestoneName}. Use Release Funds to pay this phase.`);
+            }
+            await refetchMatches();
+            const refreshed = await getAnonymousParticipantMilestoneState(signer, id, nullifier, milestones.length);
+            if (refreshed) {
+                setAnonymousMilestoneState((prev) => ({ ...prev, [nullifier]: refreshed }));
+            }
+        } catch (err: any) {
+            console.error("Anonymous Promotion Error:", err);
+            const raw = `${err.reason || ""} ${err.message || ""} ${err.shortMessage || ""}`.toLowerCase();
+            if (raw.includes("must complete milestones in order")) {
+                setDecisionStatus("Error: Promote earlier phases first. Milestones must be completed in order.");
+            } else if (raw.includes("not a registered participant") || raw.includes("participant not registered")) {
+                setDecisionStatus("Error: Participant is not in the reward pool yet. Accept/enroll them first.");
+            } else if (raw.includes("already paid")) {
+                setDecisionStatus(`Success! ${milestoneName} was already released.`);
+            } else {
+                setDecisionStatus(`Error: ${err.reason || err.message || "Promotion failed"}`);
+            }
         }
     };
 
@@ -159,6 +270,34 @@ export function SponsorTrialDetailsPage() {
             console.error(err);
             setMilestoneStatus(`Error: ${err.reason || err.message || "Reset failed"}`);
         }
+    };
+
+    const getAnonymousPhaseState = (nullifier: string | undefined, milestoneIndex: number) => {
+        const state = nullifier ? anonymousMilestoneState[nullifier] : undefined;
+        const promoted = !!state && state.progress >= milestoneIndex + 1;
+        const released = !!state?.paid?.[milestoneIndex];
+        return { promoted, released };
+    };
+
+    const getAnonymousPhaseAggregateState = (milestoneIndex: number) => {
+        const accepted = anonymousMatches.filter(
+            (match) => match.applicationStatus === "Accepted" && match.nullifier
+        );
+        const states = accepted
+            .map((match) => anonymousMilestoneState[match.nullifier!])
+            .filter(Boolean);
+        const allKnown = accepted.length > 0 && states.length === accepted.length;
+        const promotedCount = states.filter((state) => state.progress >= milestoneIndex + 1).length;
+        const releasedCount = states.filter((state) => state.paid?.[milestoneIndex]).length;
+
+        return {
+            total: accepted.length,
+            allKnown,
+            promotedCount,
+            releasedCount,
+            allPromoted: allKnown && promotedCount === accepted.length,
+            allReleased: allKnown && releasedCount === accepted.length,
+        };
     };
 
     const fadeIn = {
@@ -243,8 +382,8 @@ export function SponsorTrialDetailsPage() {
             {/* ─── Metrics Grid ─── */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 {[
-                    { label: "Total Matches", value: trialMatches.length, icon: Target, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-500/10" },
-                    { label: "Interested", value: trialMatches.filter(m => m.status === "Interested").length, icon: Users, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+                    { label: "Total Matches", value: trialMatches.length + anonymousMatches.length, icon: Target, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-500/10" },
+                    { label: "Interested", value: trialMatches.filter(m => m.status === "Interested").length + anonymousMatches.filter(m => m.applicationStatus === "Pending").length, icon: Users, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
                     { label: "Eligibility Score", value: "100%", icon: Activity, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-500/10" },
                     {
                         label: "Time Remaining",
@@ -261,7 +400,12 @@ export function SponsorTrialDetailsPage() {
                     },
                 ].map((stat, i) => (
                     <motion.div key={i} {...fadeIn} transition={{ delay: i * 0.1 }}>
-                        <Card className="border-slate-200/60 dark:border-slate-800/60 bg-white shadow-sm dark:bg-slate-900/40">
+                        <Card
+                          className={cn(
+                            sponsorCardShell,
+                            "border-0 overflow-hidden dark:border-slate-800/60 dark:bg-slate-900/40 dark:shadow-sm",
+                          )}
+                        >
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className={`p-2 rounded-xl ${stat.bg}`}>
@@ -278,6 +422,13 @@ export function SponsorTrialDetailsPage() {
                     </motion.div>
                 ))}
             </div>
+
+            <BlindRankingPanel
+                trialId={id}
+                readProvider={readOnlyProvider}
+                sponsorAccount={account}
+                fallbackApplicantCount={anonymousMatches.length}
+            />
 
             <div className="grid gap-8 xl:grid-cols-12">
                 {/* ─── Left Column: Criteria Builder ─── */}
@@ -327,7 +478,12 @@ export function SponsorTrialDetailsPage() {
                             )}
                         </div>
 
-                        <Card className="border-slate-200/60 dark:border-slate-800/60 bg-white shadow-sm dark:bg-slate-900/40 overflow-hidden">
+                        <Card
+                          className={cn(
+                            sponsorCardShell,
+                            "border-0 overflow-hidden dark:border-slate-800/60 dark:bg-slate-900/40 dark:shadow-sm",
+                          )}
+                        >
                             <div className="bg-amber-500/5 border-b border-amber-500/10 p-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/20">
@@ -393,36 +549,63 @@ export function SponsorTrialDetailsPage() {
                                     <div className="space-y-4">
                                         <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Active Phased Payouts</h4>
                                         <div className="grid gap-3">
-                                            {milestones.map((m, idx) => (
-                                                <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={cn(
-                                                            "h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold",
-                                                            m.distributed ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-500"
-                                                        )}>
-                                                            {idx + 1}
+                                            {milestones.map((m, idx) => {
+                                                const phase = getAnonymousPhaseAggregateState(idx);
+                                                const screeningAutoPaid = idx === 0 && poolInfo.distributed;
+                                                const phaseReleased = m.distributed || phase.allReleased || screeningAutoPaid;
+                                                const needsPromotion =
+                                                    idx > 0 &&
+                                                    phase.total > 0 &&
+                                                    !phase.allPromoted &&
+                                                    !phaseReleased;
+                                                const buttonLabel = phaseReleased
+                                                    ? "Released"
+                                                    : needsPromotion
+                                                        ? "Promote First"
+                                                        : "Release Funds";
+
+                                                return (
+                                                    <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className={cn(
+                                                                "h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0",
+                                                                phaseReleased
+                                                                    ? "bg-emerald-100 text-emerald-600"
+                                                                    : phase.allPromoted
+                                                                        ? "bg-teal-100 text-teal-700"
+                                                                        : "bg-slate-100 text-slate-500"
+                                                            )}>
+                                                                {idx + 1}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</p>
+                                                                <p className="text-[10px] text-slate-500 uppercase font-mono">{m.weightBps / 100}% Reward Weight</p>
+                                                                {phase.total > 0 && (
+                                                                    <p className="text-[10px] text-slate-500">
+                                                                        {phase.releasedCount}/{phase.total} released / {phase.promotedCount}/{phase.total} promoted
+                                                                    </p>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold text-slate-900 dark:text-white">{m.name}</p>
-                                                            <p className="text-[10px] text-slate-500 uppercase font-mono">{m.weightBps / 100}% Reward Weight</p>
-                                                        </div>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={phaseReleased || needsPromotion || poolInfo.distributed}
+                                                            onClick={() => handleDistributePartial(idx)}
+                                                            className={cn(
+                                                                "h-8 min-w-[7.5rem] text-[10px] font-bold uppercase disabled:opacity-100",
+                                                                phaseReleased
+                                                                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                                                    : needsPromotion
+                                                                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                                                                        : "bg-slate-100 text-slate-800",
+                                                            )}
+                                                        >
+                                                            {buttonLabel}
+                                                        </Button>
                                                     </div>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        disabled={m.distributed || poolInfo.distributed}
-                                                        onClick={() => handleDistributePartial(idx)}
-                                                        className={cn(
-                                                            "h-8 min-w-[7.5rem] text-[10px] font-bold uppercase disabled:opacity-100",
-                                                            m.distributed
-                                                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                                                : "bg-slate-100 text-slate-800",
-                                                        )}
-                                                    >
-                                                        {m.distributed ? "Distributed" : "Release Funds"}
-                                                    </Button>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 ) : (
@@ -493,9 +676,86 @@ export function SponsorTrialDetailsPage() {
                     <section className="space-y-4">
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Recent Matches</h3>
                         {anonymousMatchCount > 0 && (
-                            <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-300 text-xs font-medium">
-                                {anonymousMatchCount} anonymous application{anonymousMatchCount > 1 ? "s are" : " is"} pending/managed via nullifier flow.
-                                Use the Sponsor Matches page to review anonymous candidates.
+                            <div className="space-y-3">
+                                <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-300 text-xs font-medium">
+                                    {anonymousMatchCount} anonymous application{anonymousMatchCount > 1 ? "s are" : " is"} managed via nullifier flow.
+                                </div>
+                                {anonymousMatches.slice(0, 6).map((match, i) => (
+                                    <Card
+                                        key={match.id}
+                                        className="border-violet-200/70 bg-violet-50/70 dark:border-violet-900/40 dark:bg-violet-950/20 shadow-sm overflow-hidden"
+                                    >
+                                        <CardContent className="p-4 space-y-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="font-mono text-xs font-bold text-violet-950 dark:text-violet-100 truncate">
+                                                        {match.patientId || `Anonymous #${i + 1}`}
+                                                    </p>
+                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-violet-500">
+                                                        {match.applicationStatus}
+                                                    </p>
+                                                </div>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "text-[9px] font-black",
+                                                        match.applicationStatus === "Accepted"
+                                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                                            : "border-violet-200 bg-white/70 text-violet-700"
+                                                    )}
+                                                >
+                                                    {match.applicationStatus === "Accepted" ? "Participant" : "Review"}
+                                                </Badge>
+                                            </div>
+
+                                            {match.applicationStatus === "Accepted" && match.nullifier ? (
+                                                <div className="space-y-2">
+                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                                        Promote participant
+                                                    </p>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {milestones.map((m, mIdx) => {
+                                                            const phase = getAnonymousPhaseState(match.nullifier, mIdx);
+                                                            return (
+                                                                <Button
+                                                                    key={`${match.id}-${mIdx}`}
+                                                                    size="sm"
+                                                                    variant={phase.promoted || phase.released ? "default" : "outline"}
+                                                                    onClick={() => handlePromoteAnonymous(match.nullifier!, mIdx, m.name)}
+                                                                    disabled={phase.promoted}
+                                                                    className={cn(
+                                                                        "h-10 text-[9px] font-bold flex flex-col gap-0.5 disabled:opacity-100",
+                                                                        phase.released
+                                                                            ? "bg-emerald-600 text-white border-emerald-600"
+                                                                            : phase.promoted
+                                                                                ? "bg-teal-600 text-white border-teal-600"
+                                                                                : "bg-white/80"
+                                                                    )}
+                                                                >
+                                                                    <span>
+                                                                        {phase.released
+                                                                            ? `P${mIdx + 1} Released`
+                                                                            : phase.promoted
+                                                                                ? `P${mIdx + 1} Promoted`
+                                                                                : `Promote P${mIdx + 1}`}
+                                                                    </span>
+                                                                    <span className="opacity-70 truncate max-w-full">{m.name}</span>
+                                                                </Button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <Link
+                                                    to="/sponsor/patient-matches"
+                                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-violet-700 hover:text-violet-900"
+                                                >
+                                                    Review anonymous candidate <ChevronRight className="h-3 w-3" />
+                                                </Link>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                ))}
                             </div>
                         )}
                         <div className="space-y-3">
@@ -506,10 +766,13 @@ export function SponsorTrialDetailsPage() {
                             ) : (
                                 trialMatches.slice(0, 10).map((match, i) => (
                                     <motion.div key={match.id} {...fadeIn} transition={{ delay: 0.3 + (i * 0.1) }}>
-                                        <Card className={cn(
-                                            "group border-slate-200/60 dark:border-slate-800/60 bg-white hover:bg-slate-50 dark:bg-slate-900/40 dark:hover:bg-slate-900/60 transition-all duration-300 shadow-sm overflow-hidden",
-                                            selectedMatch === match.patientAddress ? "ring-2 ring-accent border-accent/20" : ""
-                                        )}>
+                                        <Card
+                                          className={cn(
+                                            sponsorCardShell,
+                                            "group border-0 overflow-hidden transition-all duration-300 hover:to-slate-100/80 dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:bg-slate-900/60 dark:shadow-sm",
+                                            selectedMatch === match.patientAddress ? "ring-2 ring-accent border-accent/20" : "",
+                                          )}
+                                        >
                                             <CardContent className="p-0">
                                                 <div className="p-4 flex items-center justify-between">
                                                     <div className="flex items-center gap-4">

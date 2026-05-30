@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -30,8 +30,7 @@ import { cn } from "../lib/utils";
 import { useSponsorTrialCreation } from "../hooks/useSponsorTrialCreation";
 import { useSponsorVerification } from "../hooks/useSponsorVerification";
 
-const cardShell =
-  "rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_12px_-2px_rgba(15,23,42,0.05)]";
+import { sponsorCardHeader, sponsorCardShell } from "../lib/sponsorUi";
 
 const labelClass = "text-xs font-semibold uppercase tracking-[0.08em] text-slate-500";
 
@@ -209,7 +208,7 @@ export function SponsorCreateTrialPage() {
         </div>
       )}
 
-      <div className="relative px-2 md:px-4">
+      <div className="relative">
         <div className="absolute left-10 right-10 top-5 hidden h-px bg-slate-200 md:block" />
         <div className="relative z-10 grid grid-cols-2 gap-6 md:flex md:justify-between md:gap-2">
           {steps.map((s, i) => {
@@ -243,7 +242,7 @@ export function SponsorCreateTrialPage() {
         </div>
       </div>
 
-      <Card className={`${cardShell} overflow-hidden`}>
+      <Card className={cn(sponsorCardShell, "overflow-hidden border-0")}>
         <CardContent className="p-6 md:p-10">
           <AnimatePresence mode="wait">
             {step === 1 && (

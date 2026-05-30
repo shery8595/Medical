@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useWeb3 } from "../lib/Web3Context";
 import { getStakingManager, getConfidentialETH } from "../lib/contracts";
 import { ethers } from "ethers";
-import { getFHEClient, FheTypes, reencryptUint64 } from "../lib/fhe";
-import { Encryptable, isCofheError, CofheErrorCode } from "@cofhe/sdk";
+import { decryptForTxWithPermit, ensureFHEConnected, reencryptUint64 } from "../lib/fhe";
+import { isCofheError } from "@cofhe/sdk";
 
 export function useStaking() {
     const { signer, account } = useWeb3();
@@ -43,6 +43,13 @@ export function useStaking() {
                 setIsRevealed(true);
                 return;
             }
+
+            const provider = signer.provider;
+            if (!provider) {
+                throw new Error("Wallet provider not available");
+            }
+
+            await ensureFHEConnected(provider, signer);
 
             const contract = getStakingManager(signer);
             const contractAddress = await contract.getAddress();
@@ -142,18 +149,13 @@ export function useStaking() {
         }
 
         try {
-            const c = await getFHEClient();
+            const provider = signer.provider;
+            if (!provider) {
+                throw new Error("Wallet provider not available");
+            }
+
             const handle = typeof balanceHandle === "string" ? BigInt(balanceHandle) : balanceHandle;
-            
-            // Use CoFHE SDK's decryptForTx to generate on-chain verifiable signature
-            // This signature proves knowledge of the plaintext balance at the specific handle
-            const result = await c
-                .decryptForTx(handle)
-                .withoutPermit()
-                .execute();
-            
-            // The signature from decryptForTx is already a Threshold Network signature
-            // that proves knowledge of the plaintext at this ctHash
+            const result = await decryptForTxWithPermit(handle, provider, signer);
             return result.signature;
         } catch (err: any) {
             console.error("Failed to generate unstake signature:", err);

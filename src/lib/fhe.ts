@@ -4,14 +4,18 @@ import { arbSepolia } from "@cofhe/sdk/chains";
 import { Ethers6Adapter } from "@cofhe/sdk/adapters";
 
 // ---------------------------------------------------------------------------
-// Route the ZK-proof verification POST through the Vite dev-server proxy
-// to avoid ERR_CONNECTION_TIMED_OUT hitting testnet-cofhe-vrf.fhenix.zone
-// directly from the browser.  The proxy is defined in vite.config.ts.
+// CoFHE ZK verifier URL:
+// - Dev: `/cofhe-vrf` → Vite proxy (vite.config.ts) → testnet-cofhe-vrf.fhenix.zone
+// - Prod: same-origin `/cofhe-vrf` → host must proxy (vercel.json + pack script
+//   `config.json` routes) so POST /verify is not served as SPA (405 / HTML).
+// - Optional override: VITE_COFHE_VRF_VERIFIER_URL (full base, no trailing slash)
 // ---------------------------------------------------------------------------
-const patchedArbSepolia = {
-    ...arbSepolia,
-    verifierUrl: `${window.location.origin}/cofhe-vrf`,
-};
+function getCofheVerifierBaseUrl(): string {
+    const fromEnv = import.meta.env.VITE_COFHE_VRF_VERIFIER_URL as string | undefined;
+    const trimmed = fromEnv?.trim();
+    if (trimmed) return trimmed.replace(/\/$/, "");
+    return `${window.location.origin}/cofhe-vrf`;
+}
 
 export { FheTypes };
 
@@ -27,9 +31,14 @@ let client: any = null;
 export async function getFHEClient() {
     if (client) return client;
 
+    const chain = {
+        ...arbSepolia,
+        verifierUrl: getCofheVerifierBaseUrl(),
+    };
+
     // CoFHE client does not require an injected wallet; connection happens in connectFHE via Ethers6Adapter.
     const config = createCofheConfig({
-        supportedChains: [patchedArbSepolia as any],
+        supportedChains: [chain as any],
         // Keep useWorkers: false — CoFHE workers run in a separate thread that cannot reach the
         // Vite dev-server proxy (/cofhe-vrf → testnet-cofhe-vrf.fhenix.zone). When true, the
         // worker bypasses the proxy, hits CORS/timeout, and produces a malformed VRF proof that
@@ -69,6 +78,60 @@ export async function getFHEInstance() {
 /** Clear CoFHE singleton (e.g. Privy logout). */
 export function resetFheClient() {
     client = null;
+}
+
+/**
+ * Reconnect the main wallet after ephemeral FHE work (claim, score reveal, etc.).
+ * `resetFheClient()` alone leaves the next decrypt without a connected client.
+ */
+export async function restoreMainFheSession(
+    provider: unknown,
+    signer: import("ethers").Signer
+) {
+    resetFheClient();
+    await connectFHE(provider, signer);
+}
+
+/** Reconnect the CoFHE client for the given wallet (safe after ephemeral FHE sessions). */
+export async function ensureFHEConnected(
+    provider: unknown,
+    signer: import("ethers").Signer
+) {
+    await connectFHE(provider, signer);
+}
+
+function isPermitLifecycleError(err: unknown): boolean {
+    const message = String(
+        (err as { shortMessage?: string; message?: string; reason?: string })?.shortMessage ??
+            (err as { message?: string })?.message ??
+            (err as { reason?: string })?.reason ??
+            err ??
+            ""
+    ).toLowerCase();
+    return (
+        message.includes("permit") &&
+        (message.includes("expired") ||
+            message.includes("invalid") ||
+            message.includes("not found") ||
+            message.includes("missing"))
+    );
+}
+
+async function runWithPermitRefresh<T>(
+    c: any,
+    operation: (permit: any) => Promise<T>
+): Promise<T> {
+    let permit = await c.permits.getOrCreateSelfPermit();
+    try {
+        return await operation(permit);
+    } catch (err) {
+        if (!isPermitLifecycleError(err)) {
+            throw err;
+        }
+        // Retry once with a freshly resolved permit for the current account+chain.
+        permit = await c.permits.getOrCreateSelfPermit();
+        return operation(permit);
+    }
 }
 
 /**
@@ -145,6 +208,58 @@ export async function publicDecrypt(ctHash: bigint | string) {
  * Permit-scoped decrypt-for-tx for an encrypted bool (e.g. staged eligibility `finalResult`).
  * Caller must use the ephemeral wallet that matches `permitRecipient` from the apply flow.
  */
+export interface DecryptForTxWithPermitResult {
+    ctHash: bigint;
+    decryptedValue: bigint;
+    signature: string;
+}
+
+/**
+ * Permit-scoped decrypt-for-tx (e.g. ConfidentialETH balance on an ephemeral payout address).
+ * The connected signer must match the on-chain FHE.allow recipient for the ciphertext.
+ */
+export async function decryptForTxWithPermit(
+    ctHash: bigint | string,
+    provider: unknown,
+    signer: import("ethers").Signer
+): Promise<DecryptForTxWithPermitResult> {
+    await forceConnectFHE(provider, signer);
+    const c = await getFHEClient();
+    const expectedCt = typeof ctHash === "string" ? BigInt(ctHash) : ctHash;
+
+    const run = async (): Promise<DecryptForTxWithPermitResult> => {
+        const permit = await c.permits.getOrCreateSelfPermit();
+        const result = await c.decryptForTx(expectedCt).withPermit(permit).execute();
+        const returnedCt =
+            typeof result.ctHash === "bigint" ? result.ctHash : BigInt(String(result.ctHash));
+        if (returnedCt !== expectedCt) {
+            throw new Error(
+                `CoFHE decrypt handle mismatch: expected ${expectedCt.toString()} but got ${returnedCt.toString()}.`
+            );
+        }
+        let sig = String(result.signature);
+        if (!sig.startsWith("0x")) sig = "0x" + sig;
+        return {
+            ctHash: returnedCt,
+            decryptedValue:
+                typeof result.decryptedValue === "bigint"
+                    ? result.decryptedValue
+                    : BigInt(String(result.decryptedValue)),
+            signature: sig,
+        };
+    };
+
+    try {
+        return await run();
+    } catch (err) {
+        if (!isPermitLifecycleError(err)) {
+            throw err;
+        }
+        await forceConnectFHE(provider, signer);
+        return run();
+    }
+}
+
 export async function decryptBoolForTxWithPermit(
     ctHash: bigint | string,
     provider: unknown,
@@ -153,7 +268,20 @@ export async function decryptBoolForTxWithPermit(
     await forceConnectFHE(provider, signer);
     const c = await getFHEClient();
     const expectedCt = typeof ctHash === "string" ? BigInt(ctHash) : ctHash;
-    const result = await c.decryptForTx(expectedCt).withPermit().execute();
+    let result: any;
+    try {
+        const permit = await c.permits.getOrCreateSelfPermit();
+        result = await c.decryptForTx(expectedCt).withPermit(permit).execute();
+    } catch (err) {
+        if (!isPermitLifecycleError(err)) {
+            throw err;
+        }
+        // Hard refresh the connected CoFHE client and retry once.
+        await forceConnectFHE(provider, signer);
+        const cRetry = await getFHEClient();
+        const permitRetry = await cRetry.permits.getOrCreateSelfPermit();
+        result = await cRetry.decryptForTx(expectedCt).withPermit(permitRetry).execute();
+    }
 
     const returnedCt =
         typeof result.ctHash === "bigint" ? result.ctHash : BigInt(String(result.ctHash));
@@ -182,25 +310,24 @@ export async function decryptBoolForTxWithPermit(
 export async function decryptForView(ctHash: bigint | string, utype: FheTypes) {
     const c = await getFHEClient();
     const handle = typeof ctHash === "string" ? BigInt(ctHash) : ctHash;
-    const permit = await c.permits.getOrCreateSelfPermit();
-    const plaintext = await c
-        .decryptForView(handle, utype)
-        .withPermit(permit)
-        .execute();
+    const plaintext = await runWithPermitRefresh(c, (permit) =>
+        c.decryptForView(handle, utype).withPermit(permit).execute()
+    );
     return plaintext; // boolean | bigint | string depending on utype
 }
 
 async function genericReencrypt(contractAddress: string, ciphertext: string, type: any) {
     const c = await getFHEClient();
-    
-    // Ensure we have a permit for the current account/chain
-    // This will trigger a signature if not already present or active
-    const permit = await c.permits.getOrCreateSelfPermit();
-    
-    // Use Fhenix async decryption view protocol with the signed permit
-    const result = await c.decryptForView(ciphertext, type)
-        .withPermit(permit)
-        .execute();
+    if (!c.connected) {
+        throw new Error(
+            "FHE client not connected. Connect your wallet or call ensureFHEConnected / connectFHE before decrypting."
+        );
+    }
+
+    // Use Fhenix async decryption view protocol with permit-refresh retry.
+    const result = await runWithPermitRefresh(c, (permit) =>
+        c.decryptForView(ciphertext, type).withPermit(permit).execute()
+    );
     return result;
 }
 
@@ -253,55 +380,22 @@ export interface DecryptedPatientData {
  */
 export async function decryptPatientProfile(encryptedData: EncryptedPatientData): Promise<DecryptedPatientData> {
     const c = await getFHEClient();
-    
-    // Get or create self permit for decryption
-    const permit = await c.permits.getOrCreateSelfPermit();
-    
-    // Decrypt all fields in parallel using the new SDK API
-    const [
-        age,
-        gender,
-        weight,
-        height,
-        hasDiabetes,
-        hbLevel,
-        isSmoker,
-        hasHypertension
-    ] = await Promise.all([
-        // age: euint8 -> Uint8
-        c.decryptForView(BigInt(encryptedData.age), FheTypes.Uint8)
-            .withPermit(permit)
-            .execute(),
-        // gender: ebool -> Bool
-        c.decryptForView(BigInt(encryptedData.gender), FheTypes.Bool)
-            .withPermit(permit)
-            .execute(),
-        // weight: euint16 -> Uint16
-        c.decryptForView(BigInt(encryptedData.weight), FheTypes.Uint16)
-            .withPermit(permit)
-            .execute(),
-        // height: euint8 -> Uint8
-        c.decryptForView(BigInt(encryptedData.height), FheTypes.Uint8)
-            .withPermit(permit)
-            .execute(),
-        // hasDiabetes: ebool -> Bool
-        c.decryptForView(BigInt(encryptedData.hasDiabetes), FheTypes.Bool)
-            .withPermit(permit)
-            .execute(),
-        // hbLevel: euint16 -> Uint16
-        c.decryptForView(BigInt(encryptedData.hbLevel), FheTypes.Uint16)
-            .withPermit(permit)
-            .execute(),
-        // isSmoker: ebool -> Bool
-        c.decryptForView(BigInt(encryptedData.isSmoker), FheTypes.Bool)
-            .withPermit(permit)
-            .execute(),
-        // hasHypertension: ebool -> Bool
-        c.decryptForView(BigInt(encryptedData.hasHypertension), FheTypes.Bool)
-            .withPermit(permit)
-            .execute()
-    ]);
-    
+
+    // Decrypt all fields in parallel using a permit-refresh retry flow.
+    const [age, gender, weight, height, hasDiabetes, hbLevel, isSmoker, hasHypertension] =
+        await runWithPermitRefresh(c, async (permit) =>
+            Promise.all([
+                c.decryptForView(BigInt(encryptedData.age), FheTypes.Uint8).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.gender), FheTypes.Bool).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.weight), FheTypes.Uint16).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.height), FheTypes.Uint8).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.hasDiabetes), FheTypes.Bool).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.hbLevel), FheTypes.Uint16).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.isSmoker), FheTypes.Bool).withPermit(permit).execute(),
+                c.decryptForView(BigInt(encryptedData.hasHypertension), FheTypes.Bool).withPermit(permit).execute(),
+            ])
+        );
+
     return {
         age: Number(age),
         gender: Boolean(gender),

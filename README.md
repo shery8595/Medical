@@ -2,10 +2,12 @@
 
 [![Fhenix](https://img.shields.io/badge/Powered%20By-Fhenix-teal?style=for-the-badge)](https://fhenix.io)
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-100%20Passing-emerald?style=for-the-badge)](docs/TESTING_GUIDE.md)
+[![Tests](https://img.shields.io/badge/Tests-191%2B%20Cases-emerald?style=for-the-badge)](docs/TEST_MATRIX.md)
 [![Vercel](https://img.shields.io/badge/Deploy-Vercel-black?style=for-the-badge)](https://vercel.com)
 
 **MedVault** is a decentralized clinical trial platform leveraging **Fully Homomorphic Encryption (FHE)** to bridge the gap between medical privacy and decentralized research. Built on **Fhenix (CoFHE)**, it allows patients to match with life-saving trials while keeping their medical data mathematically encrypted at all times on **Arbitrum Sepolia**.
+
+Latest product slice (waves 3–5, May 2026): FHIR JSON prefill for encrypted profiles, aggregate sponsor “representation monitoring” prompts, Reclaim-backed attestation channels with soft TTLs, subgraph hooks for encrypted propensity signals, and Aave-derived APR KPIs with labeled fallbacks.
 
 ---
 
@@ -265,14 +267,20 @@ MedVault is not just a matching engine; it is the foundation for an entirely new
 
 ## ✅ 8. Verification & Assurance
 
-The system is verified by a **comprehensive stress test suite** that validates every edge case in the Fhenix CoFHE environment.
+The system is verified by a **191+ case Hardhat suite** (unit, integration, staking, crypto) using the Fhenix CoFHE mock environment on the local Hardhat network.
 
-*   **Status**: All Tests Passing on Arbitrum Sepolia.
-*   **Coverage**: Eligibility Engine, Staking Consistency, Reward Distribution, and Access Control (ACL).
+*   **In-app docs**: [Tests & verification](https://localhost/docs/testing) tab (Overview, Matrix, Infrastructure, CI)
+*   **Matrix**: [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md)
+*   **Guide**: [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md)
+*   **Coverage**: Eligibility Engine, Staking, Reward Distribution, Access Control, Semaphore/Noir paths
 
 ```bash
-# Run the verification suite
-npx hardhat test test/comprehensive_medvault.test.js --network arbitrumSepolia
+npm run compile
+npm run test:unit
+npm run test:integration
+npm run test:crypto
+# Optional slow Honk pipeline (requires npm run build:circuit):
+npm run test:honk
 ```
 
 ---
@@ -282,6 +290,21 @@ npx hardhat test test/comprehensive_medvault.test.js --network arbitrumSepolia
 ### Prerequisites
 *   Node.js (v20+)
 *   Metamask with **Arbitrum Sepolia** Testnet configured.
+*   **Noir certify (optional):** WSL with `nargo` 1.0.0-beta.21 for `npm run build:circuit`. Browser proving uses `@noir-lang/noir_js` + `@aztec/bb.js` with Keccak transcript (`evm-no-zk`) matching `HonkVerifier.sol`.
+
+### ZK eligibility circuit (Noir 1.x)
+```bash
+# Compile circuit in WSL, generate Keccak HonkVerifier via bb.js
+npm run build:circuit
+
+# Redeploy verifier on Arbitrum Sepolia
+npx hardhat compile
+npx hardhat run scripts/deploy-verifier.ts --network arbitrumSepolia
+npx hardhat run scripts/set-verifier.ts --network arbitrumSepolia
+```
+After upgrading, restart `npm run dev` and hard-refresh the browser before **Seal FHE result** (anonymous certify).
+
+**Subgraph (sponsor FHE/seal columns):** Deploy with `npm run subgraph:deploy` (currently **v0.1.23**). Set `VITE_SUBGRAPH_URL` to the Studio query URL, e.g. `https://api.studio.thegraph.com/query/1742459/medvault-1/v0.1.23`. Indexes `fhePropensityCommittedAt`, `noirCertified`, and `noirEligible` on `AnonymousSubmission`.
 
 ### Local Installation
 1.  **Clone & Install**:

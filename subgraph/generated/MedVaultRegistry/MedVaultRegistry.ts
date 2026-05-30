@@ -537,6 +537,76 @@ export class ApplyToTrialWithConsentCall__Outputs {
   }
 }
 
+export class CancelAnonymousApplyStageCall extends ethereum.Call {
+  get inputs(): CancelAnonymousApplyStageCall__Inputs {
+    return new CancelAnonymousApplyStageCall__Inputs(this);
+  }
+
+  get outputs(): CancelAnonymousApplyStageCall__Outputs {
+    return new CancelAnonymousApplyStageCall__Outputs(this);
+  }
+}
+
+export class CancelAnonymousApplyStageCall__Inputs {
+  _call: CancelAnonymousApplyStageCall;
+
+  constructor(call: CancelAnonymousApplyStageCall) {
+    this._call = call;
+  }
+
+  get trialId(): BigInt {
+    return this._call.inputValues[0].value.toBigInt();
+  }
+
+  get proof(): CancelAnonymousApplyStageCallProofStruct {
+    return changetype<CancelAnonymousApplyStageCallProofStruct>(
+      this._call.inputValues[1].value.toTuple(),
+    );
+  }
+
+  get commitment(): BigInt {
+    return this._call.inputValues[2].value.toBigInt();
+  }
+
+  get permitRecipient(): Address {
+    return this._call.inputValues[3].value.toAddress();
+  }
+}
+
+export class CancelAnonymousApplyStageCall__Outputs {
+  _call: CancelAnonymousApplyStageCall;
+
+  constructor(call: CancelAnonymousApplyStageCall) {
+    this._call = call;
+  }
+}
+
+export class CancelAnonymousApplyStageCallProofStruct extends ethereum.Tuple {
+  get merkleTreeDepth(): BigInt {
+    return this[0].toBigInt();
+  }
+
+  get merkleTreeRoot(): BigInt {
+    return this[1].toBigInt();
+  }
+
+  get nullifier(): BigInt {
+    return this[2].toBigInt();
+  }
+
+  get message(): BigInt {
+    return this[3].toBigInt();
+  }
+
+  get scope(): BigInt {
+    return this[4].toBigInt();
+  }
+
+  get points(): Array<BigInt> {
+    return this[5].toBigIntArray();
+  }
+}
+
 export class FinalizeAnonymousApplyCall extends ethereum.Call {
   get inputs(): FinalizeAnonymousApplyCall__Inputs {
     return new FinalizeAnonymousApplyCall__Inputs(this);

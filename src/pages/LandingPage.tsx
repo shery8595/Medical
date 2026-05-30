@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import {
   Activity,
-  ArrowUp,
   ArrowRight,
   BadgeCheck,
   Check,
@@ -16,9 +15,11 @@ import {
   ExternalLink,
   Eye,
   MessageCircle,
+  Newspaper,
   FileCheck,
   FileText,
   Fingerprint,
+  HelpCircle,
   FlaskConical,
   Globe,
   ImageIcon,
@@ -123,109 +124,155 @@ const trustItems = [
   { label: "FHE-Ready", Icon: Cpu },
 ];
 
-/**
- * Real Reddit threads (public links). Headlines shortened from post titles; blurbs summarize the topic — not verbatim quotes.
- */
+/** Public links — headlines shortened; blurbs summarize the topic, not verbatim quotes. */
+type CommunityPlatform = "reddit" | "stackoverflow" | "hackernews" | "arxiv" | "security";
+
 const medicalPrivacyVoices: Array<{
   id: string;
   url: string;
+  platform: CommunityPlatform;
   source: string;
-  /** Subreddit name color (Reddit “new” light UI–style, on glass). */
-  sourceClass: string;
-  /** Ring + 3px left border when the card is selected. */
-  selectionRing: string;
+  meta: string;
+  accent: string;
   headline: string;
   blurb: string;
-  meta: string;
 }> = [
   {
     id: "mp-1",
     url: "https://www.reddit.com/r/privacy/comments/1fblu6e/each_doctors_visit_sends_your_data_through_a/",
+    platform: "reddit",
     source: "r/privacy",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-teal-500/45 border-l-[3px] border-l-teal-500",
-    meta: "Public thread on Reddit",
+    meta: "Reddit · public thread",
+    accent: "#00685f",
     headline: "Each doctor’s visit sends your data through a dozen companies",
     blurb: "Discussion of billing, vendors, and intermediaries that may handle visit data beyond your clinician.",
   },
   {
     id: "mp-2",
-    url: "https://www.reddit.com/r/privacy/comments/1se8uxf/unknown_to_most_your_health_history_is_not/",
-    source: "r/privacy",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-teal-500/45 border-l-[3px] border-l-teal-500",
-    meta: "Public thread on Reddit",
-    headline: "Your health history is not as private as people assume",
-    blurb: "Thread on what HIPAA does and does not block, and where expectations diverge from practice.",
+    url: "https://stackoverflow.com/questions/8967840/securing-sensitive-user-data-healthcare-saas",
+    platform: "stackoverflow",
+    source: "Stack Overflow",
+    meta: "Healthcare SaaS · security",
+    accent: "#f48024",
+    headline: "Securing sensitive user data in a healthcare SaaS",
+    blurb: "Builders debate plain-text medical records, breach expectations, and HIPAA-aligned encryption at rest.",
   },
   {
     id: "mp-3",
+    url: "https://news.ycombinator.com/item?id=37329261",
+    platform: "hackernews",
+    source: "Hacker News",
+    meta: "HN discussion",
+    accent: "#ff6600",
+    headline: "Why shared hospital rooms don’t “violate HIPAA”",
+    blurb: "Comment thread on what HIPAA actually protects, covered entities, and limits on patient control.",
+  },
+  {
+    id: "mp-4",
     url: "https://www.reddit.com/r/healthIT/comments/1menyte/ai_hipaa_and_hospital_portals_unified_portal_with/",
+    platform: "reddit",
     source: "r/healthIT",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-cyan-500/45 border-l-[3px] border-l-cyan-500",
-    meta: "Public thread on Reddit",
+    meta: "Reddit · public thread",
+    accent: "#00B4D8",
     headline: "AI, HIPAA, and unified hospital portals",
     blurb: "Debate on aggregating portal data and using AI on exports — security and policy angles.",
   },
   {
-    id: "mp-4",
+    id: "mp-5",
+    url: "https://security.stackexchange.com/questions/197750/what-is-the-point-of-hipaa-de-identification-re-identification",
+    platform: "security",
+    source: "Security Stack Exchange",
+    meta: "HIPAA · de-identification",
+    accent: "#8792fe",
+    headline: "What is the point of HIPAA de-identification if you keep re-ID keys?",
+    blurb: "Explains when pseudonymous samples, lab workflows, and linkage keys still count as PHI.",
+  },
+  {
+    id: "mp-6",
+    url: "https://arxiv.org/abs/2511.09043",
+    platform: "arxiv",
+    source: "arXiv",
+    meta: "cs.CR · federated learning",
+    accent: "#b31b1b",
+    headline: "Privacy-preserving federated learning for healthcare (MedHE)",
+    blurb: "Research on homomorphic encryption and gradient sparsification for collaborative models without raw data pooling.",
+  },
+  {
+    id: "mp-7",
+    url: "https://www.reddit.com/r/privacy/comments/1se8uxf/unknown_to_most_your_health_history_is_not/",
+    platform: "reddit",
+    source: "r/privacy",
+    meta: "Reddit · public thread",
+    accent: "#008378",
+    headline: "Your health history is not as private as people assume",
+    blurb: "Thread on what HIPAA does and does not block, and where expectations diverge from practice.",
+  },
+  {
+    id: "mp-8",
+    url: "https://stackoverflow.com/questions/68515615/how-to-protect-client-data-on-the-cloud-from-the-developers-and-the-deployment-t",
+    platform: "stackoverflow",
+    source: "Stack Overflow",
+    meta: "Medical software · cloud",
+    accent: "#f48024",
+    headline: "Keeping patient data private from your own dev and ops team",
+    blurb: "A clinician-led product asks how to deploy on cloud without vendors or engineers reading the database.",
+  },
+  {
+    id: "mp-9",
+    url: "https://news.ycombinator.com/item?id=35002882",
+    platform: "hackernews",
+    source: "Hacker News",
+    meta: "HN discussion",
+    accent: "#ff6600",
+    headline: "HIPAA scope for cash-only vs. in-network providers",
+    blurb: "Health-tech founders and lawyers argue entity-level coverage, hybrid entities, and mental-health carve-outs.",
+  },
+  {
+    id: "mp-10",
     url: "https://www.reddit.com/r/healthcare/comments/1sqb7um/ai_agents_accessing_patient_data_how_are_you/",
+    platform: "reddit",
     source: "r/healthcare",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-emerald-500/45 border-l-[3px] border-l-emerald-500",
-    meta: "Public thread on Reddit",
+    meta: "Reddit · public thread",
+    accent: "#06d6a0",
     headline: "AI agents and patient data — proving authorization",
     blurb: "Clinicians and builders discuss how to evidence what automated tools were allowed to access.",
   },
   {
-    id: "mp-5",
-    url: "https://www.reddit.com/r/healthIT/comments/1q82vbw/how_do_healthcare_orgs_usually_share_sensitive/",
-    source: "r/healthIT",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-cyan-500/45 border-l-[3px] border-l-cyan-500",
-    meta: "Public thread on Reddit",
-    headline: "How orgs share sensitive documents with patients and partners",
-    blurb: "Frustrations and methods around secure exchange of labs, letters, and approvals in 2025.",
+    id: "mp-11",
+    url: "https://security.stackexchange.com/questions/91438/are-internal-patient-identifiers-considered-phi-under-hipaa",
+    platform: "security",
+    source: "Security Stack Exchange",
+    meta: "HIPAA · identifiers",
+    accent: "#8792fe",
+    headline: "Are internal patient IDs PHI when used in API query strings?",
+    blurb: "When a GUID alone is not PHI versus when linking it to clinical data triggers HIPAA obligations.",
   },
   {
-    id: "mp-6",
-    url: "https://www.reddit.com/r/hipaa/comments/1n517ad/private_md_how_much_of_my_hipaa_compliance_will/",
-    source: "r/hipaa",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-violet-500/45 border-l-[3px] border-l-violet-500",
-    meta: "Public thread on Reddit",
-    headline: "How much does Epic handle vs. the practice for HIPAA?",
-    blurb: "A new clinic asks what the EHR covers versus policies, training, and BAAs they still need.",
-  },
-  {
-    id: "mp-7",
+    id: "mp-12",
     url: "https://www.reddit.com/r/23andme/comments/1ayw9y3/what_specific_privacy_concerns_do_you_have_about/",
+    platform: "reddit",
     source: "r/23andme",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-amber-500/45 border-l-[3px] border-l-amber-500",
-    meta: "Public thread on Reddit",
-    headline: "Privacy concerns about 23andMe and DTC tests",
+    meta: "Reddit · public thread",
+    accent: "#008378",
+    headline: "Privacy concerns about 23andMe and DTC genetics",
     blurb: "Users list worries after breaches and policy changes — typical direct-to-consumer genetics concerns.",
-  },
-  {
-    id: "mp-8",
-    url: "https://www.reddit.com/r/HealthInsurance/comments/1qlap92/how_do_i_avoid_my_parents_seeing_how_i_use_the/",
-    source: "r/HealthInsurance",
-    sourceClass: "text-[#1a1a1b] group-hover:underline",
-    selectionRing: "ring-rose-500/45 border-l-[3px] border-l-rose-500",
-    meta: "Public thread on Reddit",
-    headline: "Avoiding a policyholder seeing dependent care via EOBs",
-    blurb: "Adult dependents and families discuss who receives explanations of benefits and what shows up.",
   },
 ];
 
-const medicalPrivacyTop = medicalPrivacyVoices.slice(0, 4);
-const medicalPrivacyBottom = medicalPrivacyVoices.slice(4, 8);
+const medicalPrivacyTop = medicalPrivacyVoices.slice(0, 6);
+const medicalPrivacyBottom = medicalPrivacyVoices.slice(6, 12);
 
 /* ─── types ─────────────────────────────────────────────────────────────────── */
 
 type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string; strokeWidth?: number | string }>;
+
+const platformIcons: Record<CommunityPlatform, LucideIcon> = {
+  reddit: MessageCircle,
+  stackoverflow: HelpCircle,
+  hackernews: Newspaper,
+  arxiv: FileText,
+  security: Shield,
+};
 
 type OrbitNode = {
   key: string;
@@ -368,39 +415,20 @@ function OrbitNodePill({ node, reduce, index }: { node: OrbitNode; reduce: boole
   );
 }
 
-/* ─── Medical privacy “voices” — dual marquee + pause on card select ─────── */
+/* ─── Community voices — marquee cards + scroll-linked accent line ────── */
 
 type MedicalVoice = (typeof medicalPrivacyVoices)[number];
 type MarqueeRowId = "top" | "bottom";
 
-/** Minimal Snoo-style avatar (evokes Reddit; not official branding). */
-function RedditSnooAvatar({ className }: { className?: string }) {
+function CommunitySourceIcon({ platform, accent }: { platform: CommunityPlatform; accent: string }) {
+  const Icon = platformIcons[platform];
   return (
-    <svg className={cn("h-9 w-9 shrink-0 drop-shadow-sm", className)} viewBox="0 0 40 40" fill="none" aria-hidden>
-      <circle cx="20" cy="22" r="14" fill="#FF4500" />
-      <circle cx="20" cy="18" r="11" fill="white" />
-      <path d="M10 28c2-4 6-6 10-6s8 2 10 6" stroke="#FF4500" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-      <circle cx="14" cy="17" r="2" fill="#1a1a1b" />
-      <circle cx="26" cy="17" r="2" fill="#1a1a1b" />
-      <circle cx="20" cy="6" r="3" fill="white" stroke="#FF4500" strokeWidth="1.2" />
-      <rect x="19" y="8" width="2" height="5" rx="1" fill="white" />
-      <ellipse cx="20" cy="32" rx="9" ry="5" fill="#3DDC84" />
-    </svg>
-  );
-}
-
-/** Reddit orange mark (right side of header, like native post UI). */
-function RedditHeaderMark({ className }: { className?: string }) {
-  return (
-    <svg className={cn("h-7 w-7 shrink-0 drop-shadow-sm", className)} viewBox="0 0 32 32" fill="none" aria-hidden>
-      <circle cx="16" cy="16" r="15" fill="#FF4500" />
-      <ellipse cx="16" cy="19" rx="8" ry="7" fill="white" />
-      <circle cx="12" cy="17" r="1.6" fill="#FF4500" />
-      <circle cx="20" cy="17" r="1.6" fill="#FF4500" />
-      <path d="M11 22c2.2 2.2 5.3 3.5 5 3.5s2.8-1.3 5-3.5" stroke="#FF4500" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-      <circle cx="16" cy="5" r="2.5" fill="white" />
-      <rect x="15" y="5" width="2" height="4" rx="0.5" fill="white" />
-    </svg>
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-white/80"
+      style={{ backgroundColor: `${accent}18`, color: accent, boxShadow: `0 0 0 1px ${accent}30` }}
+    >
+      <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+    </span>
   );
 }
 
@@ -414,7 +442,7 @@ function MedicalPrivacyPostCard({
   onPick: () => void;
 }) {
   return (
-    <div
+    <article
       role="button"
       tabIndex={0}
       onClick={onPick}
@@ -425,65 +453,56 @@ function MedicalPrivacyPostCard({
         }
       }}
       className={cn(
-        "group relative flex shrink-0 cursor-pointer flex-col overflow-hidden text-left font-sans transition duration-200 will-change-transform",
-        "w-[calc((100vw-1.5rem-2.25rem)/1.2)] min-[400px]:w-[calc((100vw-2rem-2rem)/2.1)] min-[640px]:w-[calc((100vw-3rem)/3.5)]",
-        /* Frosted glass panel (reference: ~80% white + blur) */
-        "rounded-2xl border border-white/55 bg-white/80 shadow-[0_4px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl backdrop-saturate-150",
-        "hover:border-white/70 hover:bg-white/85",
-        selected && [
-          "z-10 scale-[1.02] border-white/80 bg-white/90 shadow-[0_12px_40px_rgba(15,23,42,0.12)] ring-2 backdrop-blur-2xl",
-          v.selectionRing,
-        ]
+        "group relative flex shrink-0 cursor-pointer flex-col rounded-2xl border bg-white text-left transition duration-300",
+        "w-[calc((100vw-1.5rem-2.25rem)/1.15)] min-[400px]:w-[calc((100vw-2rem-2rem)/2.05)] min-[640px]:w-[calc((100vw-3rem)/3.2)] min-[1024px]:w-[320px]",
+        "min-h-[220px] border-[#bcc9c6]/45 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_12px_32px_-20px_rgba(10,37,64,0.14)]",
+        "hover:border-[#6bd8cb]/55 hover:shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_20px_44px_-18px_rgba(0,104,95,0.16)]",
+        selected && "z-[1] scale-[1.02] border-[#6bd8cb]/70 ring-2 ring-[#6bd8cb]/30 shadow-[0_20px_48px_-16px_rgba(0,104,95,0.2)]"
       )}
-      style={{ fontFamily: 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
       aria-pressed={selected}
     >
-      <div className="flex min-w-0 flex-col px-4 py-4 sm:px-5 sm:py-[1.125rem]">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <RedditSnooAvatar />
-            <div className="min-w-0">
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            <CommunitySourceIcon platform={v.platform} accent={v.accent} />
+            <div className="min-w-0 pt-0.5">
               <a
                 href={v.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className={cn("block truncate text-[14px] font-bold leading-tight text-[#1a1a1b] sm:text-[15px]", v.sourceClass)}
+                className="block truncate text-sm font-semibold leading-tight transition hover:underline"
+                style={{ color: v.accent }}
               >
                 {v.source}
               </a>
-              <p className="mt-0.5 text-[11px] leading-tight text-[#787c7e] sm:text-xs">{v.meta}</p>
+              <p className="mt-0.5 truncate text-xs text-[#5a6a80]">{v.meta}</p>
             </div>
           </div>
-          <a href={v.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} aria-label="Reddit">
-            <RedditHeaderMark />
-          </a>
-        </div>
-
-        <div className="space-y-2 text-[14px] leading-relaxed text-[#333] sm:text-[15px]">
           <a
             href={v.url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="block font-medium text-[#1a1a1b] [text-wrap:pretty] hover:underline"
+            aria-label={`Open thread: ${v.headline}`}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#5a6a80]/70 opacity-60 transition hover:bg-[#f7f9fb] hover:text-[#00685f] hover:opacity-100"
           >
-            {v.headline}
+            <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
           </a>
-          <p className="line-clamp-3 text-[13px] font-normal leading-relaxed text-[#5c5c5c] sm:text-sm">{v.blurb}</p>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-black/[0.06] pt-3 text-[11px] text-[#787c7e] sm:text-xs">
-          <span className="inline-flex items-center gap-1 text-[#ff4500]" aria-hidden>
-            <ArrowUp className="h-4 w-4" strokeWidth={2.2} />
-          </span>
-          <span className="inline-flex items-center gap-1" aria-hidden>
-            <MessageCircle className="h-3.5 w-3.5 text-[#878a8c]" strokeWidth={2} />
-          </span>
-          <span className="ml-auto font-normal tabular-nums text-[#878a8c]">Public thread · Reddit</span>
-        </div>
+        <a
+          href={v.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="mb-2 block text-[15px] font-bold leading-snug text-[#191c1e] [text-wrap:pretty] transition group-hover:text-[#008378] sm:text-base"
+        >
+          {v.headline}
+        </a>
+        <p className="line-clamp-4 flex-1 text-[13px] leading-relaxed text-[#5a6a80]">{v.blurb}</p>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -514,7 +533,7 @@ function MedicalPrivacyMarqueeRow({
 
   if (reduce) {
     return (
-      <div className="flex flex-wrap justify-center gap-4 px-4">
+      <div className="flex flex-wrap justify-center gap-4 px-2">
         {items.map((v) => card(v, ""))}
       </div>
     );
@@ -528,14 +547,13 @@ function MedicalPrivacyMarqueeRow({
       onMouseEnter={() => setIsHoveringRow(true)}
       onMouseLeave={() => setIsHoveringRow(false)}
     >
-      {/* Edge fade — match peach/rose strip behind cards */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-20 w-8 bg-gradient-to-r from-[#ffe8ea] from-15% to-transparent sm:w-10"
+        className="pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-gradient-to-r from-[#f7f9fb] from-20% to-transparent sm:w-14"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-20 w-8 bg-gradient-to-l from-[#fff0e5] from-15% to-transparent sm:w-10"
+        className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-gradient-to-l from-[#f7f9fb] from-20% to-transparent sm:w-14"
       />
       <div
         className={cn(
@@ -557,23 +575,22 @@ function MedicalPrivacyVoicesBento() {
   const reduce = useReducedMotion();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  /** Click toggles which card is highlighted; marquee pause is hover-only (see row onMouseEnter/Leave). */
   const onCardClick = (_row: MarqueeRowId, v: MedicalVoice) => {
     setSelectedId((prev) => (prev === v.id ? null : v.id));
   };
 
   return (
     <section
-      className="relative border-b border-[#bcc9c6]/35 bg-white px-0 py-20 sm:px-0"
+      className="relative border-b border-[#bcc9c6]/35 bg-[#f7f9fb] px-4 py-20 sm:px-8"
       id="medical-privacy-risks"
       aria-labelledby="medical-privacy-risks-heading"
     >
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
-        <div className="absolute left-1/2 top-0 h-72 w-[min(100%,52rem)] -translate-x-1/2 rounded-full bg-[#89f5e7]/[0.16] blur-3xl" />
-        <div className="absolute -left-1/4 top-1/3 h-48 w-72 rounded-full bg-[#00685f]/[0.06] blur-3xl" />
+        <div className="absolute -left-24 top-8 h-72 w-72 rounded-full bg-[#89f5e7]/20 blur-3xl" />
+        <div className="absolute -right-16 bottom-0 h-64 w-64 rounded-full bg-[#8792fe]/10 blur-3xl" />
       </div>
 
-      <div className="mx-auto max-w-screen-lg px-4 sm:px-8">
+      <div className="mx-auto max-w-screen-xl">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -590,40 +607,40 @@ function MedicalPrivacyVoicesBento() {
             Medical data doesn’t stay in one place —{" "}
             <span className="text-[#008378]">it spreads.</span>
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-[#5a6a80] sm:text-lg">
+          <p className="mt-4 text-base leading-relaxed text-[#3d4947] sm:text-lg">
             Portals, payers, vendors, and wearables can each surface more than you expect. MedVault is built for a
             world where you choose what gets shared — with proofs, not open-ended exposure.
           </p>
         </motion.div>
-      </div>
 
-      <p className="mx-auto mt-8 max-w-screen-lg px-4 text-center text-xs text-[#5a6a80] sm:px-8">
-        Top row scrolls left · bottom row scrolls right. Hover a row to pause; move the pointer away to resume. Click a card to highlight it.
-      </p>
+        <p className="mx-auto mt-10 max-w-lg text-center text-[11px] text-[#5a6a80] sm:text-xs">
+          Top row scrolls left · bottom row scrolls right · hover to pause · click to focus
+        </p>
 
-      <div className="relative mx-3 mt-5 overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-rose-100/95 via-orange-50/90 to-amber-100/[0.93] py-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] sm:mx-8 sm:rounded-[2rem] sm:py-8">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(255,255,255,0.5),transparent)]" aria-hidden />
-        <div className="relative space-y-3 sm:space-y-4">
-          <MedicalPrivacyMarqueeRow
-            items={medicalPrivacyTop}
-            direction="left"
-            reduce={!!reduce}
-            selectedId={selectedId}
-            onCardClick={onCardClick}
-          />
-          <MedicalPrivacyMarqueeRow
-            items={medicalPrivacyBottom}
-            direction="right"
-            reduce={!!reduce}
-            selectedId={selectedId}
-            onCardClick={onCardClick}
-          />
+        <div className="relative mt-6 min-h-[480px] overflow-hidden py-2 sm:mt-8">
+          <div className="relative space-y-4 sm:space-y-5">
+            <MedicalPrivacyMarqueeRow
+              items={medicalPrivacyTop}
+              direction="left"
+              reduce={!!reduce}
+              selectedId={selectedId}
+              onCardClick={onCardClick}
+            />
+            <MedicalPrivacyMarqueeRow
+              items={medicalPrivacyBottom}
+              direction="right"
+              reduce={!!reduce}
+              selectedId={selectedId}
+              onCardClick={onCardClick}
+            />
+          </div>
         </div>
-      </div>
 
-      <p className="mx-auto mt-8 max-w-xl px-4 text-center text-xs text-[#5a6a80] sm:px-6">
-        Real public threads on Reddit — opens in a new tab. Headlines follow each post title; blurbs summarize the discussion, not verbatim comments. Not medical or legal advice.
-      </p>
+        <p className="mx-auto mt-10 max-w-xl text-center text-xs leading-relaxed text-[#5a6a80]">
+          Real public threads from Reddit, Stack Overflow, Hacker News, arXiv, and Security Stack Exchange — opens in a
+          new tab. Headlines summarize the discussion; not medical or legal advice.
+        </p>
+      </div>
     </section>
   );
 }
@@ -659,24 +676,29 @@ function TrustMarquee() {
 /* ─── Step mini-illustrations ────────────────────────────────────────────────── */
 
 function VaultIllus({ reduce }: { reduce: boolean }) {
+  /** Fixed px widths so bars stay centered (not left-aligned % in a flex row). */
+  const bars = [72, 48, 64] as const;
+
   return (
-    <div className="flex items-center justify-center gap-3 px-5 py-5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e8f4fd]">
-        <UserRound className="h-5 w-5 text-[#0a2540]" strokeWidth={1.7} />
-      </div>
-      <div className="flex flex-1 flex-col gap-[5px]">
-        {([80, 55, 70] as number[]).map((w, i) => (
-          <motion.div
-            key={i}
-            className="h-[3px] rounded-full bg-gradient-to-r from-[#6bd8cb] to-[#89f5e7]"
-            style={{ width: `${w}%` }}
-            animate={reduce ? undefined : { scaleX: [0.5, 1, 0.5], opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.28, ease: "easeInOut" }}
-          />
-        ))}
-      </div>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00685f]/10">
-        <Database className="h-5 w-5 text-[#00685f]" strokeWidth={1.7} />
+    <div className="flex w-full items-center justify-center px-5 py-4">
+      <div className="flex items-center justify-center gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e8f4fd]">
+          <UserRound className="h-5 w-5 text-[#0a2540]" strokeWidth={1.7} />
+        </div>
+        <div className="flex w-[80px] flex-col items-center justify-center gap-[6px]" aria-hidden>
+          {bars.map((w, i) => (
+            <motion.div
+              key={i}
+              className="h-[3px] rounded-full bg-gradient-to-r from-[#6bd8cb] to-[#89f5e7]"
+              style={{ width: w, transformOrigin: "center" }}
+              animate={reduce ? undefined : { scaleX: [0.55, 1, 0.55], opacity: [0.45, 1, 0.45] }}
+              transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.28, ease: "easeInOut" }}
+            />
+          ))}
+        </div>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00685f]/10">
+          <Database className="h-5 w-5 text-[#00685f]" strokeWidth={1.7} />
+        </div>
       </div>
     </div>
   );
@@ -689,7 +711,7 @@ function MatchIllus({ reduce: _reduce }: { reduce: boolean }) {
     { label: "Cardiac Rx", match: false },
   ];
   return (
-    <div className="flex flex-col gap-1.5 px-4 py-4">
+    <div className="flex w-full max-w-[220px] flex-col justify-center gap-1.5 px-4 py-4 mx-auto">
       {rows.map((row, i) => (
         <motion.div
           key={i}
@@ -718,7 +740,7 @@ function MatchIllus({ reduce: _reduce }: { reduce: boolean }) {
 
 function ProofIllus({ reduce }: { reduce: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-5">
+    <div className="flex w-full flex-col items-center justify-center gap-3 py-4">
       <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#06d6a0]/15">
         <BadgeCheck className="h-6 w-6 text-[#00685f]" strokeWidth={1.8} />
         {!reduce && (
@@ -792,7 +814,7 @@ function FhenixCipherTerminal({ reduce }: { reduce: boolean }) {
                 <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={1.6} />
               </div>
               <span className="font-mono text-[10px] font-medium text-slate-300 sm:text-[11px]">fhEVM</span>
-              <span className="font-mono text-[9px] text-slate-600 sm:text-[10px]">Fhenix Helium</span>
+              <span className="font-mono text-[9px] text-slate-600 sm:text-[10px]">Fhenix</span>
             </div>
             <div className="flex items-center gap-1.5">
               {!reduce && (
@@ -1141,7 +1163,7 @@ export function LandingPage() {
                   transition={{ type: "spring", stiffness: 380, damping: 26 }}
                 >
                   <Link
-                    to="/docs/security-model"
+                    to="/docs"
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[#bcc9c6] bg-white px-8 py-4 text-base font-semibold text-[#191c1e] shadow-sm transition hover:bg-[#f2f4f6] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#00685f]/20"
                   >
                     <FileText className="h-4 w-4 text-[#00685f]" strokeWidth={1.8} />
@@ -1321,6 +1343,13 @@ export function LandingPage() {
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
               From vault to trial — with proofs, not exposure
             </h2>
+            <Link
+              to="/docs"
+              className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#00685f]/30 bg-[#00685f]/5 px-5 py-2.5 text-sm font-semibold text-[#00685f] transition hover:bg-[#00685f]/10"
+            >
+              Explore the full walkthrough
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </motion.div>
 
           {/* Timeline grid */}
@@ -1366,8 +1395,8 @@ export function LandingPage() {
                     transition={{ type: "spring", stiffness: 300, damping: 22 }}
                     className="w-full overflow-hidden rounded-2xl border border-[#bcc9c6]/60 bg-white shadow-sm"
                   >
-                    {/* Mini illustration */}
-                    <div className="border-b border-[#bcc9c6]/50 bg-[#f7f9fb]">
+                    {/* Mini illustration — fixed height so step 01 bars stay centered vs siblings */}
+                    <div className="flex min-h-[88px] items-center justify-center border-b border-[#bcc9c6]/50 bg-[#f7f9fb]">
                       {idx === 0 && <VaultIllus reduce={!!reduce} />}
                       {idx === 1 && <MatchIllus reduce={!!reduce} />}
                       {idx === 2 && <ProofIllus reduce={!!reduce} />}

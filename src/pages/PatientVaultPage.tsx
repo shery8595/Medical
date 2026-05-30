@@ -1,29 +1,29 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useWeb3 } from "../lib/Web3Context";
 import { PatientRecordForm } from "../components/dashboard/PatientRecordForm";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Portal } from "../components/ui/Portal";
 import { VaultCard } from "../components/dashboard/VaultCard";
-import { ConfidentialWallet } from "../components/dashboard/ConfidentialWallet";
+import { PatientVaultHeader } from "../components/dashboard/PatientVaultHeader";
+import { PatientVaultHero } from "../components/dashboard/PatientVaultHero";
+import { VaultStatusStrip } from "../components/dashboard/VaultStatusStrip";
+import { FinancialEnclaveSection } from "../components/dashboard/FinancialEnclaveSection";
+import { VaultQuickActions } from "../components/dashboard/VaultQuickActions";
 import { Button } from "../components/ui/Button";
 import { usePatientProfile } from "../hooks/usePatientProfile";
+import { getContractAddressForChain } from "../lib/contracts";
+import { getSubgraphQueryPath } from "../lib/subgraph";
 import { getStoredIdentity, isMemberRegistered } from "../lib/semaphore";
 import {
   Plus,
   ShieldCheck,
-  Upload,
   History,
-  Search,
-  SlidersHorizontal,
-  ChevronRight,
   Sparkles,
   SearchX,
-  Coins
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { SectionTopBar } from "../components/layout/SectionTopBar";
+import { importFhirJson, type FhirImportIssue, type FhirMappedProfile } from "../lib/fhirImport";
 import { ArbSepoliaGasBanner } from "../components/ui/ArbSepoliaGasBanner";
-import { ReclaimUpcomingButton } from "../components/reclaim/ReclaimUpcomingButton";
 
 /* ─── Animation helpers ───────────────────────────────────────────────────── */
 const fadeUp = (delay = 0) => ({
@@ -39,112 +39,176 @@ const fadeIn = (delay = 0) => ({
 });
 
 export function PatientVaultPage() {
-  const { account, provider, connect, isConnecting, error: connectError } = useWeb3();
+  const { account, provider, signer, isFHEReady, connect, isConnecting, error: connectError, chainId } = useWeb3();
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const { profile, loading, hasProfile } = usePatientProfile(account || undefined);
+  const { profile, loading, hasProfile, error: profileError, refetch: refetchPatient } = usePatientProfile(account || undefined);
+  const [fhirPrefill, setFhirPrefill] = useState<FhirMappedProfile | null>(null);
+  const [fhirIssues, setFhirIssues] = useState<FhirImportIssue[]>([]);
+  const fhirInputRef = useRef<HTMLInputElement>(null);
+  const [uploadNonce, setUploadNonce] = useState(0);
   // On-chain registration state (supplement subgraph — catches cases where the subgraph lags)
   const [onChainRegistered, setOnChainRegistered] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!provider) return;
+    if (!provider) {
+      console.debug("[PatientVault] provider unavailable; skipping on-chain registration check");
+      return;
+    }
     const identity = getStoredIdentity();
-    if (!identity) { setOnChainRegistered(false); return; }
+    if (!identity) {
+      console.debug("[PatientVault] no local Semaphore identity found");
+      setOnChainRegistered(false);
+      return;
+    }
+    console.debug("[PatientVault] checking on-chain member registration", {
+      account: account ?? null,
+      commitment: identity.commitment.toString(),
+    });
     isMemberRegistered(provider, identity.commitment)
-      .then(setOnChainRegistered)
-      .catch(() => setOnChainRegistered(null));
-  }, [provider]);
+      .then((registered) => {
+        console.debug("[PatientVault] on-chain member registration result", {
+          account: account ?? null,
+          registered,
+        });
+        setOnChainRegistered(registered);
+      })
+      .catch((err) => {
+        console.error("[PatientVault] on-chain member check failed", err);
+        setOnChainRegistered(null);
+      });
+  }, [provider, account]);
+
+  // Subgraph often lags the confirmed registerPatient tx; poll briefly while on-chain says "member" but Patient entity is missing.
+  useEffect(() => {
+    if (!account || onChainRegistered !== true || hasProfile || loading) return;
+    let cancelled = false;
+    let n = 0;
+    console.debug("[PatientVault] starting subgraph polling for patient profile", {
+      account,
+      onChainRegistered,
+      hasProfile,
+    });
+    const tick = async () => {
+      if (cancelled || n >= 30) return;
+      n += 1;
+      console.debug("[PatientVault] subgraph poll attempt", { attempt: n, account });
+      const data = await refetchPatient();
+      if (!cancelled && data?.patient) {
+        console.debug("[PatientVault] subgraph patient profile found", {
+          attempt: n,
+          patientId: data.patient.id,
+        });
+        return;
+      }
+      if (!cancelled) {
+        console.debug("[PatientVault] subgraph patient still missing", { attempt: n });
+      }
+      if (!cancelled && n < 30) {
+        setTimeout(tick, 4000);
+      } else if (!cancelled) {
+        console.warn("[PatientVault] polling stopped after max attempts without profile", {
+          attempts: n,
+          account,
+        });
+      }
+    };
+    const id = window.setTimeout(tick, 2000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+      console.debug("[PatientVault] stopped subgraph polling loop");
+    };
+  }, [account, onChainRegistered, hasProfile, loading, refetchPatient]);
+
+  const openManualUpload = () => {
+    setUploadNonce((n) => n + 1);
+    setFhirPrefill(null);
+    setFhirIssues([]);
+    setShowUploadForm(true);
+  };
+
+  const triggerFhirImport = () => {
+    fhirInputRef.current?.click();
+  };
+
+  const onFhirFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadNonce((n) => n + 1);
+    try {
+      const text = await file.text();
+      const res = importFhirJson(text);
+      if (!res.ok) {
+        setFhirPrefill(null);
+        setFhirIssues(res.issues);
+        setShowUploadForm(true);
+        return;
+      }
+      setFhirPrefill(res.profile);
+      setFhirIssues(res.issues);
+      setShowUploadForm(true);
+    } catch {
+      setFhirIssues([{ path: "$", message: "Could not read that file — try exporting UTF-8 JSON from your EHR." }]);
+      setShowUploadForm(true);
+    }
+  };
 
   const isRegistered = hasProfile || onChainRegistered === true;
 
+  const subgraphQueryPath = getSubgraphQueryPath(import.meta.env.VITE_SUBGRAPH_URL as string | undefined);
+  const medVaultRegistryAddress =
+    chainId != null ? getContractAddressForChain("MedVaultRegistry", chainId) : getContractAddressForChain("MedVaultRegistry");
+
+  useEffect(() => {
+    console.debug("[PatientVault] render state", {
+      account: account ?? null,
+      loading,
+      hasProfile,
+      onChainRegistered,
+      isRegistered,
+      profileError: profileError?.message ?? null,
+    });
+  }, [account, loading, hasProfile, onChainRegistered, isRegistered, profileError]);
+
   return (
-    <div className="max-w-[1600px] mx-auto pb-24 px-4 md:px-8 lg:px-12 space-y-10">
-      <SectionTopBar
-        title="Medical Vault"
-        className="-mx-4 md:-mx-8 lg:-mx-12 px-4 md:px-8 lg:px-12"
-        rightContent={(
-          <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest">
-            <Link to="/patient/find-trials" className="text-teal-700 hover:text-teal-600 transition-colors">
-              Find Trials
-            </Link>
-            <Link to="/patient/medical-vault" className="text-slate-500 hover:text-slate-700 transition-colors">
-              Identity
-            </Link>
-          </div>
-        )}
-      />
+    <div className="mx-auto max-w-[1600px] space-y-8 pb-24">
+      <motion.div {...fadeIn(0)} className="space-y-6">
+        <PatientVaultHeader
+          account={account}
+          connect={connect}
+          isConnecting={isConnecting}
+          connectError={connectError}
+          onChainActive={Boolean(account && isRegistered)}
+        />
 
-      <ArbSepoliaGasBanner />
+        <ArbSepoliaGasBanner />
 
-      {/* ── Hero Banner ── */}
-      <motion.section
-        {...fadeIn(0)}
-        className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-100 via-white to-slate-100 p-10 md:p-14 text-slate-900 shadow-xl border border-slate-200"
-      >
-        <div className="absolute top-0 right-0 h-[30rem] w-[30rem] -translate-y-1/2 translate-x-1/3 rounded-full bg-teal-100/50 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 h-48 w-80 -translate-y-1/4 -translate-x-1/4 rounded-full bg-emerald-100/60 blur-[100px] pointer-events-none" />
+        <PatientVaultHero
+          account={account}
+          isRegistered={isRegistered}
+          connect={connect}
+          isConnecting={isConnecting}
+          connectError={connectError}
+          onUpload={openManualUpload}
+          onNewVisit={openManualUpload}
+          onFhirImport={triggerFhirImport}
+        />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
-          <div className="max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-50 border border-teal-200 text-[11px] font-bold uppercase tracking-widest text-teal-700 mb-6">
-              <ShieldCheck className="h-3 w-3 text-teal-600" />
-              Secure FHE Enclave
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-              Medical <span className="text-teal-600">Vault</span>
-            </h1>
-            <p className="text-slate-600 text-lg leading-relaxed">
-              Your sensitive health records are stored in an encrypted state using Fully Homomorphic Encryption. Only you control who can access the decrypted insights.
-            </p>
-          </div>
+        <input
+          ref={fhirInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(ev) => void onFhirFile(ev)}
+        />
 
-          <motion.div {...fadeUp(0.2)} className="flex flex-col items-stretch md:items-end gap-2">
-            {!account ? (
-              <>
-                <Button
-                  onClick={() => void connect()}
-                  disabled={isConnecting}
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-bold h-14 px-8 rounded-2xl gap-3 shadow-xl shadow-teal-600/20 transition-all text-base"
-                >
-                  <ShieldCheck className="h-5 w-5" />
-                  {isConnecting ? "Connecting..." : "Log in"}
-                </Button>
-                {connectError ? (
-                  <p className="text-sm text-rose-600 max-w-md text-center md:text-right">{connectError}</p>
-                ) : null}
-              </>
-            ) : (
-              <div className="flex flex-col items-stretch md:items-end gap-3 w-full md:w-auto">
-                <Button
-                  onClick={() => setShowUploadForm(true)}
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-bold h-14 px-8 rounded-2xl gap-3 shadow-xl shadow-teal-600/20 transition-all text-base w-full md:w-auto"
-                >
-                  <Upload className="h-5 w-5" />
-                  {isRegistered ? "Update Protected Record" : "Upload Initial Record"}
-                </Button>
-                <ReclaimUpcomingButton className="w-full md:w-auto" />
-                <p className="text-xs text-slate-500 text-center md:text-right max-w-xs">
-                  Enter your own metrics in the form; values are not verified against a lab or EHR until Reclaim is enabled.
-                </p>
-              </div>
-            )}
-          </motion.div>
-        </div>
-      </motion.section>
-
-      <motion.section {...fadeUp(0.05)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2">Record Status</p>
-          <p className="text-2xl font-black text-slate-900">{isRegistered ? "Initialized" : "Empty"}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2">Wallet</p>
-          <p className="text-sm font-mono text-slate-700">{account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "Not connected"}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2">Privacy Layer</p>
-          <p className="text-sm font-bold text-emerald-400">FHE Active</p>
-        </div>
-      </motion.section>
+        <VaultStatusStrip
+          account={account}
+          isRegistered={isRegistered}
+          onUploadClick={account ? openManualUpload : undefined}
+        />
+      </motion.div>
 
       {/* ── Upload Modal Overlay ── */}
       <AnimatePresence>
@@ -160,19 +224,36 @@ export function PatientVaultPage() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl custom-scrollbar relative z-[110]"
+                className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl custom-scrollbar relative z-[110] space-y-4"
               >
+                {fhirIssues.length > 0 ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+                    <p className="font-semibold mb-1">FHIR import notes</p>
+                    <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed">
+                      {fhirIssues.map((i) => (
+                        <li key={`${i.path}-${i.message.slice(0, 40)}`}>{i.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <PatientRecordForm
+                  key={`vault-upload-${uploadNonce}`}
+                  prefillProfile={fhirPrefill ?? undefined}
                   onSuccess={async () => {
                     setShowUploadForm(false);
-                    // Subgraph may lag the confirmed tx; poll until the Patient entity exists.
+                    setFhirPrefill(null);
+                    setFhirIssues([]);
                     for (let i = 0; i < 20; i++) {
                       const fresh = await refetchPatient();
                       if (fresh?.patient) break;
                       await new Promise((r) => setTimeout(r, 3000));
                     }
                   }}
-                  onCancel={() => setShowUploadForm(false)}
+                  onCancel={() => {
+                    setShowUploadForm(false);
+                    setFhirPrefill(null);
+                    setFhirIssues([]);
+                  }}
                 />
               </motion.div>
             </motion.div>
@@ -180,19 +261,13 @@ export function PatientVaultPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Financial Enclave ── */}
-      <motion.section {...fadeUp(0.1)} className="space-y-6">
-        <div className="flex items-center justify-between px-2">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-              <Coins className="h-7 w-7 text-amber-500" />
-              Financial Enclave
-            </h2>
-            <p className="text-sm text-slate-500">Manage your private incentives and confidential rewards.</p>
-          </div>
-        </div>
-        <ConfidentialWallet />
-      </motion.section>
+      <motion.div {...fadeUp(0.1)}>
+        <FinancialEnclaveSection />
+      </motion.div>
+
+      <motion.div {...fadeUp(0.15)}>
+        <VaultQuickActions onUpload={openManualUpload} />
+      </motion.div>
 
       {/* ── Vault Grid ── */}
       <div className="flex items-center justify-between px-2 mb-6">
@@ -226,17 +301,45 @@ export function PatientVaultPage() {
             }} />
           </motion.div>
         ) : onChainRegistered === true && !hasProfile ? (
-          /* On-chain registered but subgraph still indexing */
+          /* On-chain Semaphore member via MedVaultRegistry, but Patient(wallet) missing in this subgraph deployment */
           <motion.div
             {...fadeUp(0.2)}
-            className="col-span-full py-16 flex flex-col items-center justify-center gap-4 bg-teal-50 rounded-[2.5rem] border-2 border-teal-200"
+            className="col-span-full py-16 flex flex-col items-center justify-center gap-4 bg-teal-50 rounded-[2.5rem] border-2 border-teal-200 px-6 "
           >
             <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
               <ShieldCheck className="h-8 w-8" />
             </div>
-            <div className="text-center">
+            <div className="text-center max-w-md">
               <h3 className="text-xl font-bold text-slate-900">Identity Registered</h3>
-              <p className="text-slate-600 max-w-xs mx-auto mt-2">Your anonymous profile is on-chain. The indexer is catching up — vault details will appear shortly.</p>
+              <p className="text-slate-600 mx-auto mt-2 text-sm leading-relaxed">
+                Your Semaphore commitment is registered on <strong>MedVaultRegistry</strong>, but the indexer returned{" "}
+                <strong>no Patient</strong> for this wallet. That usually means either the subgraph deployment is behind or{" "}
+                <code className="text-xs bg-white/80 px-1 rounded border border-teal-200">VITE_SUBGRAPH_URL</code> points at a different Studio version than
+                the one where your <code className="text-xs bg-white/80 px-1 rounded border border-teal-200">patient(id: …)</code> query works. If you registered
+                this identity from <em>another</em> wallet, connect that wallet — the subgraph keys Patient by transaction sender.
+              </p>
+              {subgraphQueryPath ? (
+                <p className="text-slate-500 text-xs mt-3 font-mono break-all text-left max-w-xl mx-auto">
+                  Active indexer path: <span className="text-teal-800">{subgraphQueryPath}</span>
+                  {medVaultRegistryAddress ? (
+                    <>
+                      {" "}
+                      · Expected registry: <span className="text-teal-800">{String(medVaultRegistryAddress).toLowerCase()}</span>
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              {profileError ? (
+                <p className="text-rose-600 text-xs mt-3 font-medium">{profileError.message}</p>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 border-teal-300 text-teal-800 hover:bg-teal-100"
+                onClick={() => void refetchPatient()}
+              >
+                Refresh profile from indexer
+              </Button>
             </div>
             <Sparkles className="h-5 w-5 text-teal-400 animate-pulse" />
           </motion.div>
@@ -258,7 +361,7 @@ export function PatientVaultPage() {
         {account && (
           <motion.button
             {...fadeUp(0.3)}
-            onClick={() => setShowUploadForm(true)}
+            onClick={openManualUpload}
             className="group flex flex-col items-center justify-center gap-4 p-8 rounded-[2rem] border-2 border-dotted border-black/40 hover:border-black/60 hover:bg-teal-50/40 transition-all min-h-[280px]"
           >
             <div className="p-4 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-teal-50 group-hover:text-teal-600 transition-all">
@@ -289,7 +392,7 @@ export function PatientVaultPage() {
           <Link to="/patient/find-trials" className="text-sm font-semibold text-accent hover:text-accent/80 transition-colors">
             Find Trials
           </Link>
-          <Link to="/patient/medical-vault" className="text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+          <Link to="/patient/identity" className="text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
             Identity & Privacy
           </Link>
         </div>

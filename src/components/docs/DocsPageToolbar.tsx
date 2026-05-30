@@ -2,8 +2,8 @@ import { useState, useCallback } from "react";
 import { Check, Link2, FileText } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-/** Renders above article content: copy full page text + copy URL. `DocsLayout` wraps children in `#docs-article-body`. */
-export function DocsPageToolbar() {
+/** Copy page text + URL — use in toolbar or embedded in page chrome (e.g. intro hero). */
+export function DocsCopyActions({ className }: { className?: string }) {
     const [linkCopied, setLinkCopied] = useState(false);
     const [pageCopied, setPageCopied] = useState(false);
 
@@ -32,7 +32,7 @@ export function DocsPageToolbar() {
 
     return (
         <div
-            className="not-prose flex flex-wrap items-center justify-end gap-2 mb-6"
+            className={cn("not-prose flex flex-wrap items-center justify-end gap-1.5", className)}
             aria-label="Page copy actions"
         >
             <button
@@ -63,4 +63,9 @@ export function DocsPageToolbar() {
             </button>
         </div>
     );
+}
+
+/** Renders above article content: copy full page text + copy URL. `DocsLayout` wraps children in `#docs-article-body`. */
+export function DocsPageToolbar() {
+    return <DocsCopyActions className="mb-3" />;
 }

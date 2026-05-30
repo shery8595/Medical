@@ -20,10 +20,15 @@ rmSync(output, { recursive: true, force: true });
 mkdirSync(staticDir, { recursive: true });
 cpSync(dist, staticDir, { recursive: true });
 
+const FHENIX_VRF = 'https://testnet-cofhe-vrf.fhenix.zone';
+
+/** Same as vite.config.ts `/cofhe-vrf` proxy — required for production (prebuilt deploy reads this, not vercel.json). */
 const config = {
   version: 3,
   routes: [
     { handle: 'filesystem' },
+    { src: '^/cofhe-vrf$', dest: FHENIX_VRF },
+    { src: '^/cofhe-vrf/(.*)$', dest: `${FHENIX_VRF}/$1` },
     { src: '/.*', dest: '/index.html' },
   ],
 };

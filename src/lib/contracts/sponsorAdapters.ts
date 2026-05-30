@@ -4,12 +4,16 @@ import { getEligibilityEngine, getSponsorIncentiveVault, getTrialMilestoneManage
 export async function getPoolFundingAndRegistration(
   signer: ethers.Signer,
   trialId: string,
-  account?: string
+  account?: string,
+  ephemeralAddress?: string
 ) {
   const vault = getSponsorIncentiveVault(signer);
   const funded = await vault.isPoolFunded(BigInt(trialId));
-  const registered = account
-    ? await vault.isParticipantRegistered(BigInt(trialId), account)
+  
+  // Use the ephemeralAddress if provided (for anonymous participants), otherwise fallback to EOA account
+  const targetAddress = ephemeralAddress || account;
+  const registered = targetAddress
+    ? await vault.isParticipantRegistered(BigInt(trialId), targetAddress)
     : false;
   return { funded, registered };
 }
@@ -22,7 +26,7 @@ export async function getEncryptedScoreHandle(
 ) {
   const engine = getEligibilityEngine(signer);
   if (nullifier) {
-    return engine.getAnonymousScore(BigInt(nullifier));
+    return engine.getAnonymousScore(BigInt(nullifier), BigInt(trialId));
   }
   return engine.getEncryptedScore(account, BigInt(trialId));
 }
@@ -33,7 +37,34 @@ export async function registerAnonymousParticipantByNullifier(
   nullifier: bigint
 ) {
   const vault = getSponsorIncentiveVault(signer);
+  const engine = getEligibilityEngine(signer);
+  const permitHolder = await engine.decryptPermitHolder(nullifier);
+  if (permitHolder && permitHolder !== ethers.ZeroAddress) {
+    const alreadyRegistered = await vault.isParticipantRegistered(BigInt(trialId), permitHolder);
+    if (alreadyRegistered) return;
+  }
   const tx = await vault.registerAnonymousParticipant(BigInt(trialId), nullifier);
+  await tx.wait();
+}
+
+export async function claimRewardsWithSignature(
+  signer: ethers.Signer,
+  trialId: string,
+  nullifier: bigint,
+  destination: string,
+  units: number,
+  balanceSig: string,
+  balance: bigint
+) {
+  const vault = getSponsorIncentiveVault(signer);
+  const tx = await vault.claimParticipantRewards(
+    BigInt(trialId),
+    nullifier,
+    destination,
+    units,
+    balanceSig,
+    balance
+  );
   await tx.wait();
 }
 
@@ -58,13 +89,17 @@ export async function getTrialPoolAndMilestones(signer: ethers.Signer, trialId: 
     mm.getMilestones(trialId),
   ]);
 
+  const screeningDistributed = distributed;
   const milestonesWithDistribution = await Promise.all(
-    rawMilestones.map(async (m: any, idx: number) => ({
-      name: m.name,
-      weightBps: Number(m.weightBps),
-      deadline: Number(m.deadline),
-      distributed: await vault.milestoneDistributed(trialId, idx),
-    }))
+    rawMilestones.map(async (m: any, idx: number) => {
+      const milestoneFlag = await vault.milestoneDistributed(trialId, idx);
+      return {
+        name: m.name,
+        weightBps: Number(m.weightBps),
+        deadline: Number(m.deadline),
+        distributed: milestoneFlag || (idx === 0 && screeningDistributed),
+      };
+    })
   );
 
   return {
@@ -150,14 +185,65 @@ export async function promoteParticipantAndDistribute(
   milestoneIndex: number
 ) {
   const vault = getSponsorIncentiveVault(signer);
-  const alreadyPaid = await vault.participantMilestonePaid(trialId, patientAddress, milestoneIndex);
-  if (alreadyPaid) return { alreadyPaid: true };
-
   const mm = getTrialMilestoneManager(signer);
-  const tx1 = await mm.completeMilestone(trialId, patientAddress, milestoneIndex);
-  await tx1.wait();
+  const currentProgress = Number(await mm.getParticipantProgress(trialId, patientAddress));
+  const alreadyPaid = await vault.participantMilestonePaid(trialId, patientAddress, milestoneIndex);
 
-  const tx2 = await vault.distributeMilestoneToParticipant(trialId, patientAddress, milestoneIndex);
-  await tx2.wait();
-  return { alreadyPaid: false };
+  if (currentProgress <= milestoneIndex) {
+    const tx1 = await mm.completeMilestone(trialId, patientAddress, milestoneIndex);
+    await tx1.wait();
+  }
+
+  return {
+    alreadyPaid,
+    promoted: currentProgress <= milestoneIndex,
+    progress: Math.max(currentProgress, milestoneIndex + 1),
+  };
+}
+
+export async function promoteAnonymousParticipantAndDistribute(
+  signer: ethers.Signer,
+  trialId: string,
+  nullifier: string | bigint,
+  milestoneIndex: number
+) {
+  const engine = getEligibilityEngine(signer);
+  const patientAddress = await engine.decryptPermitHolder(BigInt(nullifier));
+  if (!patientAddress || patientAddress === ethers.ZeroAddress) {
+    throw new Error("No reward participant found for this anonymous nullifier.");
+  }
+
+  return promoteParticipantAndDistribute(signer, trialId, patientAddress, milestoneIndex);
+}
+
+export async function getAnonymousParticipantMilestoneState(
+  signer: ethers.Signer,
+  trialId: string,
+  nullifier: string | bigint,
+  milestoneCount: number
+) {
+  const engine = getEligibilityEngine(signer);
+  const vault = getSponsorIncentiveVault(signer);
+  const mm = getTrialMilestoneManager(signer);
+  const participant = await engine.decryptPermitHolder(BigInt(nullifier));
+  if (!participant || participant === ethers.ZeroAddress) {
+    return null;
+  }
+
+  const [registered, progress, paid] = await Promise.all([
+    vault.isParticipantRegistered(BigInt(trialId), participant),
+    mm.getParticipantProgress(trialId, participant),
+    Promise.all(
+      Array.from({ length: milestoneCount }, (_, index) =>
+        vault.participantMilestonePaid(BigInt(trialId), participant, index)
+      )
+    ),
+  ]);
+
+  return {
+    participant,
+    registered: Boolean(registered),
+    progress: Number(progress),
+    paid: paid.map(Boolean),
+  };
 }

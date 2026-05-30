@@ -309,7 +309,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
               <span className="text-[11px] font-medium">{report.timestamp || "—"}</span>
             </div>
             <a
-              href={arbiscanUrl}
+              href={etherscanUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-slate-500 hover:text-teal-700 transition-colors group/link"

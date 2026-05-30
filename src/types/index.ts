@@ -18,6 +18,17 @@ export interface Trial {
   createdAt?: string;
   eligibilityScore?: number;
   matchCount?: number;
+  applicantCount?: number;
+  acceptedCount?: number;
+  pendingApplicationCount?: number;
+  screenedCount?: number;
+  updatedAtSec?: number;
+  poolFundedWei?: string;
+  paidToParticipantsEth?: number;
+  payoutPct?: number;
+  enrollmentPct?: number;
+  milestoneProgressPct?: number;
+  isNew?: boolean;
   hasConsent?: boolean;
   hasComputed?: boolean;
   applicationStatus?: "Pending" | "Accepted" | "Rejected";
@@ -40,7 +51,12 @@ export interface Trial {
     totalFundedWei: string;
     shareWei?: string;
     distributedAt?: string;
+    participantCount?: number;
+    participants?: { patient: string }[];
   };
+  rewardPoolFunded?: boolean;
+  rewardParticipantRegistered?: boolean;
+  milestones?: { index: number; weightBps: number; distributed: boolean }[];
 }
 
 export interface MedicalReport {
@@ -89,6 +105,10 @@ export interface Match {
   currentMilestone?: number; // 0 = none, 1-4 for milestones
   isAnonymous?: boolean; // For anonymous applications
   nullifier?: string; // For anonymous applications
+  /** Unix seconds when AnonymousEncryptedPropensityCommitted indexed (anonymous only) */
+  fhePropensityCommittedAt?: string | null;
+  noirCertified?: boolean;
+  noirEligible?: boolean | null;
 }
 
 export interface AnalyticsData {

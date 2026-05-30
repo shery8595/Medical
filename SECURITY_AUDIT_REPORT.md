@@ -267,4 +267,30 @@ No warnings, no errors. All 45 artifacts regenerated; 114 TypeChain typings rege
 
 ---
 
+---
+
+## 8. Edge-case pass (2026-05-30) — fixed + redeployed
+
+| ID | Severity | Issue | Fix |
+| --- | --- | --- | --- |
+| E-1 | Medium | `reclaimUndistributed` required `screeningDistributed`, but `distribute()` never runs with zero participants → funded trials with no registrations locked ETH forever | Allow reclaim when `participants.length == 0` after `trial.endTime` |
+| E-2 | Medium | `distributePartialPaginated` reverted on batches with zero eligible participants, bricking sequential pagination | Remove per-batch eligible guard; keep `totalEligibleCount > 0` |
+| E-3 | Low | `EncryptedScoreLeaderboard` could not `FHE.gt` on scores (no ACL from engine) | `EligibilityEngine.setScoreLeaderboard` + `FHE.allow(score, leaderboard)` on persist |
+| E-4 | Info | Misleading TN signature comments in `ConfidentialETH` / `claimParticipantRewards` | Comments corrected; claim redirection documented (not patched per product choice) |
+
+**Arbitrum Sepolia redeploy** (`scripts/deploy-audit-fixes.ts`, block ~272162528):
+
+| Contract | Address |
+| --- | --- |
+| AnonymousPatientRegistry | `0xDB7ec7853D08cC73a6E8FcC368Ce2912C037ebAe` |
+| ConsentManager | `0xdD5A1d0875D77B250842476d4fD96d115AaE0B2f` |
+| EligibilityEngine | `0x064f227265cd22203D038F84AAf38Bc0F0B3eAb3` |
+| MedVaultRegistry | `0xd0B2aBe1734B3b44564D0e970C33a321bc1af6ee` |
+| SponsorIncentiveVault | `0x9460E792e7aE6Edb612DFaEA2c46cc46D6445dc8` |
+| EncryptedScoreLeaderboard | `0xf8164FA9D3dFC0dc886b6e83213A06c33D8124A4` |
+
+⚠ **New MedVaultRegistry creates a new Semaphore group** — existing patients must re-register. Update relayer env if `MEDVAULT_REGISTRY` / `ELIGIBILITY_ENGINE` are pinned.
+
+---
+
 *End of report.*

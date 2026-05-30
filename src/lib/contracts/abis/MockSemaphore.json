@@ -1,0 +1,571 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MockSemaphore",
+  "sourceName": "contracts/test/MockSemaphore.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "Semaphore__GroupHasNoMembers",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "Semaphore__InvalidProof",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "Semaphore__MerkleTreeDepthIsNotSupported",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "Semaphore__MerkleTreeRootIsExpired",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "Semaphore__MerkleTreeRootIsNotPartOfTheGroup",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "Semaphore__YouAreUsingTheSameNullifierTwice",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "oldMerkleTreeDuration",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "newMerkleTreeDuration",
+          "type": "uint256"
+        }
+      ],
+      "name": "GroupMerkleTreeDurationUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "merkleTreeDepth",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "merkleTreeRoot",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "nullifier",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "message",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "scope",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256[8]",
+          "name": "points",
+          "type": "uint256[8]"
+        }
+      ],
+      "name": "ProofValidated",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "acceptGroupAdmin",
+      "outputs": [],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "identityCommitment",
+          "type": "uint256"
+        }
+      ],
+      "name": "addMember",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "identityCommitments",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "addMembers",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "duration",
+          "type": "uint256"
+        }
+      ],
+      "name": "createGroup",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "createGroup",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "admin",
+          "type": "address"
+        }
+      ],
+      "name": "createGroup",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "getMerkleTreeDepth",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "getMerkleTreeRoot",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getMerkleTreeSize",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "groupAdmin",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "groupCounter",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "identityCommitment",
+          "type": "uint256"
+        }
+      ],
+      "name": "hasMember",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "merkleTreeDuration",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "proofsValid",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "removeMember",
+      "outputs": [],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "valid",
+          "type": "bool"
+        }
+      ],
+      "name": "setProofsValid",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "updateGroupAdmin",
+      "outputs": [],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "groupId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "newDuration",
+          "type": "uint256"
+        }
+      ],
+      "name": "updateGroupMerkleTreeDuration",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "updateMember",
+      "outputs": [],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "merkleTreeDepth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "merkleTreeRoot",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "nullifier",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "message",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "scope",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256[8]",
+              "name": "points",
+              "type": "uint256[8]"
+            }
+          ],
+          "internalType": "struct ISemaphore.SemaphoreProof",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "name": "validateProof",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "merkleTreeDepth",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "merkleTreeRoot",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "nullifier",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "message",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "scope",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256[8]",
+              "name": "points",
+              "type": "uint256[8]"
+            }
+          ],
+          "internalType": "struct ISemaphore.SemaphoreProof",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "name": "verifyProof",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60808060405234602157600160ff19815416176001556105f290816100268239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c8063042453711461043c5780631783efc3146103d35780632c8803631461037f5780634178c4d51461034f578063456f41881461032d578063568ee82614610314578063575185ed146102f95780635c3f3b60146102ce5780636389e107146102b25780636bb74796146102825780636cdd32fe146102525780637ee35a0c1461022857806390509d44146101f4578063bd883eb6146101ca578063d0d898dd146101ba578063d24924fe1461019e578063da3cda521461018b578063dabc4d511461016f578063f5d1a5c314610145578063f60ad42d146101235763fcf0b6ec14610100575f80fd5b3461011f5761010e36610527565b905f52600360205260405f20555f80f35b5f80fd5b3461011f575f36600319011261011f57602060ff600154166040519015158152f35b3461011f57602036600319011261011f576004355f526003602052602060405f2054604051908152f35b3461011f57602036600319011261011f57602060405160018152f35b3461011f57602036600319011261011f57005b3461011f575f36600319011261011f5760205f54604051908152f35b3461011f576101c836610569565b005b3461011f57602036600319011261011f576004355f526002602052602060405f2054604051908152f35b3461011f5761020236610527565b905f52600460205260405f20905f52602052602060ff60405f2054166040519015158152f35b3461011f57602036600319011261011f576004355f526005602052602060405f2054604051908152f35b3461011f57606036600319011261011f576044356001600160401b03811161011f576101c89036906004016104f7565b3461011f57602036600319011261011f5760043580151580910361011f5760ff8019600154169116176001555f80f35b3461011f57602036600319011261011f57602060405160148152f35b3461011f57602036600319011261011f5760206102f16102ec61053d565b6105ae565b604051908152f35b3461011f575f36600319011261011f5760206102f1336105ae565b3461011f57604036600319011261011f576101c8610553565b3461011f5761033b36610569565b5050602060ff600154166040519015158152f35b3461011f57608036600319011261011f576064356001600160401b03811161011f576101c89036906004016104f7565b3461011f57604036600319011261011f57602061039a61053d565b6103a45f5461058c565b90815f55815f526002835260018060a01b031660405f2055805f526003825260243560405f2055604051908152f35b3461011f576103e136610527565b815f52600460205260405f20815f5260205260ff60405f2054161561040257005b815f52600460205260405f20905f5260205260405f20600160ff198254161790555f52600560205260405f20610438815461058c565b9055005b3461011f57604036600319011261011f576004356024356001600160401b03811161011f5761046f9036906004016104f7565b905f5b828110156101c857303b1561011f5760405190631783efc360e01b82528460048301528060051b83013560248301525f8260448183305af180156104ec576104bf575b6001915001610472565b6001600160401b0382116104d8576001916040526104b5565b634e487b7160e01b5f52604160045260245ffd5b6040513d5f823e3d90fd5b9181601f8401121561011f578235916001600160401b03831161011f576020808501948460051b01011161011f57565b604090600319011261011f576004359060243590565b600435906001600160a01b038216820361011f57565b602435906001600160a01b038216820361011f57565b906101c060031983011261011f576101a060043592602319011261011f57602490565b5f19811461059a5760010190565b634e487b7160e01b5f52601160045260245ffd5b6105b85f5461058c565b90815f55815f52600260205260018060a01b031660405f2055805f52600360205262278d0060405f20559056fea164736f6c634300081b000a",
+  "deployedBytecode": "0x60806040526004361015610011575f80fd5b5f3560e01c8063042453711461043c5780631783efc3146103d35780632c8803631461037f5780634178c4d51461034f578063456f41881461032d578063568ee82614610314578063575185ed146102f95780635c3f3b60146102ce5780636389e107146102b25780636bb74796146102825780636cdd32fe146102525780637ee35a0c1461022857806390509d44146101f4578063bd883eb6146101ca578063d0d898dd146101ba578063d24924fe1461019e578063da3cda521461018b578063dabc4d511461016f578063f5d1a5c314610145578063f60ad42d146101235763fcf0b6ec14610100575f80fd5b3461011f5761010e36610527565b905f52600360205260405f20555f80f35b5f80fd5b3461011f575f36600319011261011f57602060ff600154166040519015158152f35b3461011f57602036600319011261011f576004355f526003602052602060405f2054604051908152f35b3461011f57602036600319011261011f57602060405160018152f35b3461011f57602036600319011261011f57005b3461011f575f36600319011261011f5760205f54604051908152f35b3461011f576101c836610569565b005b3461011f57602036600319011261011f576004355f526002602052602060405f2054604051908152f35b3461011f5761020236610527565b905f52600460205260405f20905f52602052602060ff60405f2054166040519015158152f35b3461011f57602036600319011261011f576004355f526005602052602060405f2054604051908152f35b3461011f57606036600319011261011f576044356001600160401b03811161011f576101c89036906004016104f7565b3461011f57602036600319011261011f5760043580151580910361011f5760ff8019600154169116176001555f80f35b3461011f57602036600319011261011f57602060405160148152f35b3461011f57602036600319011261011f5760206102f16102ec61053d565b6105ae565b604051908152f35b3461011f575f36600319011261011f5760206102f1336105ae565b3461011f57604036600319011261011f576101c8610553565b3461011f5761033b36610569565b5050602060ff600154166040519015158152f35b3461011f57608036600319011261011f576064356001600160401b03811161011f576101c89036906004016104f7565b3461011f57604036600319011261011f57602061039a61053d565b6103a45f5461058c565b90815f55815f526002835260018060a01b031660405f2055805f526003825260243560405f2055604051908152f35b3461011f576103e136610527565b815f52600460205260405f20815f5260205260ff60405f2054161561040257005b815f52600460205260405f20905f5260205260405f20600160ff198254161790555f52600560205260405f20610438815461058c565b9055005b3461011f57604036600319011261011f576004356024356001600160401b03811161011f5761046f9036906004016104f7565b905f5b828110156101c857303b1561011f5760405190631783efc360e01b82528460048301528060051b83013560248301525f8260448183305af180156104ec576104bf575b6001915001610472565b6001600160401b0382116104d8576001916040526104b5565b634e487b7160e01b5f52604160045260245ffd5b6040513d5f823e3d90fd5b9181601f8401121561011f578235916001600160401b03831161011f576020808501948460051b01011161011f57565b604090600319011261011f576004359060243590565b600435906001600160a01b038216820361011f57565b602435906001600160a01b038216820361011f57565b906101c060031983011261011f576101a060043592602319011261011f57602490565b5f19811461059a5760010190565b634e487b7160e01b5f52601160045260245ffd5b6105b85f5461058c565b90815f55815f52600260205260018060a01b031660405f2055805f52600360205262278d0060405f20559056fea164736f6c634300081b000a",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

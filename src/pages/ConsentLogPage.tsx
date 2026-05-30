@@ -1,12 +1,17 @@
-import { ConsentTable } from "../components/dashboard/ConsentTable";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useWeb3 } from "../lib/Web3Context";
 import { useConsent } from "../hooks/useConsent";
-import { Clock, Loader2, Search, Shield } from "lucide-react";
+import { Clock, Loader2, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { ConsentLog } from "../types";
 import { Link } from "react-router-dom";
-import { SectionTopBar } from "../components/layout/SectionTopBar";
+import { useTrials } from "../hooks/useTrials";
+import { ConsentSecureBanner } from "../components/consent/ConsentSecureBanner";
+import { ConsentStatCards, buildConsentStats } from "../components/consent/ConsentStatCards";
+import { ConsentLogList } from "../components/consent/ConsentLogList";
+import { ConsentSidebarPanels } from "../components/consent/ConsentSidebarPanels";
+import { PatientConnectPrompt } from "../components/dashboard/PatientConnectPrompt";
+import { consentRowVariant } from "../lib/consentDisplay";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 10 },
@@ -14,49 +19,61 @@ const fadeUp = (delay = 0) => ({
   transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const, delay },
 });
 
+function formatLastSynced(d: Date) {
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function countInLastWeek(logs: ConsentLog[], predicate: (l: ConsentLog) => boolean) {
+  const weekAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+  return logs.filter((l) => (l.rawTimestamp || 0) >= weekAgo && predicate(l)).length;
+}
+
 export function ConsentLogPage() {
   const { account } = useWeb3();
   const { consents, applications, loading, error, refetch } = useConsent(account as string | undefined);
+  const { trials, loading: trialsLoading, refetch: refetchTrials } = useTrials(account || undefined);
   const [search, setSearch] = useState("");
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
-  const handleRevokeAllConsent = async () => {
-    if (!signer || !account) return;
-    setKillBusy(true);
-    setKillMsg(null);
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
     try {
-      const cm = getConsentManager(signer);
-      const tx = await cm.revokeAllConsent();
-      await tx.wait();
-      setKillMsg("All active data-sharing permits were revoked on-chain.");
-      await refetch();
-    } catch (e: any) {
-      setKillMsg(e?.reason || e?.message || "Transaction failed.");
+      await Promise.all([refetch(), refetchTrials()]);
+      setLastSynced(new Date());
     } finally {
-      setKillBusy(false);
+      setSyncing(false);
     }
-  };
+  }, [refetch, refetchTrials]);
 
-  const handleRevokeTrialConsent = async (trialId: string) => {
-    if (!signer || !account) return;
-    setRevokeBusyTrialId(trialId);
-    setKillMsg(null);
-    try {
-      const cm = getConsentManager(signer);
-      const tx = await cm.revokeConsent(BigInt(trialId));
-      await tx.wait();
-      setKillMsg(`Consent revoked for trial #${trialId}.`);
-      await refetch();
-    } catch (e: any) {
-      setKillMsg(e?.reason || e?.message || "Revoke failed.");
-    } finally {
-      setRevokeBusyTrialId(null);
+  useEffect(() => {
+    if (!account) return;
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      void handleSync();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [account, handleSync]);
+
+  useEffect(() => {
+    if (!loading && !trialsLoading && account && !lastSynced) {
+      setLastSynced(new Date());
     }
-  };
+  }, [loading, trialsLoading, account, lastSynced]);
 
   const formattedLogs = useMemo<ConsentLog[]>(() => {
     const trialMap = new Map<string, ConsentLog>();
 
     consents.forEach((c: any) => {
+      const expiresAt = c.expiresAt ? parseInt(String(c.expiresAt), 10) : undefined;
       trialMap.set(c.trial.id, {
         id: c.id,
         trialId: c.trial.id,
@@ -64,11 +81,13 @@ export function ConsentLogPage() {
         timestamp: new Date(parseInt(c.lastUpdatedAt) * 1000).toLocaleString(),
         rawTimestamp: parseInt(c.lastUpdatedAt, 10),
         txHash: c.txHash,
-        status: "Active",
+        granted: c.granted !== false,
+        status: c.granted === false ? "Revoked" : "Active",
+        expiresAt: expiresAt && expiresAt > 0 ? expiresAt : undefined,
         sponsorName: c.trial.sponsor.name.startsWith("0x")
           ? `${c.trial.sponsor.name.slice(0, 6)}...${c.trial.sponsor.name.slice(-4)}`
           : c.trial.sponsor.name,
-        dataShared: ["Medical Profile", "Encrypted Labs"],
+        dataShared: ["Medical profile", "Encrypted labs"],
       });
     });
 
@@ -88,19 +107,91 @@ export function ConsentLogPage() {
           sponsorName: app.trial.sponsor.name.startsWith("0x")
             ? `${app.trial.sponsor.name.slice(0, 6)}...${app.trial.sponsor.name.slice(-4)}`
             : app.trial.sponsor.name,
-          dataShared: existing?.dataShared || ["Full Medical Disclosure"],
+          dataShared: existing?.dataShared || ["Full medical disclosure"],
         };
         trialMap.set(app.trial.id, combinedLog);
       }
     });
 
-    const logs = Array.from(trialMap.values());
-    return logs.sort((a, b) => (b.rawTimestamp || 0) - (a.rawTimestamp || 0));
-  }, [consents, applications]);
+    trials
+      .filter((trial) => trial.nullifier && trial.applicationStatus)
+      .forEach((trial) => {
+        const existing = trialMap.get(trial.id);
+        const rawTimestamp = Number(trial.createdAt || "0") || undefined;
+        if (!existing) {
+          trialMap.set(trial.id, {
+            id: `anonymous-${trial.id}-${trial.nullifier}`,
+            trialId: trial.id,
+            trialName: trial.name,
+            timestamp: rawTimestamp
+              ? new Date(rawTimestamp * 1000).toLocaleString()
+              : "Anonymous application",
+            rawTimestamp,
+            status: trial.applicationStatus,
+            message: trial.applicationMessage || undefined,
+            sponsorName: trial.sponsor.name.startsWith("0x")
+              ? `${trial.sponsor.name.slice(0, 6)}...${trial.sponsor.name.slice(-4)}`
+              : trial.sponsor.name,
+            dataShared: ["Anonymous eligibility", "Ephemeral reward address"],
+          });
+        }
+      });
+
+    return Array.from(trialMap.values()).sort((a, b) => (b.rawTimestamp || 0) - (a.rawTimestamp || 0));
+  }, [consents, applications, trials]);
+
+  const stats = useMemo(() => {
+    const isActive = (l: ConsentLog) => {
+      const v = consentRowVariant(l);
+      return v === "active" || v === "expiring";
+    };
+    const isPending = (l: ConsentLog) => consentRowVariant(l) === "pending";
+    const isRevoked = (l: ConsentLog) => consentRowVariant(l) === "revoked";
+    const sponsors = new Set(formattedLogs.map((l) => l.sponsorName).filter(Boolean));
+
+    return buildConsentStats(
+      {
+        active: formattedLogs.filter(isActive).length,
+        pending: formattedLogs.filter(isPending).length,
+        revoked: formattedLogs.filter(isRevoked).length,
+        sponsors: sponsors.size,
+      },
+      {
+        active: countInLastWeek(formattedLogs, isActive),
+        pending: countInLastWeek(formattedLogs, isPending),
+        revoked: countInLastWeek(formattedLogs, isRevoked),
+        sponsors: countInLastWeek(formattedLogs, () => true),
+      }
+    );
+  }, [formattedLogs]);
 
   const total = formattedLogs.length;
 
-  if (loading) {
+  if (!account) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20 space-y-6">
+        <motion.header {...fadeUp(0)} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+              <Shield className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Consent Logs</h1>
+          </div>
+          <p className="text-sm text-slate-500 max-w-xl leading-relaxed">
+            Manage your cryptographic proofs and clinical trial access permissions.
+          </p>
+        </motion.header>
+        <PatientConnectPrompt
+          title="Connect to view consent logs"
+          description="Consent grants, revocations, and application-linked access show here after you connect the wallet tied to your vault."
+          showBrowseTrials={false}
+          className="mt-4"
+        />
+      </div>
+    );
+  }
+
+  if ((loading || trialsLoading) && total === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="h-10 w-10 text-teal-600 animate-spin mb-4" />
@@ -110,92 +201,77 @@ export function ConsentLogPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto pb-20 space-y-8">
-      <SectionTopBar
-        title="Consent Logs"
-        rightContent={
-          <Link
-            to="/patient/find-trials"
-            className="text-xs font-bold uppercase tracking-widest text-teal-700 hover:text-teal-800 transition-colors"
-          >
-            Browse trials
-          </Link>
-        }
-      />
+    <div className="max-w-7xl mx-auto pb-20 space-y-6">
+      <motion.header
+        {...fadeUp(0)}
+        className="sticky top-0 z-30 pt-1 pb-4 mb-2 bg-slate-50/95 backdrop-blur-md border-b border-slate-200/80 space-y-4"
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+                <Shield className="h-5 w-5" strokeWidth={2} aria-hidden />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Consent Logs</h1>
+            </div>
+            <p className="text-sm text-slate-500 max-w-xl leading-relaxed">
+              Manage your cryptographic proofs and clinical trial access permissions.
+            </p>
+          </div>
 
-      <motion.div {...fadeUp(0)} className="space-y-2">
-        <p className="text-slate-500 text-sm md:text-base leading-relaxed max-w-2xl">
-          Manage your cryptographic proofs and clinical trial access permissions.
-        </p>
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <Link
-            to="/patient/applications"
-            className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            Application results
-          </Link>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:border-slate-300 hover:bg-slate-50 transition-colors"
-          >
-            <Clock className="h-4 w-4 shrink-0" />
-            Sync records
-          </button>
+          <div className="flex flex-col items-stretch sm:items-end gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/patient/find-trials"
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Browse trials
+              </Link>
+              <button
+                type="button"
+                onClick={() => void handleSync()}
+                disabled={syncing}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-teal-700 px-5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-70 transition-colors shadow-sm"
+              >
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Clock className="h-4 w-4" />
+                )}
+                Sync records
+              </button>
+            </div>
+            {lastSynced ? (
+              <p className="text-[11px] text-slate-400 text-right">
+                Last synced: {formatLastSynced(lastSynced)}
+              </p>
+            ) : null}
+          </div>
         </div>
-      </motion.div>
+      </motion.header>
 
-      {error && (
+      {error ? (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-100 text-rose-800 text-sm">
           Could not refresh all data: {error.message}. Showing the last loaded snapshot.
         </div>
-      )}
+      ) : null}
 
-      <motion.div
-        {...fadeUp(0.06)}
-        className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/95 to-rose-50/80 px-5 py-4 sm:px-6 sm:py-5 shadow-sm"
-      >
-        <div className="flex gap-4">
-          <div className="shrink-0 p-2 h-fit rounded-xl bg-white/70 border border-orange-100/80 shadow-sm">
-            <Shield className="h-5 w-5 text-violet-600" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0 space-y-1">
-            <h2 className="text-sm font-bold text-orange-950 sm:text-base">
-              Cryptographic finality
-            </h2>
-            <p className="text-xs sm:text-sm text-orange-950/85 leading-relaxed">
-              Consent is encrypted on-chain. Revoking sets your consent to encrypted false. This action is
-              immutable and immediately severs data access for the respective sponsor.
-            </p>
-          </div>
-        </div>
+      <motion.div {...fadeUp(0.04)}>
+        <ConsentSecureBanner />
       </motion.div>
 
-      <motion.div
-        {...fadeUp(0.1)}
-        className="rounded-2xl border border-slate-200/90 bg-white shadow-[0px_8px_30px_rgba(15,23,42,0.06)] overflow-hidden"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 border-b border-slate-100 bg-white">
-          <p className="text-xs text-slate-400 flex-1">
-            <span className="font-semibold text-slate-600">{total}</span>{" "}
-            {total === 1 ? "record" : "records"}
-          </p>
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-            <input
-              type="search"
-              placeholder="Search…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-300 transition"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <ConsentTable logs={formattedLogs} searchQuery={search} />
-        </div>
+      <motion.div {...fadeUp(0.08)}>
+        <ConsentStatCards stats={stats} />
       </motion.div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_300px]">
+        <motion.div {...fadeUp(0.12)}>
+          <ConsentLogList logs={formattedLogs} search={search} onSearchChange={setSearch} />
+        </motion.div>
+        <motion.div {...fadeUp(0.14)} className="xl:sticky xl:top-24 xl:self-start">
+          <ConsentSidebarPanels logs={formattedLogs} />
+        </motion.div>
+      </div>
     </div>
   );
 }

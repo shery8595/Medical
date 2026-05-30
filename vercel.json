@@ -2,6 +2,14 @@
     "buildCommand": "npm run build:prebuilt",
     "rewrites": [
         {
+            "source": "/cofhe-vrf",
+            "destination": "https://testnet-cofhe-vrf.fhenix.zone"
+        },
+        {
+            "source": "/cofhe-vrf/:path*",
+            "destination": "https://testnet-cofhe-vrf.fhenix.zone/:path*"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }

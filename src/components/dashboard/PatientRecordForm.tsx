@@ -4,17 +4,23 @@ import { ArrowRight, Loader2, Lock, ShieldCheck, Stethoscope, Sparkles } from "l
 import { Button } from "../ui/Button";
 import { useWeb3 } from "../../lib/Web3Context";
 import { encryptBool, encryptUint8, encryptUint16, connectFHE, yieldToMain } from "../../lib/fhe";
-import { getOrCreateIdentity, isMemberRegistered, forceNewIdentity, registerPatientWithHealthData } from "../../lib/semaphore";
-import { getContractAddressForChain } from "../../lib/contracts";
+import { getOrCreateIdentity, isMemberRegistered, isPatientRegistered, forceNewIdentity, registerPatientWithHealthData } from "../../lib/semaphore";
+import { getContractAddressForChain, getDataAccessLog } from "../../lib/contracts";
 import { cn } from "../../lib/utils";
 
-import type { ReclaimAttestation } from "../../lib/reclaim";
+import {
+  type ReclaimAttestation,
+  isAttestationExpired,
+} from "../../lib/reclaim";
+import type { FhirMappedProfile } from "../../lib/fhirImport";
 
 interface PatientRecordFormProps {
     onSuccess: () => void;
     onCancel: () => void;
     /** Set after a successful Reclaim session before this form (optional). */
     reclaimAttestation?: ReclaimAttestation | null;
+    /** Prefill from FHIR importer or similar (optional). */
+    prefillProfile?: FhirMappedProfile | null;
 }
 
 type FormErrors = {
@@ -33,7 +39,7 @@ type EncryptPhase = {
 
 const ENCRYPT_STEPS_TOTAL = 10;
 
-export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: PatientRecordFormProps) {
+export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation, prefillProfile }: PatientRecordFormProps) {
     const { signer, account, isFHEReady, connect, isConnecting, error: connectError } = useWeb3();
     const [age, setAge] = useState("25");
     const [gender, setGender] = useState<"male" | "female" | "">("");
@@ -48,6 +54,20 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
     const [status, setStatus] = useState<string | null>(null);
     const [errors, setErrors] = useState<FormErrors>({});
     const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+
+    React.useEffect(() => {
+        if (!prefillProfile) return;
+        if (prefillProfile.age != null) setAge(String(prefillProfile.age));
+        if (prefillProfile.gender) setGender(prefillProfile.gender);
+        if (prefillProfile.weightKg != null) setWeight(String(Math.round(prefillProfile.weightKg)));
+        if (prefillProfile.heightCm != null) setHeight(String(Math.round(prefillProfile.heightCm)));
+        if (prefillProfile.hbApprox != null) setHbLevel(String(Math.round(prefillProfile.hbApprox)));
+        if (prefillProfile.hasDiabetes === true) setHasDiabetes("yes");
+        else if (prefillProfile.hasDiabetes === false) setHasDiabetes("no");
+        if (prefillProfile.isSmoker === true) setIsSmoker(true);
+        if (prefillProfile.isSmoker === false) setIsSmoker(false);
+        if (prefillProfile.hasHypertension === true) setHasHypertension(true);
+    }, [prefillProfile]);
 
     const canSubmit = useMemo(() => {
         return !!account && isFHEReady && !isSubmitting;
@@ -110,14 +130,43 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
                 throw new Error("No provider from signer.");
             }
 
-            await advance(1, "FHE: connecting…");
+            const chainId = await provider.getNetwork().then((network) => network.chainId).catch(() => undefined);
+
+            await advance(1, "Checking protocol wiring…");
+            const anonymousRegistryAddress = getContractAddressForChain("AnonymousPatientRegistry", chainId);
+            if (!anonymousRegistryAddress) {
+                throw new Error("AnonymousPatientRegistry address not configured for current network.");
+            }
+            const dataAccessLog = getDataAccessLog(provider, chainId);
+            const patientRegistryCanLog = await dataAccessLog.isAuthorizedLogger(anonymousRegistryAddress);
+            if (!patientRegistryCanLog) {
+                throw new Error(
+                    "Protocol wiring issue: AnonymousPatientRegistry is not authorized in DataAccessLog. " +
+                    "Ask the protocol admin to run `npx hardhat run scripts/fix-loggers.ts --network arbitrumSepolia`, then try again."
+                );
+            }
+
+            await advance(2, "FHE: connecting…");
             await connectFHE(provider, signer);
 
-            await advance(2, "Private identity…");
+            await advance(3, "Private identity…");
             const identity = getOrCreateIdentity();
             await yieldToMain();
 
-            // Guard: if this commitment is already in the Semaphore group the tx WILL revert
+            // Guard 1: Check if this WALLET has already registered (regardless of commitment).
+            // MedVaultRegistry.registerPatient() checks `registered[msg.sender]` and reverts
+            // with "Already registered" inside a cross-contract call, which surfaces as
+            // "missing revert data" (data=null) on estimateGas. Catch it early.
+            const walletAlreadyRegistered = await isPatientRegistered(signer);
+            if (walletAlreadyRegistered) {
+                setAlreadyRegistered(true);
+                setIsSubmitting(false);
+                setEncryptPhase(null);
+                setStatus(null);
+                return;
+            }
+
+            // Guard 2: if this commitment is already in the Semaphore group the tx WILL revert
             // with a custom error (0x258a195a) before FHE is ever reached.
             // Check on-chain before spending time on encryption.
             const alreadyIn = await isMemberRegistered(provider, identity.commitment);
@@ -134,7 +183,7 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
             // it is called externally by MedVaultRegistry, so msg.sender is MedVaultRegistry.
             // If the SDK proof is bound to any other account, the FHE TaskManager reverts with
             // InvalidSigner(address,address), selector 0x7ba5ffb5.
-            const registryAddress = getContractAddressForChain("MedVaultRegistry");
+            const registryAddress = getContractAddressForChain("MedVaultRegistry", chainId);
             if (!registryAddress) {
                 throw new Error("MedVaultRegistry address not configured for current network.");
             }
@@ -146,19 +195,19 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
             const genderFlag = gender === "male";
             const diabetesFlag = hasDiabetes === "yes";
 
-            await advance(3, "Encrypt: age…");
+            await advance(4, "Encrypt: age…");
             const rawAge = await encryptUint8(registryAddress, account, parsedAge);
-            await advance(4, "Encrypt: sex…");
+            await advance(5, "Encrypt: sex…");
             const rawGender = await encryptBool(registryAddress, account, genderFlag);
-            await advance(5, "Encrypt: weight…");
+            await advance(6, "Encrypt: weight…");
             const rawWeight = await encryptUint16(registryAddress, account, parsedWeight);
-            await advance(6, "Encrypt: height…");
+            await advance(7, "Encrypt: height…");
             const rawHeight = await encryptUint8(registryAddress, account, parsedHeight);
-            await advance(7, "Encrypt: diabetes, HbA1c…");
+            await advance(8, "Encrypt: diabetes, HbA1c…");
             const rawDiabetes = await encryptBool(registryAddress, account, diabetesFlag);
             await yieldToMain();
             const rawHb = await encryptUint16(registryAddress, account, parsedHb);
-            await advance(8, "Encrypt: smoker, hypertension…");
+            await advance(9, "Encrypt: smoker, hypertension…");
             const rawSmoker = await encryptBool(registryAddress, account, isSmoker);
             await yieldToMain();
             const rawHypertension = await encryptBool(registryAddress, account, hasHypertension);
@@ -174,7 +223,7 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
                 hasHypertension: rawHypertension
             };
 
-            await advance(9, "Wallet: sign & submit…");
+            await advance(10, "Wallet: sign & submit…");
             await registerPatientWithHealthData(signer, identity, encryptedData);
 
             setStatus("Submitted. Record encrypted and linked to your anonymous identity.");
@@ -186,7 +235,20 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
             }, 1600);
         } catch (err: any) {
             console.error("Submission failed:", err);
-            const errorMsg = err.reason || err.message || "Encryption failed";
+            let errorMsg = err.reason || err.message || "Encryption failed";
+
+            // Detect the cross-contract "missing revert data" estimateGas error and provide
+            // actionable guidance instead of the raw ethers.js dump.
+            if (
+                errorMsg.includes("missing revert data") ||
+                (err.code === "CALL_EXCEPTION" && err.data === null)
+            ) {
+                errorMsg =
+                    "Transaction would revert on-chain. This usually means your wallet is already registered, " +
+                    "the Semaphore commitment is a duplicate, or the FHE encrypted inputs are invalid. " +
+                    "Try clicking \"Reset Identity\" or reconnecting your wallet.";
+            }
+
             setStatus(`Error: ${errorMsg}`);
             setEncryptPhase(null);
             setIsSubmitting(false);
@@ -262,17 +324,39 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation }: P
                     Enter your baseline clinical metrics. This data is encrypted locally before transmission.
                 </p>
                 {reclaimAttestation ? (
-                    <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3">
+                    <div
+                        className={cn(
+                            "mt-4 rounded-2xl border px-4 py-3",
+                            isAttestationExpired(reclaimAttestation)
+                                ? "border-amber-300 bg-amber-50/90"
+                                : "border-emerald-200 bg-emerald-50/80"
+                        )}
+                    >
                         <p className="text-xs font-bold uppercase tracking-widest text-emerald-800 mb-1">
-                            Reclaim — verified source
+                            Reclaim — {reclaimAttestation.kind.replace("_", " ")}
                         </p>
+                        {isAttestationExpired(reclaimAttestation) ? (
+                            <p className="text-sm text-amber-950 font-semibold mb-1">
+                                This session attestation expired. Run Reclaim again for a fresh audit trail (optional).
+                            </p>
+                        ) : null}
                         <p className="text-sm text-emerald-900/90">
-                            A Reclaim attestation is bound to this wallet for provider{" "}
+                            Provider{" "}
                             <code className="text-xs bg-white/60 px-1 rounded border border-emerald-200/80">
                                 {reclaimAttestation.providerId}
                             </code>
-                            . Encrypted values below are separate from the proof; the proof only attests a real provider
-                            session in this flow.
+                            {reclaimAttestation.expiresAt ? (
+                                <>
+                                    {" "}
+                                    · valid until{" "}
+                                    <span className="font-semibold tabular-nums">
+                                        {new Date(reclaimAttestation.expiresAt).toLocaleString()}
+                                    </span>
+                                </>
+                            ) : (
+                                <> · no local expiry stamp</>
+                            )}
+                            . Encrypted values below are separate from the proof.
                         </p>
                     </div>
                 ) : null}

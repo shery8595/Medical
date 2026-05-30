@@ -1,0 +1,39 @@
+name: Contracts Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Unit and staking tests
+        run: npm run test:unit
+        env:
+          TEST_SUITE: unit
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          TEST_SUITE: integration
+
+      - name: Crypto nullifier tests
+        run: npm run test:crypto
+        env:
+          TEST_SUITE: crypto

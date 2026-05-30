@@ -4,9 +4,10 @@ import type { SemaphoreProof } from './semaphore';
 import {
     generateAnonymousProof,
     parseAnonymousApplyStagedFinalCt,
-    getEphemeralSigner
+    getEphemeralSigner,
+    cancelAnonymousApplyStage,
 } from './semaphore';
-import { getMedVaultRegistry } from './contracts';
+import { getMedVaultRegistry, resolveChainIdFrom } from './contracts';
 
 /**
  * Relayer HTTP origin.
@@ -50,7 +51,9 @@ export function isNotEligibleForTrialMessage(text: string | null | undefined): b
     return (
         text === NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE ||
         text.includes('Not eligible for this trial') ||
-        text.includes('FHE finalResult is false')
+        text.includes('FHE finalResult is false') ||
+        text.includes('decryptedEligible must be true') ||
+        text.includes('NOT_ELIGIBLE')
     );
 }
 
@@ -95,7 +98,7 @@ export async function stageViaRelayer(
     return txHash;
 }
 
-/** Finalize relay (tx 2). */
+/** Finalize relay (tx 2). Only called when FHE decrypt attests full eligibility (finalResult === true). */
 export async function finalizeViaRelayer(
     trialId: number | bigint,
     proof: SemaphoreProof,
@@ -104,6 +107,9 @@ export async function finalizeViaRelayer(
     decryptedEligible: boolean,
     decryptSignature: string
 ): Promise<string> {
+    if (decryptedEligible !== true) {
+        throw new Error(NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE);
+    }
     const { txHash } = await postRelay('/relay/apply-finalize', {
         trialId: Number(trialId),
         proof: serializeProofForRelay(proof),
@@ -131,7 +137,8 @@ export async function submitViaRelayer(
     const receipt = await ctx.provider.waitForTransaction(stageTxHash);
     if (!receipt) throw new Error('Stage transaction receipt missing');
 
-    const registry = getMedVaultRegistry(ctx.provider);
+    const chainId = await resolveChainIdFrom(ctx.provider);
+    const registry = getMedVaultRegistry(ctx.provider, chainId);
     const registryAddr = await registry.getAddress();
     const finalCt = parseAnonymousApplyStagedFinalCt(receipt, registryAddr);
 
@@ -146,6 +153,17 @@ export async function submitViaRelayer(
     }
 
     if (!decryptedEligible) {
+        try {
+            await cancelAnonymousApplyStage(
+                ephemeralSigner,
+                trialId,
+                proof,
+                BigInt(commitment),
+                permitRecipient
+            );
+        } catch (cancelErr) {
+            console.warn("Failed to cancel orphaned FHE staging:", cancelErr);
+        }
         throw new Error(NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE);
     }
 

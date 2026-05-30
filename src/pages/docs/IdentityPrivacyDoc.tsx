@@ -11,16 +11,31 @@ export function IdentityPrivacyDoc() {
             <Prose className="max-w-none">
                 <DocsPageHeaderForRoute />
 
-                <p className="lead not-prose text-lg text-slate-600 max-w-3xl">
-                    This page ties together <strong>Privy</strong> sign-in, the <strong>MedVault HTTP relayer</strong>, the{" "}
-                    optional <strong>private faucet</strong> (<code>arb-sepolia-faucet</code>), <strong>Arbitrum Sepolia</strong>{" "}
-                    funding, <strong>Semaphore</strong> anonymous identity, the derived <strong>ephemeral wallet</strong> used for
-                    CoFHE permits, optional <strong>Reclaim</strong> attestations, and <strong>Noir / Honk</strong> eligibility
-                    proofs. <strong>Chainlink Automation</strong> for trial finalization is documented on its{" "}
-                    <Link to="/docs/automation" className="text-blue-700 font-semibold">
-                        dedicated page
+                <div className="not-prose grid sm:grid-cols-3 gap-3 my-6">
+                    {[
+                        { href: "/docs/fhenix-cofhe", title: "Fhenix & CoFHE", desc: "SDK, coprocessor, ACL, proof accounts" },
+                        { href: "/docs/semaphore", title: "Semaphore", desc: "Anonymous apply, nullifiers, ephemeral wallet" },
+                        { href: "/docs/noir", title: "Noir & Honk", desc: "Circuit, browser prove, on-chain verify" },
+                    ].map((card) => (
+                        <Link
+                            key={card.href}
+                            to={card.href}
+                            className="block rounded-xl border border-slate-200 bg-white p-4 hover:border-[#00685f]/40 hover:shadow-sm transition-all"
+                        >
+                            <p className="text-sm font-bold text-slate-900 m-0">{card.title}</p>
+                            <p className="text-xs text-slate-500 mt-1 m-0">{card.desc}</p>
+                        </Link>
+                    ))}
+                </div>
+
+                <p className="lead not-prose text-base text-slate-600 max-w-3xl">
+                    This hub covers <strong>Privy</strong>, the <strong>HTTP relayer</strong>, the optional{" "}
+                    <strong>private faucet</strong>, and <strong>Reclaim</strong>. For encryption and ZK identity, use the
+                    dedicated pages above. <strong>Chainlink Automation</strong> is on its{" "}
+                    <Link to="/docs/automation" className="text-[#00685f] font-semibold hover:underline">
+                        automation page
                     </Link>
-                    . File paths are from the repo root.
+                    .
                 </p>
 
                 <h2>Privy (authentication &amp; embedded wallets)</h2>
@@ -79,30 +94,10 @@ export function IdentityPrivacyDoc() {
                     Never send user private keys to the relayer.
                 </p>
 
-                <h2>Semaphore (anonymous group membership)</h2>
-                <p>
-                    <code>src/lib/semaphore.ts</code> and related hooks build Semaphore identities and proofs so a user
-                    can prove they are in a on-chain group (e.g. registered patient) without revealing <em>which</em>{" "}
-                    member. Group addresses are in <code>src/lib/contracts/addresses.json</code> (e.g.{" "}
-                    <code>Semaphore</code> on <code>arbSepolia</code>).
-                </p>
-                <p>
-                    The relayer path above is one way to land those proofs on-chain; you can also submit transactions
-                    directly from the user wallet when that fits your gas model.
-                </p>
-
-                <h2>Ephemeral wallet (decrypt permit recipient)</h2>
-                <p>
-                    Each Semaphore identity derives a deterministic <strong>ephemeral EOA</strong> (see{" "}
-                    <code>generateEphemeralAddress</code> / <code>getEphemeralSigner</code> in <code>src/lib/semaphore.ts</code>
-                    ). That address is the <code>permitRecipient</code> encoded in the Semaphore proof signal and receives{" "}
-                    <code>FHE.allow(...)</code> on staged ciphertexts so the patient browser — not the main Privy wallet — can run
-                    CoFHE <strong>decrypt-for-tx</strong> with permit during anonymous apply finalize and when decrypting
-                    nullifier-keyed scores in the UI.
-                </p>
-                <Callout type="tip" title="Same browser profile">
-                    If the local Semaphore identity is cleared, the ephemeral key material no longer matches what the contracts
-                    allowed; decrypt and apply flows must use the same browser storage as registration.
+                <Callout type="info" title="Semaphore &amp; CoFHE depth">
+                    See <Link to="/docs/semaphore" className="font-semibold text-[#00685f]">Semaphore identity</Link> and{" "}
+                    <Link to="/docs/fhenix-cofhe" className="font-semibold text-[#00685f]">Fhenix &amp; CoFHE</Link> for
+                    full flows (ephemeral wallet, stage/finalize, proof accounts).
                 </Callout>
 
                 <h2>Reclaim (attestations)</h2>
@@ -112,13 +107,10 @@ export function IdentityPrivacyDoc() {
                     (see <code>addresses.json</code> and Reclaim&rsquo;s address book for your chain).
                 </p>
 
-                <h2>Noir &amp; Honk (eligibility ZK / verifier)</h2>
-                <p>
-                    The <code>circuits/eligibility_proof</code> Noir project compiles a circuit; the verifier artifact is
-                    represented on-chain (e.g. <code>HonkVerifier</code> in <code>addresses.json</code>). Frontend
-                    coordination: <code>src/hooks/useEligibilityProof.ts</code> and <code>src/lib/noir.ts</code> — used
-                    when the product path proves eligibility with a ZK proof instead of or alongside pure FHE checks.
-                </p>
+                <Callout type="info" title="Noir depth">
+                    Circuit design, build pipeline, and <code>verifyEligibilityProof</code> are documented on{" "}
+                    <Link to="/docs/noir" className="font-semibold text-[#00685f]">Noir &amp; Honk proofs</Link>.
+                </Callout>
 
                 <CodeBlock
                     language="text"

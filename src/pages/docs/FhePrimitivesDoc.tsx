@@ -8,10 +8,17 @@ import { Zap, Lock, AlertTriangle, GitBranch, ArrowRight, Binary } from "lucide-
 import { cn } from "../../lib/utils";
 
 const FHE_STAT_TONE: Record<string, string> = {
-    teal: "bg-teal-100 text-teal-600",
-    purple: "bg-purple-100 text-purple-600",
-    rose: "bg-rose-100 text-rose-600",
-    amber: "bg-amber-100 text-amber-600",
+    teal: "bg-teal-500 text-white",
+    purple: "bg-violet-500 text-white",
+    rose: "bg-rose-500 text-white",
+    amber: "bg-amber-500 text-white",
+};
+
+const FHE_STAT_SURFACE: Record<string, string> = {
+    teal: "border-teal-200 bg-gradient-to-b from-teal-50 to-white",
+    purple: "border-violet-200 bg-gradient-to-b from-violet-50 to-white",
+    rose: "border-rose-200 bg-gradient-to-b from-rose-50 to-white",
+    amber: "border-amber-200 bg-gradient-to-b from-amber-50 to-white",
 };
 
 const typeGasChart = `
@@ -53,28 +60,43 @@ export function FhePrimitivesDoc() {
                 <DocsPageHeaderForRoute />
 
                 {/* Stat Bar */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-10 not-prose">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6 not-prose">
                     {[
                         { label: "Encrypted Types", value: "6+", icon: <Lock className="w-5 h-5" />, color: "teal" },
                         { label: "FHE Operations", value: "12+", icon: <Zap className="w-5 h-5" />, color: "purple" },
                         { label: "Branching Allowed", value: "None", icon: <GitBranch className="w-5 h-5" />, color: "rose" },
                         { label: "Data Revealed On-Chain", value: "Zero", icon: <Binary className="w-5 h-5" />, color: "amber" },
                     ].map((s) => (
-                        <div key={s.label} className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 bg-white shadow-sm text-center">
-                            <div className={cn("p-2 rounded-xl mb-3", FHE_STAT_TONE[s.color] ?? "bg-slate-100 text-slate-600")}>
+                        <div
+                            key={s.label}
+                            className={cn(
+                                "flex flex-col items-center justify-center p-4 rounded-xl border shadow-sm text-center",
+                                FHE_STAT_SURFACE[s.color] ?? "border-slate-200 bg-white"
+                            )}
+                        >
+                            <div className={cn("p-2 rounded-lg mb-2 shadow-sm", FHE_STAT_TONE[s.color] ?? "bg-slate-500 text-white")}>
                                 {s.icon}
                             </div>
-                            <div className="text-3xl font-bold font-display text-slate-900">{s.value}</div>
-                            <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+                            <div className="text-2xl font-bold font-display text-slate-900">{s.value}</div>
+                            <div className="text-[11px] font-semibold text-slate-600 mt-0.5">{s.label}</div>
                         </div>
                     ))}
                 </div>
 
-                <hr className="my-12 border-slate-200" />
+                <Callout type="info" title="CoFHE 0.5 (not legacy fhevm)">
+                    MedVault uses <code>@fhenixprotocol/cofhe-contracts</code> in Solidity and{" "}
+                    <code>@cofhe/sdk</code> + <code>@cofhe/hardhat-plugin</code> in tests. Encryption proofs must use the
+                    correct <strong>proof account</strong> (signer that matches <code>msg.sender</code> at verify). See{" "}
+                    <a href="/docs/testing/infrastructure">test infrastructure</a>.
+                </Callout>
+
+                <hr className="my-8 border-slate-200" />
 
                 <h2>I. Encrypted Integer Types (e-Types)</h2>
                 <p>
-                    The Fhenix fhEVM exposes encrypted versions of Solidity's primitive unsigned integer types. Each type trades off bit-width against FHE computation cost. Larger types require more polynomial rings during evaluation, increasing gas significantly.
+                    The Fhenix CoFHE stack exposes encrypted versions of Solidity unsigned integer types. Each type trades
+                    bit-width against coprocessor cost. MedVault primarily uses <code>euint32</code> for health metrics and{" "}
+                    <code>euint8</code> for compact eligibility scores.
                 </p>
                 <p>
                     MedVault primarily uses <code>euint32</code> because all medical scalar metrics (Age, Blood Pressure, HbA1c) fit comfortably within a 32-bit range while minimizing unnecessary gas expenditure.

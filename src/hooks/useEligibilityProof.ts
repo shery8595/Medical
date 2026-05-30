@@ -9,12 +9,15 @@
  *   5. Sponsor can read noirVerifiedResults[nullifier][trialId] to confirm
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { ethers } from "ethers";
 import { useWeb3 } from "../lib/Web3Context";
 import { getStoredIdentity } from "../lib/semaphore";
+import { formatCertifyFailure, runCertifyPreflight } from "../lib/certifyDiagnostics";
 import { generateEligibilityProof } from "../lib/noir";
+import { parseFieldElement, parseTrialId } from "../lib/field";
 import { getContractAddressForChain } from "../lib/contracts";
+import addresses from "../lib/contracts/addresses.json";
 import EligibilityEngineAbi from "../lib/contracts/abis/EligibilityEngine.json";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -77,7 +80,7 @@ export function useEligibilityProof(): UseEligibilityProofResult {
                 setStatus("generating");
                 setError(null);
 
-                const trialIdBigInt = BigInt(trialId);
+                const trialIdBigInt = parseTrialId(trialId);
                 const proofData = await generateEligibilityProof(identity, trialIdBigInt, eligible);
 
                 // ── Phase 2: Submit proof on-chain ────────────────────────────────────
@@ -89,43 +92,66 @@ export function useEligibilityProof(): UseEligibilityProofResult {
 
                 const engine = new ethers.Contract(engineAddress, abi, signer);
 
-                const tx = await engine.verifyEligibilityProof(
+                const { nullifier } = proofData.inputs;
+
+                const networkKey =
+                    chainId === 421614n
+                        ? "arbSepolia"
+                        : chainId === 42161n
+                          ? "arbitrum"
+                          : null;
+                const expectedVerifier =
+                    networkKey && (addresses as Record<string, Record<string, string>>)[networkKey]
+                        ? (addresses as Record<string, Record<string, string>>)[networkKey].HonkVerifier
+                        : getContractAddressForChain("HonkVerifier", chainId ?? undefined);
+
+                const onChainVerifier = (await engine.eligibilityVerifier()) as string;
+
+                const preflightError = await runCertifyPreflight({
+                    engine,
+                    honkVerifierAddress: onChainVerifier,
+                    proofData,
+                    trialId: trialIdBigInt,
+                    nullifier,
+                    eligible,
+                    expectedHonkVerifier: expectedVerifier,
+                    chainId: chainId ?? undefined,
+                });
+                if (preflightError) {
+                    throw new Error(preflightError);
+                }
+
+                const txArgs = [
                     proofData.proofBytes,
                     proofData.publicInputs,
                     trialIdBigInt,
-                    proofData.inputs.nullifier,
-                    eligible
-                );
+                    nullifier,
+                    eligible,
+                ] as const;
+
+                try {
+                    await engine.verifyEligibilityProof.staticCall(...txArgs);
+                } catch (simErr) {
+                    const simMsg = formatCertifyFailure(simErr, preflightError);
+                    throw new Error(simMsg);
+                }
+
+                const tx = await engine.verifyEligibilityProof(...txArgs);
 
                 await tx.wait();
 
                 setStatus("certified");
                 return true;
-            } catch (err: any) {
-                const msg =
-                    err?.reason ??
-                    err?.message ??
-                    "Proof generation or submission failed.";
+            } catch (err: unknown) {
+                const msg = formatCertifyFailure(err);
 
-                // Provide helpful guidance for common errors
-                if (msg.includes("Circuit artifact not found")) {
-                    setError("Circuit not compiled. Run `npm run build:circuit` first.");
-                } else if (msg.includes("Verifier not set")) {
-                    setError("HonkVerifier not deployed. Run deploy-verifier.ts + set-verifier.ts.");
-                } else if (msg.includes("No stored Semaphore nullifier")) {
-                    setError("You must apply to this trial before certifying your result.");
-                } else if (msg.includes("No FHE application found")) {
-                    setError("No FHE eligibility check found for this trial. Apply first.");
-                } else if (msg.includes("Already certified")) {
-                    // Not really an error — proof already certified
+                if (msg.includes("already certified") || msg.includes("Already certified")) {
                     setStatus("certified");
                     return true;
-                } else if (msg.includes("Invalid Noir proof")) {
-                    setError("Proof verification failed. Circuit may need recompilation after the last update.");
-                } else {
-                    setError(msg);
                 }
 
+                console.error("[Certify] failed:", err);
+                setError(msg);
                 setStatus("error");
                 return false;
             }
@@ -150,7 +176,7 @@ export function useEligibilityProof(): UseEligibilityProofResult {
                     : (EligibilityEngineAbi as any).abi;
 
                 const engine = new ethers.Contract(engineAddress, abi, signer);
-                return await engine.noirVerifiedResults(BigInt(nullifier), BigInt(trialId));
+                return await engine.noirVerifiedResults(parseFieldElement(nullifier), parseTrialId(trialId));
             } catch {
                 return false;
             }
@@ -161,32 +187,4 @@ export function useEligibilityProof(): UseEligibilityProofResult {
     return { status, error, certifyResult, isNullifierCertified, reset };
 }
 
-// ── Helper hook: check certification for a specific (nullifier, trialId) ──────
-
-/**
- * Checks on-chain whether a specific (nullifier, trialId) has been Noir-certified.
- * Polls once on mount and whenever dependencies change.
- */
-export function useIsNullifierCertified(
-    nullifier: string | undefined,
-    trialId: string | undefined
-): { certified: boolean; loading: boolean } {
-    const { isNullifierCertified } = useEligibilityProof();
-    const [certified, setCertified] = useState(false);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (!nullifier || !trialId) return;
-
-        let cancelled = false;
-        setLoading(true);
-        isNullifierCertified(nullifier, trialId)
-            .then((result) => { if (!cancelled) setCertified(result); })
-            .catch(() => { if (!cancelled) setCertified(false); })
-            .finally(() => { if (!cancelled) setLoading(false); });
-
-        return () => { cancelled = true; };
-    }, [nullifier, trialId, isNullifierCertified]);
-
-    return { certified, loading };
-}
+export { useAnonymousCertification, useIsNullifierCertified } from "./useAnonymousCertification";

@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, Loader2, ShieldCheck, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import {
+  type ReclaimAttestation,
+  type ReclaimAttestationKind,
   isReclaimEnvConfigured,
   isReclaimSkipAllowed,
   runReclaimVerification,
@@ -11,7 +13,7 @@ import { cn } from "../../lib/utils";
 
 type Props = {
   walletAddress: string | null;
-  onVerified: (att: { providerId: string; verifiedAt: number; claimIdentifier?: string }) => void;
+  onVerified: (att: ReclaimAttestation) => void;
   onSkip: () => void;
   onCancel: () => void;
 };
@@ -20,6 +22,7 @@ export function ReclaimUploadPreflight({ walletAddress, onVerified, onSkip, onCa
   const [step, setStep] = useState<"info" | "running" | "error">("info");
   const [status, setStatus] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [attestationKind, setAttestationKind] = useState<ReclaimAttestationKind>("general");
 
   const configured = isReclaimEnvConfigured();
   const canSkip = isReclaimSkipAllowed();
@@ -34,7 +37,7 @@ export function ReclaimUploadPreflight({ walletAddress, onVerified, onSkip, onCa
     setStep("running");
     setStatus("Preparing Reclaim…");
     try {
-      const att = await runReclaimVerification(walletAddress, (m) => setStatus(m));
+      const att = await runReclaimVerification(walletAddress, attestationKind, (m) => setStatus(m));
       onVerified(att);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -138,6 +141,22 @@ export function ReclaimUploadPreflight({ walletAddress, onVerified, onSkip, onCa
           <li>You sign in to your provider there; Reclaim builds a <strong>TLS-backed proof</strong> without us seeing your password.</li>
           <li>We bind the claim to <strong>your current wallet address</strong> for this session.</li>
         </ul>
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-slate-700">Attestation category (audit trail)</p>
+          <select
+            value={attestationKind}
+            onChange={(e) => setAttestationKind(e.target.value as ReclaimAttestationKind)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
+          >
+            <option value="general">General health record handshake</option>
+            <option value="lab_result">Lab result conduit</option>
+            <option value="provider_credential">Provider / portal credential</option>
+          </select>
+          <p className="text-[11px] text-slate-500">
+            This does not gate encryption in MVP builds — it records intent for compliance reviewers. Expiry defaults via{" "}
+            <code className="text-[10px]">VITE_RECLAIM_ATTEST_TTL_SEC</code>.
+          </p>
+        </div>
         {!configured && (
           <div
             className={cn(

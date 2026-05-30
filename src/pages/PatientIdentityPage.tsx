@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Wallet,
   Copy,
   Check,
   Download,
+  Upload,
   AlertTriangle,
   UserCheck,
   Lock,
@@ -15,8 +16,15 @@ import { motion } from "framer-motion";
 import { SectionTopBar } from "../components/layout/SectionTopBar";
 import { Button } from "../components/ui/Button";
 import { Link } from "react-router-dom";
+import { useWeb3 } from "../lib/Web3Context";
+import { PatientConnectPrompt } from "../components/dashboard/PatientConnectPrompt";
 import { cn } from "../lib/utils";
-import { getStoredIdentity, generateEphemeralAddress } from "../lib/semaphore";
+import {
+  getStoredIdentity,
+  generateEphemeralAddress,
+  parseIdentityBackupPayload,
+  restoreIdentityFromBackup,
+} from "../lib/semaphore";
 
 const NULLIFIERS_KEY = "medvault_anon_nullifiers";
 
@@ -32,26 +40,30 @@ const fadeUp = (delay = 0) => ({
 });
 
 export function PatientIdentityPage() {
+  const { account } = useWeb3();
   const [ephemeralAddress, setEphemeralAddress] = useState<string | null>(null);
   const [hasIdentity, setHasIdentity] = useState(false);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const refreshIdentityState = useCallback(async () => {
     const id = getStoredIdentity();
     setHasIdentity(!!id);
     if (!id) {
       setEphemeralAddress(null);
       return;
     }
-    let cancelled = false;
-    void generateEphemeralAddress(id).then((addr) => {
-      if (!cancelled) setEphemeralAddress(addr);
-    });
-    return () => {
-      cancelled = true;
-    };
+    const addr = await generateEphemeralAddress(id);
+    setEphemeralAddress(addr);
   }, []);
+
+  useEffect(() => {
+    void refreshIdentityState();
+  }, [refreshIdentityState]);
 
   const copyEphemeral = useCallback(async () => {
     if (!ephemeralAddress) return;
@@ -98,6 +110,57 @@ export function PatientIdentityPage() {
     }
   }, []);
 
+  const restoreFromBackupFile = useCallback(
+    async (file: File) => {
+      setRestoreMessage(null);
+      setRestoreError(null);
+
+      if (hasIdentity) {
+        const ok = window.confirm(
+          "Restoring will replace the Semaphore identity in this browser. Continue only if this backup belongs to you."
+        );
+        if (!ok) return;
+      }
+
+      setImporting(true);
+      try {
+        const text = await file.text();
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = text;
+        }
+        const backup = parseIdentityBackupPayload(parsed);
+        restoreIdentityFromBackup(backup, { mergeNullifiers: hasIdentity });
+        await refreshIdentityState();
+        const nullifierCount = backup.anonymousNullifiers
+          ? Object.keys(backup.anonymousNullifiers).length
+          : 0;
+        setRestoreMessage(
+          nullifierCount > 0
+            ? `Identity restored (${nullifierCount} trial nullifier${nullifierCount === 1 ? "" : "s"}).`
+            : "Identity restored."
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Could not read backup file.";
+        setRestoreError(msg);
+      } finally {
+        setImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [hasIdentity, refreshIdentityState]
+  );
+
+  const onBackupFileSelected = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) void restoreFromBackupFile(file);
+    },
+    [restoreFromBackupFile]
+  );
+
   const privacyLayers = [
     {
       title: "Semaphore identity",
@@ -119,8 +182,34 @@ export function PatientIdentityPage() {
     },
   ];
 
+  if (!account) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-8 pb-16">
+        <SectionTopBar
+          title="Identity & Privacy Controls"
+          rightContent={
+            <Link
+              to="/patient/medical-vault"
+              className="text-xs font-bold uppercase tracking-widest text-teal-700 hover:text-teal-800 transition-colors"
+            >
+              Medical Vault
+            </Link>
+          }
+        />
+        <p className="-mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
+          Manage your zero-knowledge proofs and secure data enclaves.
+        </p>
+        <PatientConnectPrompt
+          title="Connect to manage identity & privacy"
+          description="Ephemeral keys, Semaphore backup, and clinical privacy controls are available after you connect the wallet tied to your vault."
+          showBrowseTrials={false}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-6xl mx-auto pb-16 space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8 pb-16">
       <SectionTopBar
         title="Identity & Privacy Controls"
         rightContent={
@@ -133,11 +222,11 @@ export function PatientIdentityPage() {
         }
       />
 
-      <motion.p {...fadeUp(0)} className="text-slate-600 text-sm sm:text-base leading-relaxed -mt-2 max-w-2xl">
+      <motion.p {...fadeUp(0)} className="-mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
         Manage your zero-knowledge proofs and secure data enclaves.
       </motion.p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
+      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
         {/* Left column */}
         <div className="lg:col-span-5 space-y-6">
           <motion.section
@@ -195,20 +284,59 @@ export function PatientIdentityPage() {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900">Identity backup</h2>
               </div>
-              <Button
-                type="button"
-                disabled={!hasIdentity || exporting}
-                onClick={downloadBackup}
-                className="w-full rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold h-12 gap-2 shadow-md border-0"
-              >
-                {exporting ? (
-                  "Preparing…"
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" /> Download identity backup
-                  </>
-                )}
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  type="button"
+                  disabled={!hasIdentity || exporting}
+                  onClick={downloadBackup}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold h-12 gap-2 shadow-md border-0"
+                >
+                  {exporting ? (
+                    "Preparing…"
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" /> Download backup
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={importing}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 rounded-xl h-12 gap-2 border-slate-200 font-semibold text-slate-800 hover:bg-slate-50"
+                >
+                  {importing ? (
+                    "Restoring…"
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" /> Restore from backup
+                    </>
+                  )}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  aria-hidden
+                  onChange={onBackupFileSelected}
+                />
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Use the same JSON file you downloaded here — includes your Semaphore secret and optional trial
+                nullifiers for anonymous applications.
+              </p>
+              {restoreMessage ? (
+                <p className="text-sm font-medium text-teal-800 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                  {restoreMessage}
+                </p>
+              ) : null}
+              {restoreError ? (
+                <p className="text-sm font-medium text-rose-800 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">
+                  {restoreError}
+                </p>
+              ) : null}
               <div className="rounded-xl border border-rose-100 bg-rose-50/90 px-4 py-3 space-y-1.5">
                 <div className="flex items-center gap-2 text-rose-900">
                   <AlertTriangle className="h-4 w-4 shrink-0" />

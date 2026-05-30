@@ -49,6 +49,7 @@ interface IEligibilityEngine {
         uint256 _nullifier,
         ApplicationStatus _status
     ) external;
+    function cancelStagedAnonymousEligibility(uint256 _nullifier, uint256 _trialId) external;
 }
 
 /**
@@ -214,6 +215,7 @@ contract MedVaultRegistry {
         );
         bool isValid = semaphore.verifyProof(patientGroupId, proof);
         require(isValid, "Invalid Semaphore proof");
+        require(proof.scope == trialId, "Scope mismatch: trialId");
         bytes32 consentSignal = keccak256(abi.encodePacked(commitment, trialId, permitRecipient, "CONSENT"));
         require(proof.message == uint256(consentSignal), "Proof does not encode consent for this trial");
     }
@@ -271,6 +273,22 @@ contract MedVaultRegistry {
 
         bytes32 blindedRef = keccak256(abi.encodePacked(proof.nullifier, trialId));
         emit AnonymousApplication(trialId, proof.nullifier, blindedRef);
+    }
+
+    /**
+     * @notice Clear orphaned FHE staging when finalize never completes (e.g. ineligible decrypt).
+     * @dev Callable by anyone with a valid Semaphore proof for the same trial; does not mark applied.
+     */
+    function cancelAnonymousApplyStage(
+        uint256 trialId,
+        ISemaphore.SemaphoreProof calldata proof,
+        uint256 commitment,
+        address permitRecipient
+    ) external {
+        _verifyAnonymousApplyProof(trialId, proof, commitment, permitRecipient);
+        require(!trialApplications[trialId][proof.nullifier], "Already applied to this trial");
+        require(address(eligibilityEngine) != address(0), "Eligibility engine not set");
+        eligibilityEngine.cancelStagedAnonymousEligibility(proof.nullifier, trialId);
     }
 
     // MED-4: Separate event for wallet-linked applications (not anonymous)

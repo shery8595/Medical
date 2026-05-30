@@ -4,246 +4,408 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useConfidentialBalance } from "../../hooks/useConfidentialBalance";
 import {
-    Wallet,
-    Eye,
-    EyeOff,
-    Download,
-    Upload,
-    Loader2,
-    CheckCircle2,
-    Lock,
-    Unlock,
-    Activity
+  Eye,
+  EyeOff,
+  Download,
+  Upload,
+  Loader2,
+  CheckCircle2,
+  Lock,
+  Unlock,
+  Activity,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "../../lib/utils";
 
-export function ConfidentialWallet() {
-    const {
-        balanceEth,
-        isRevealed,
-        loading,
-        error,
-        revealBalance,
-        hideBalance,
-        deposit,
-        withdraw,
-        getWithdrawNonce,
-        generateWithdrawSignature
-    } = useConfidentialBalance();
+type Props = {
+  variant?: "default" | "enclave";
+};
 
-    const [amount, setAmount] = useState("");
-    const [action, setAction] = useState<"deposit" | "withdraw" | null>(null);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+export function ConfidentialWallet({ variant = "default" }: Props) {
+  const isEnclave = variant === "enclave";
+  const {
+    balanceEth,
+    walletBalanceEth,
+    rewardBalanceEth,
+    isRevealed,
+    loading,
+    error,
+    revealBalance,
+    hideBalance,
+    deposit,
+    withdraw,
+    getWithdrawNonce,
+    generateWithdrawSignature,
+  } = useConfidentialBalance();
 
-    const handleAction = async () => {
-        if (!amount || isNaN(parseFloat(amount))) return;
+  const [amount, setAmount] = useState("");
+  const [action, setAction] = useState<"deposit" | "withdraw" | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-        try {
-            if (action === "deposit") {
-                await deposit(amount);
-                setSuccessMessage(`Successfully shielded ${amount} ETH entering the Confidential Vault.`);
-            } else if (action === "withdraw") {
-                // C-2: Withdraw now requires Threshold Network signature
-                setSuccessMessage(null);
-                
-                // Get current nonce for replay protection
-                const nonce = await getWithdrawNonce();
-                
-                // Get the balance handle to generate signature
-                // Note: This requires the balance to be revealed first
-                throw new Error(
-                    "Please reveal your balance first to generate the required Threshold Network signature. " +
-                    "Click 'Reveal Balance' before attempting withdrawal."
-                );
-                
-                // After balance is revealed, the flow would be:
-                // const { signature, balance } = await generateWithdrawSignature(handle, balance, units, nonce);
-                // await withdraw(amount, signature, balance.toString());
-            }
-            setAmount("");
-            setAction(null);
-            setTimeout(() => setSuccessMessage(null), 5000);
-        } catch (err) {
-            // Error is handled by the hook
-        }
-    };
+  const handleAction = async () => {
+    if (!amount || isNaN(parseFloat(amount))) return;
 
-    return (
-        <Card className="border border-slate-200 shadow-xl relative overflow-hidden group min-h-[400px] rounded-[2rem] bg-white dark:bg-white dark:border-slate-200 dark:text-slate-900">
-            {/* Animated Gradient Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 opacity-100" />
-            <motion.div
-                animate={{
-                    scale: [1, 1.2, 1],
-                    rotate: [0, 90, 0],
-                }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute -top-32 -right-32 w-96 h-96 bg-teal-300/10 blur-[100px] rounded-full pointer-events-none"
-            />
-            <motion.div
-                animate={{
-                    scale: [1, 1.5, 1],
-                    x: [0, -50, 0],
-                }}
-                transition={{ duration: 15, repeat: Infinity, ease: "easeOut" }}
-                className="absolute -bottom-32 -left-32 w-96 h-96 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none"
-            />
+    try {
+      if (action === "deposit") {
+        await deposit(amount);
+        setSuccessMessage(`Successfully shielded ${amount} ETH entering the Confidential Vault.`);
+      } else if (action === "withdraw") {
+        setSuccessMessage(null);
+        await getWithdrawNonce();
+        throw new Error(
+          "Please reveal your balance first to generate the required Threshold Network signature. " +
+            "Click 'Reveal Balance' before attempting withdrawal."
+        );
+      }
+      setAmount("");
+      setAction(null);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch {
+      // Error is handled by the hook
+    }
+  };
 
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-700 pointer-events-none">
-                <Lock className="h-48 w-48 text-slate-500 -rotate-12 translate-x-12 -translate-y-8" />
+  const balanceBlock = (
+    <div
+      className={cn(
+        "flex flex-col transition-all",
+        isEnclave
+          ? "items-start justify-center min-h-[140px]"
+          : "items-center justify-center min-h-[180px] rounded-[1.5rem] border border-slate-200 bg-slate-50 p-8 hover:bg-slate-100"
+      )}
+    >
+      <p
+        className={cn(
+          "mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em]",
+          isEnclave ? "text-slate-400" : "text-slate-500"
+        )}
+      >
+        {isRevealed ? (
+          <Unlock className={cn("h-3 w-3", isEnclave ? "text-teal-400" : "text-emerald-500")} />
+        ) : (
+          <Lock className={cn("h-3 w-3", isEnclave ? "text-teal-400" : "text-teal-600")} />
+        )}
+        Private Balance
+      </p>
+
+      <AnimatePresence mode="wait">
+        {loading && !action ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className={cn(
+              "flex flex-col gap-3",
+              isEnclave ? "items-start text-teal-400" : "items-center text-teal-600"
+            )}
+          >
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full border-2 border-teal-500/30" />
+              <Loader2 className="relative z-10 h-8 w-8 animate-spin" />
             </div>
+            <span className={cn("text-xs font-medium uppercase tracking-wide", isEnclave && "text-slate-400")}>
+              Decrypting via coprocessor…
+            </span>
+          </motion.div>
+        ) : isRevealed ? (
+          <motion.div
+            key="revealed"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={cn("flex flex-col gap-3", isEnclave ? "items-start w-full" : "items-center")}
+          >
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h2
+                className={cn(
+                  "font-black tracking-tighter",
+                  isEnclave
+                    ? "text-4xl text-teal-400 md:text-5xl"
+                    : "bg-gradient-to-br from-slate-900 via-teal-700 to-emerald-600 bg-clip-text text-6xl text-transparent"
+                )}
+              >
+                {balanceEth || "0.000000"}
+              </h2>
+              <span className={cn("text-xl font-bold", isEnclave ? "text-teal-300/90" : "text-teal-700")}>
+                {isEnclave ? "ETH" : "cETH"}
+              </span>
+            </div>
+            <div
+              className={cn(
+                "grid w-full max-w-md grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-wider",
+                isEnclave ? "text-slate-400" : "text-slate-500"
+              )}
+            >
+              <div
+                className={cn(
+                  "rounded-lg border px-3 py-2",
+                  isEnclave ? "border-white/10 bg-white/5" : "border-slate-200 bg-white"
+                )}
+              >
+                <p>Wallet balance</p>
+                <p className={cn("normal-case", isEnclave ? "text-slate-200" : "text-slate-900")}>
+                  {walletBalanceEth || "0.000000"} ETH
+                </p>
+              </div>
+              <div
+                className={cn(
+                  "rounded-lg border px-3 py-2",
+                  isEnclave
+                    ? "border-teal-500/20 bg-teal-500/10 text-teal-300"
+                    : "border-emerald-100 bg-emerald-50 text-emerald-700"
+                )}
+              >
+                <p>Trial rewards</p>
+                <p className={cn("normal-case", isEnclave ? "text-teal-200" : "text-emerald-900")}>
+                  {rewardBalanceEth || "0.000000"} ETH
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "mt-1 h-8 rounded-full px-4 text-xs font-bold",
+                isEnclave
+                  ? "text-slate-400 hover:bg-white/10 hover:text-white"
+                  : "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+              )}
+              onClick={hideBalance}
+            >
+              <EyeOff className="mr-2 h-4 w-4" /> Hide balance
+            </Button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={cn("flex w-full flex-col gap-4", isEnclave ? "items-start" : "items-center gap-5")}
+          >
+            {!isEnclave ? (
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ opacity: [0.3, 0.7, 0.3] }}
+                    transition={{ duration: 2, repeat: Infinity, delay: i * 0.2 }}
+                    className="h-10 w-8 rounded-lg border border-slate-300 bg-slate-200"
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-3xl font-bold tracking-tight text-slate-500">••••••</p>
+            )}
+            <Button
+              className={cn(
+                "rounded-xl border-0 font-bold shadow-lg transition-all hover:scale-[1.02]",
+                isEnclave
+                  ? "h-11 bg-teal-600 px-5 text-white hover:bg-teal-500"
+                  : "h-12 bg-gradient-to-r from-teal-600 to-emerald-600 px-6 text-white hover:from-teal-500 hover:to-emerald-500"
+              )}
+              onClick={revealBalance}
+            >
+              <Eye className="mr-2 h-5 w-5" />
+              {isEnclave ? "View balance summary" : "Reveal (requires decryption key)"}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 
-            <CardHeader className="relative z-10 pb-6 pt-8 px-8">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-100 text-[10px] font-bold uppercase tracking-widest text-teal-700 mb-4">
-                            <Activity className="h-3 w-3" /> Zero-Knowledge Proof enabled
-                        </div>
-                        <CardTitle className="text-3xl font-black text-slate-900 dark:text-slate-900 tracking-tight flex items-center gap-3">
-                            Confidential Vault
-                        </CardTitle>
-                        <CardDescription className="text-slate-600 dark:text-slate-600 text-sm mt-2 max-w-sm">
-                            Your trial incentives are fully encrypted via FHE. Only your private key can reveal the contents.
-                        </CardDescription>
-                    </div>
-                </div>
-            </CardHeader>
+  const messages = (
+    <AnimatePresence>
+      {error && !action ? (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className={cn(
+            "rounded-xl border p-4 text-xs font-medium",
+            isEnclave
+              ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+              : "border-rose-200 bg-rose-50 text-rose-600"
+          )}
+        >
+          {error}
+        </motion.div>
+      ) : null}
+      {successMessage ? (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className={cn(
+            "flex items-center gap-3 rounded-xl border p-4 text-xs font-medium",
+            isEnclave
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          )}
+        >
+          <CheckCircle2 className="h-5 w-5" /> {successMessage}
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 
-            <CardContent className="relative z-10 space-y-8 px-8 pb-8">
-                {/* Balance Display */}
-                <div className="p-8 rounded-[1.5rem] bg-slate-50 border border-slate-200 flex flex-col items-center justify-center min-h-[180px] transition-all hover:bg-slate-100">
-                    <p className="text-xs font-bold tracking-[0.2em] uppercase text-slate-500 mb-4 flex items-center gap-2">
-                        {isRevealed ? <Unlock className="h-3 w-3 text-emerald-500" /> : <Lock className="h-3 w-3 text-teal-600" />}
-                        Private Balance
-                    </p>
+  const actions = (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Button
+          variant="outline"
+          className={cn(
+            "h-12 rounded-xl font-bold text-sm transition-all",
+            isEnclave
+              ? action === "deposit"
+                ? "border-teal-400/50 bg-teal-500/20 text-teal-200"
+                : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10"
+              : action === "deposit"
+                ? "border-teal-300 bg-teal-50 text-teal-700"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+          )}
+          onClick={() => setAction(action === "deposit" ? null : "deposit")}
+        >
+          <Upload className="mr-2 h-5 w-5" /> Shield ETH
+        </Button>
+        <Button
+          variant="outline"
+          className={cn(
+            "h-12 rounded-xl font-bold text-sm transition-all",
+            isEnclave
+              ? action === "withdraw"
+                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
+                : "border-white/15 bg-white/5 text-slate-300 hover:bg-white/10"
+              : action === "withdraw"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+          )}
+          onClick={() => setAction(action === "withdraw" ? null : "withdraw")}
+        >
+          <Download className="mr-2 h-5 w-5" /> Unshield cETH
+        </Button>
+      </div>
 
-                    <AnimatePresence mode="wait">
-                        {loading && !action ? (
-                            <motion.div
-                                key="loading"
-                                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-                                className="flex flex-col items-center gap-3 text-teal-600"
-                            >
-                                <div className="relative">
-                                    <div className="absolute inset-0 border-2 border-teal-500/30 rounded-full animate-ping" />
-                                    <Loader2 className="h-8 w-8 animate-spin relative z-10" />
-                                </div>
-                                <span className="text-xs font-medium tracking-wide uppercase text-slate-500">Decrypting via Coprocessor...</span>
-                            </motion.div>
-                        ) : isRevealed ? (
-                            <motion.div
-                                key="revealed"
-                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                                className="flex flex-col items-center gap-3 group/balance"
-                            >
-                                <div className="flex items-baseline gap-2">
-                                    <h2 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-slate-900 via-teal-700 to-emerald-600">
-                                        {balanceEth || "0.00"}
-                                    </h2>
-                                    <span className="text-2xl font-bold text-teal-700">cETH</span>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-slate-500 hover:text-slate-900 hover:bg-slate-200 mt-2 h-8 rounded-full px-4 text-xs font-bold transition-colors"
-                                    onClick={hideBalance}
-                                >
-                                    <EyeOff className="h-4 w-4 mr-2" /> Hide Balance
-                                </Button>
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key="hidden"
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                className="flex flex-col items-center gap-5 w-full"
-                            >
-                                <div className="flex gap-2">
-                                    {[1, 2, 3, 4, 5, 6].map(i => (
-                                        <motion.div
-                                            key={i}
-                                            animate={{ opacity: [0.3, 0.7, 0.3] }}
-                                            transition={{ duration: 2, repeat: Infinity, delay: i * 0.2 }}
-                                            className="h-10 w-8 rounded-lg bg-slate-200 border border-slate-300"
-                                        />
-                                    ))}
-                                </div>
-                                <Button
-                                    className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white border-0 shadow-lg rounded-xl h-12 px-6 font-bold tracking-wide transition-all hover:scale-[1.02]"
-                                    onClick={revealBalance}
-                                >
-                                    <Eye className="h-5 w-5 mr-2" /> Reveal (Requires Decryption Key)
-                                </Button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+      <AnimatePresence>
+        {action ? (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className={cn(
+              "space-y-4 rounded-2xl border p-5 shadow-inner",
+              isEnclave ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"
+            )}
+          >
+            <div
+              className={cn(
+                "flex items-center gap-3 rounded-xl border p-2 transition-colors focus-within:border-teal-500/50",
+                isEnclave ? "border-white/15 bg-slate-900/50" : "border-slate-200 bg-white"
+              )}
+            >
+              <div className="flex-1">
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className={cn(
+                    "h-14 border-0 bg-transparent px-4 font-mono text-2xl font-black focus-visible:ring-0",
+                    isEnclave
+                      ? "text-white placeholder:text-slate-500"
+                      : "text-slate-900 placeholder:text-slate-400"
+                  )}
+                  value={amount}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
+                />
+              </div>
+              <div
+                className={cn(
+                  "mr-2 rounded-lg px-4 py-2 text-sm font-bold tracking-widest",
+                  isEnclave ? "bg-white/10 text-slate-300" : "bg-slate-100 text-slate-600"
+                )}
+              >
+                {action === "deposit" ? "ETH" : "cETH"}
+              </div>
+            </div>
+            <Button
+              className={cn(
+                "h-12 w-full rounded-xl text-sm font-bold tracking-wide shadow-xl",
+                action === "deposit"
+                  ? "bg-teal-600 text-white hover:bg-teal-500"
+                  : "bg-emerald-600 text-white hover:bg-emerald-500"
+              )}
+              disabled={!amount || loading}
+              onClick={handleAction}
+            >
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                `Confirm ${action === "deposit" ? "shielding" : "withdrawal"}`
+              )}
+            </Button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </>
+  );
 
-                <AnimatePresence>
-                    {error && !action && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-xs font-medium text-rose-600 bg-rose-50 p-4 rounded-xl border border-rose-200">
-                            {error}
-                        </motion.div>
-                    )}
-
-                    {successMessage && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-xs font-medium text-emerald-700 bg-emerald-50 p-4 rounded-xl border border-emerald-200 flex items-center gap-3">
-                            <CheckCircle2 className="h-5 w-5" /> {successMessage}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Actions */}
-                <div className="grid grid-cols-2 gap-4">
-                    <Button
-                        variant="outline"
-                        className={`h-14 rounded-xl border-slate-200 hover:bg-slate-100 transition-all duration-300 font-bold text-sm ${action === 'deposit' ? 'bg-teal-50 border-teal-300 text-teal-700' : 'bg-white text-slate-600'}`}
-                        onClick={() => setAction(action === "deposit" ? null : "deposit")}
-                    >
-                        <Upload className="h-5 w-5 mr-3" /> Shield ETH
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className={`h-14 rounded-xl border-slate-200 hover:bg-slate-100 transition-all duration-300 font-bold text-sm ${action === 'withdraw' ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white text-slate-600'}`}
-                        onClick={() => setAction(action === "withdraw" ? null : "withdraw")}
-                    >
-                        <Download className="h-5 w-5 mr-3 relative top-0.5" /> Unshield cETH
-                    </Button>
-                </div>
-
-                {/* Action Input Box */}
-                <AnimatePresence>
-                    {action && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-inner"
-                        >
-                            <div className="flex items-center gap-3 bg-white rounded-xl p-2 border border-slate-200 focus-within:border-teal-500/50 transition-colors">
-                                <div className="flex-1">
-                                    <Input
-                                        type="number"
-                                        placeholder="0.00"
-                                        className="bg-transparent border-0 focus-visible:ring-0 h-14 text-2xl font-black font-mono text-slate-900 placeholder:text-slate-400 px-4"
-                                        value={amount}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
-                                    />
-                                </div>
-                                <div className="px-4 py-2 rounded-lg bg-slate-100 text-sm font-bold tracking-widest text-slate-600 mr-2">
-                                    {action === 'deposit' ? 'ETH' : 'cETH'}
-                                </div>
-                            </div>
-                            <Button
-                                className={`w-full h-14 rounded-xl font-bold text-sm tracking-wide shadow-xl transition-all ${action === 'deposit' ? 'bg-teal-600 hover:bg-teal-500 shadow-teal-900/30 text-white' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30 text-white'}`}
-                                disabled={!amount || loading}
-                                onClick={handleAction}
-                            >
-                                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : `Confirm ${action === 'deposit' ? 'Shielding' : 'Withdrawal'}`}
-                            </Button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </CardContent>
-        </Card>
+  if (isEnclave) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5">
+            <Lock className="h-3.5 w-3.5 text-teal-400" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300">
+              Confidential vault
+            </span>
+          </div>
+          <span className="rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-300">
+            End-to-end encrypted
+          </span>
+        </div>
+        {balanceBlock}
+        {messages}
+        {actions}
+      </div>
     );
+  }
+
+  return (
+    <Card className="group relative min-h-[400px] overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl dark:border-slate-200 dark:bg-white dark:text-slate-900">
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 opacity-100" />
+      <motion.div
+        animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+        className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-teal-300/10 blur-[100px]"
+      />
+      <motion.div
+        animate={{ scale: [1, 1.5, 1], x: [0, -50, 0] }}
+        transition={{ duration: 15, repeat: Infinity, ease: "easeOut" }}
+        className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-emerald-300/10 blur-[100px]"
+      />
+      <div className="pointer-events-none absolute right-0 top-0 translate-x-12 -translate-y-8 p-8 opacity-10 transition-opacity duration-700 group-hover:opacity-20">
+        <Lock className="h-48 w-48 -rotate-12 text-slate-500" />
+      </div>
+
+      <CardHeader className="relative z-10 px-8 pb-6 pt-8">
+        <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-700">
+          <Activity className="h-3 w-3" /> Zero-Knowledge Proof enabled
+        </div>
+        <CardTitle className="mt-4 flex items-center gap-3 text-3xl font-black tracking-tight text-slate-900">
+          Confidential Vault
+        </CardTitle>
+        <CardDescription className="mt-2 max-w-sm text-sm text-slate-600">
+          Your trial incentives are fully encrypted via FHE. Only your private key can reveal the
+          contents.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="relative z-10 space-y-8 px-8 pb-8">
+        {balanceBlock}
+        {messages}
+        {actions}
+      </CardContent>
+    </Card>
+  );
 }

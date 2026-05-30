@@ -14,7 +14,9 @@ import {
     Activity,
     Coins,
     Shield,
+    FlaskConical,
     Scale,
+    GitBranch,
     HelpCircle,
     ScrollText,
     Fingerprint,
@@ -31,6 +33,9 @@ const HREF_ICONS: Record<string, LucideIcon> = {
     "/docs/guides": MonitorPlay,
     "/docs/faq": HelpCircle,
     "/docs/architecture": Cpu,
+    "/docs/fhenix-cofhe": Lock,
+    "/docs/semaphore": Fingerprint,
+    "/docs/noir": GitBranch,
     "/docs/fhe-primitives": Lock,
     "/docs/engine": Activity,
     "/docs/contracts": FileCode2,
@@ -41,7 +46,10 @@ const HREF_ICONS: Record<string, LucideIcon> = {
     "/docs/frontend": LayoutTemplate,
     "/docs/identity-privacy": Fingerprint,
     "/docs/staking": Coins,
-    "/docs/testing": Shield,
+    "/docs/testing": FlaskConical,
+    "/docs/testing/matrix": FlaskConical,
+    "/docs/testing/infrastructure": FlaskConical,
+    "/docs/testing/ci": FlaskConical,
     "/docs/deployment": Terminal,
     "/docs/changelog": ScrollText,
     "/docs/security-model": Shield,
@@ -78,29 +86,29 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     const isSectionOpen = (section: string) => expandedSections[section] !== false;
 
     return (
-        <div className="flex h-full w-[280px] flex-col border-r border-slate-200/80 bg-white transition-all duration-300">
-            <div className="relative flex h-20 items-center px-6 border-b border-slate-200/60 shrink-0">
-                <Link to="/" className="group flex items-center gap-3" onClick={onNavigate}>
-                    <div className="relative flex h-10 w-10 items-center justify-center group-hover:scale-105 transition-transform duration-300 overflow-hidden rounded-xl">
+        <div className="flex h-full w-[212px] flex-col border-r border-slate-200/80 bg-white transition-all duration-300">
+            <div className="relative flex h-[58px] items-center px-3 border-b border-slate-200/60 shrink-0">
+                <Link to="/" className="group flex items-center gap-[9px] min-w-0" onClick={onNavigate}>
+                    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center group-hover:scale-105 transition-transform duration-300 overflow-hidden rounded-lg">
                         <img src="/logo.png" alt="MedVault" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                        <span className="font-display text-base font-bold tracking-tight text-slate-900 leading-tight truncate">
+                        <span className="font-display text-[15.4px] font-bold tracking-tight text-slate-900 leading-tight truncate">
                             MedVault
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#00685f]">
-                            Technical docs
+                        <span className="text-[9.9px] font-bold uppercase tracking-[0.1em] text-[#00685f] truncate">
+                            Docs
                         </span>
                     </div>
                 </Link>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 py-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-2 py-3 space-y-3 custom-scrollbar">
                 <motion.div
                     initial="hidden"
                     animate="visible"
                     variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
-                    className="space-y-5"
+                    className="space-y-3"
                 >
                     {groups.map((group) => (
                         <motion.div
@@ -115,9 +123,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                                         return { ...prev, [group.section]: !open };
                                     })
                                 }
-                                className="w-full flex items-center justify-between px-3 mb-1.5 group"
+                                className="w-full flex items-center justify-between px-2 mb-0.5 group"
                             >
-                                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 group-hover:text-slate-600">
+                                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 group-hover:text-slate-600">
                                     {group.section}
                                 </p>
                                 <ChevronRight
@@ -151,7 +159,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                                                     to={item.href}
                                                     onClick={onNavigate}
                                                     className={cn(
-                                                        "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors",
+                                                        "group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors",
                                                         isActive
                                                             ? "text-[#00685f] bg-[#00685f]/8 border border-[#00685f]/15"
                                                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -160,13 +168,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                                                     {isActive && (
                                                         <motion.div
                                                             layoutId="docs-sidebar-active-marker"
-                                                            className="absolute left-0 w-1 h-5 bg-[#00685f] rounded-r-full"
+                                                            className="absolute left-0 w-0.5 h-4 bg-[#00685f] rounded-r-full"
                                                             transition={{ type: "spring", stiffness: 400, damping: 35 }}
                                                         />
                                                     )}
                                                     <Icon
                                                         className={cn(
-                                                            "h-4 w-4 shrink-0",
+                                                            "h-3.5 w-3.5 shrink-0",
                                                             isActive ? "text-[#00685f]" : "text-slate-400"
                                                         )}
                                                     />
@@ -182,14 +190,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 </motion.div>
             </div>
 
-            <div className="px-4 py-4 border-t border-slate-200/60 bg-slate-50/50 shrink-0">
+            <div className="px-2 py-2 border-t border-slate-200/60 bg-slate-50/50 shrink-0">
                 <Link
                     to="/"
                     onClick={onNavigate}
-                    className="group flex items-center justify-between gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 border border-slate-200/90 bg-white hover:shadow-sm transition-all"
+                    className="group flex items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200/90 bg-white hover:shadow-sm transition-all"
                 >
-                    <span>Return to app</span>
-                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    <span className="truncate">App</span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
                 </Link>
             </div>
         </div>

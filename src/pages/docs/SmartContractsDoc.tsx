@@ -1,8 +1,16 @@
+import { Link } from "react-router-dom";
 import { Prose } from "../../components/docs/Prose";
-import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
 import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
+import { ProtocolContractSection } from "../../components/docs/ProtocolContractSection";
+import {
+    CONTRACT_INTERACTION_ROWS,
+    PROTOCOL_CONTRACTS,
+    PROTOCOL_OPTIONAL_CONTRACTS,
+} from "../../lib/protocolContracts";
+import { DOCS_CONTRACT_COUNT } from "../../lib/docsNav";
 import { motion } from "framer-motion";
+import { FileCode2, FlaskConical } from "lucide-react";
 
 export function SmartContractsDoc() {
     return (
@@ -10,290 +18,92 @@ export function SmartContractsDoc() {
             <Prose className="max-w-none">
                 <DocsPageHeaderForRoute />
 
-                <Callout type="info" title="Deployment environment">
-                    Production contracts are deployed to <strong>Arbitrum Sepolia</strong> (see{" "}
-                    <code>src/lib/contracts/addresses.json</code>). They are compiled with Solidity 0.8.24+ and use{" "}
-                    <code>@fhenixprotocol/cofhe-contracts</code> for FHE types. The dApp defaults to this chain via
+                <div className="not-prose mb-6 p-4 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-[#00685f]/10 text-[#00685f]">
+                            <FileCode2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-slate-900 m-0">
+                                {DOCS_CONTRACT_COUNT} production contracts + Honk verifier
+                            </p>
+                            <p className="text-xs text-slate-500 m-0">
+                                Arbitrum Sepolia · Solidity 0.8.24+ ·{" "}
+                                <code>@fhenixprotocol/cofhe-contracts</code>
+                            </p>
+                        </div>
+                    </div>
+                    <Link
+                        to="/docs/testing"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full hover:bg-emerald-100 shrink-0"
+                    >
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        191+ Hardhat tests
+                    </Link>
+                </div>
+
+                <Callout type="info" title="Addresses & deployment">
+                    Live addresses live in <code>src/lib/contracts/addresses.json</code>. Deploy scripts wire
+                    dependencies in the same order as <code>test-support/deployments.ts</code> (
+                    <code>deployMedVaultStack()</code>). The dApp defaults to chainId <strong>421614</strong> via
                     Privy.
                 </Callout>
 
-                <hr className="my-12 border-slate-200" />
-
-                <div className="space-y-16 mt-12">
-                    {/* 01 — Trial Manager */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl border border-emerald-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">01</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">TrialManager.sol</h2>
-                        </div>
-
-                        <p className="max-w-prose">
-                            The <code>TrialManager</code> is the central hub for creating, tracking, and halting clinical trials. It acts as the routing layer between unencrypted structural metadata (Trial Names, Phases, Timestamps) and the encrypted requirements (min/max bounds for health metrics stored as <code>euint32</code>). Before instantiating a new trial struct, the <code>TrialManager</code> makes a synchronous cross-contract call to the <code>SponsorRegistry</code> to verify the <code>msg.sender</code> is KYC-approved.
-                        </p>
-
-                        <CodeBlock
-                            filename="TrialManager.sol (Create Logic)"
-                            language="solidity"
-                            code={`function createTrial(
-    string memory name,
-    string memory phase,
-    string memory location,
-    string memory compensation,
-    bytes memory encryptedReqs
-) external returns (uint256) {
-    // 1. Authorize Caller via distinct registry
-    require(
-        sponsorRegistry.isVerifiedSponsor(msg.sender), 
-        "Only verified sponsors can create trials"
-    );
-    
-    // 2. Increment global trial counter securely
-    uint256 newTrialId = ++trialCount;
-    
-    // 3. Map structural data
-    trials[newTrialId] = Trial({
-        id: newTrialId,
-        sponsor: msg.sender,
-        name: name,
-        phase: phase,
-        active: true,
-        // ...
-    });
-
-    emit TrialCreated(newTrialId, msg.sender, name);
-    return newTrialId;
-}`}
-                        />
-                    </section>
-
-                    {/* 02 — Patient Registry */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-blue-500/10 text-blue-500 rounded-2xl border border-blue-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">02</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">MedVaultRegistry.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            The <code>MedVaultRegistry</code> handles the storage and updating of patient health metrics. It manages the <code>PatientInfo</code> struct which holds exclusively Fhenix encrypted data types. On registration, ZK input proofs are validated via the FHE precompile, ciphertext handles are stored with ACL permissions granted to this contract and the <code>EligibilityEngine</code>, and a <code>DataAccessLog</code> entry is recorded.
-                        </p>
-                        <Callout type="warning" title="Reentrancy Protections">
-                            Because the patient registry interfaces with the <code>EligibilityEngine</code> and the <code>ConsentManager</code> directly upon state updates, it utilizes standard OpenZeppelin <code>ReentrancyGuard</code> modifiers to prevent recursive calls during FHE evaluations.
-                        </Callout>
-
-                        <CodeBlock
-                            filename="MedVaultRegistry.sol (Structs)"
-                            language="solidity"
-                            code={`import "@fhenixprotocol/cofhe-contracts/FHE.sol";
-
-// All fields are fully homomorphically encrypted
-struct PatientInfo {
-    euint32 age;
-    euint32 bloodPressure;
-    euint32 hba1c;
-    euint32 weight;
-    bool isRegistered; // Standard boolean — it is public knowledge *that* a patient exists.
-}
-
-mapping(address => PatientInfo) private registry;`}
-                        />
-
-                        <p className="max-w-prose">
-                            <strong>Key functions:</strong> <code>registerPatient(einput, einput, einput, einput, bytes)</code>, <code>updateMetrics(...)</code>, <code>unregister()</code>, <code>getPatientEncryptedMetrics(address) → PatientInfo</code>
-                        </p>
-                    </section>
-
-                    {/* 03 — Eligibility Engine */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-purple-500/10 text-purple-500 rounded-2xl border border-purple-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">03</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">EligibilityEngine.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            The <strong>computational core</strong> of MedVault. Reads encrypted patient metrics from <code>MedVaultRegistry</code> and encrypted trial bounds from <code>TrialManager</code>, then executes 5 FHE comparison operations and 3 CMUX multiplexing operations to produce a weighted eligibility score (0-100) — all without decrypting any inputs. The score is stored in a private mapping keyed by <code>(trialId, patientAddress)</code> with FHE ACL granting decryption rights only to the patient.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>computeEligibility(address patient, uint256 trialId)</code>, <code>getScore(uint256 trialId, address patient) → euint32</code>
-                        </p>
-                        <Callout type="info" title="Detailed Documentation">
-                            See the <a href="/docs/engine">Eligibility Engine Mechanics</a> page for a comprehensive scoring breakdown, threshold behavior analysis, and gas cost estimation.
-                        </Callout>
-                    </section>
-
-                    {/* 04 — Sponsor Registry */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">04</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">SponsorRegistry.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            An admin-gated allowlist of verified pharmaceutical sponsors. Only the protocol owner (multisig) can add or remove sponsors via <code>Ownable</code>-protected functions. This prevents Sybil attacks where malicious actors create trials with extreme parameter bounds designed to deduce patient data through binary search. The registry exposes <code>isVerifiedSponsor(address)</code> for cross-contract authorization checks from <code>TrialManager</code>.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>addSponsor(address)</code>, <code>removeSponsor(address)</code>, <code>isVerifiedSponsor(address) → bool</code>, <code>emergencyRemoveSponsor(address)</code>
-                        </p>
-                    </section>
-
-                    {/* 05 — Consent Manager */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-blue-500/10 text-blue-500 rounded-2xl border border-blue-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">05</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">ConsentManager.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            Manages granular, revocable patient consent for identity disclosure. After a patient receives a match score, they may <em>optionally</em> grant the trial sponsor access to their profile through this contract. Consent is scoped per <code>(patient, sponsor, trialId)</code> tuple — granting consent for Trial #1 does not affect Trial #2. All consent grants and revocations are logged to <code>DataAccessLog</code> with anonymized hashes.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>grantConsent(address sponsor, uint256 trialId)</code>, <code>revokeConsent(address sponsor, uint256 trialId)</code>, <code>hasConsent(address patient, address sponsor, uint256 trialId) → bool</code>
-                        </p>
-                    </section>
-
-                    {/* 06 — Chainlink Price Feeds */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-rose-500/10 text-rose-500 rounded-2xl border border-rose-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">06</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">Chainlink Price Feeds Integration</h2>
-                        </div>
-
-                        <p className="max-w-prose">
-                            Clinical trials often guarantee compensation (e.g., "$5,000 equivalent in ETH"). To prevent sponsors from under-funding their trial escrow due to extreme market volatility, MedVault integrates <code>@chainlink/contracts</code> to fetch live ETH/USD market data during trial instantiation and funding operations.
-                        </p>
-
-                        <Callout type="tip" title="Decentralized Validation">
-                            By querying the <code>AggregatorV3Interface</code> dynamically inside the payable Trial Activation function, we eliminate the need for an admin to manually set oracle prices. If <code>msg.value &lt; requiredFiatFunding / getChainlinkDataFeedLatestAnswer()</code>, the transaction reverts, protecting patient payouts.
-                        </Callout>
-                    </section>
-
-                    {/* 07 — Sponsor Incentive Vault */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-purple-500/10 text-purple-500 rounded-2xl border border-purple-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">07</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">SponsorIncentiveVault.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            Manages the <strong>escrow and phased payout</strong> mechanism for trial participant rewards. When a sponsor creates a trial, they fund an escrow pool. Matched and consent-approved patients are registered as participants. Rewards are distributed in phased milestones (enrollment, mid-trial, completion) rather than lump-sum, protecting both sponsors from early patient dropout and patients from sponsor non-payment.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>registerParticipant(address, uint256)</code>, <code>distributeReward(uint256, uint256)</code>, <code>claimReward(uint256)</code>
-                        </p>
-                    </section>
-
-                    {/* 08 — Staking Manager */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl border border-emerald-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">08</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">StakingManager.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            Coordinates the <strong>private yield generation</strong> pipeline. Patient rewards flow through this contract into Aave V3 lending pools, generating interest on locked funds. The staking position is tracked privately using <code>ConfidentialETH</code> encrypted balance wrappers, so the on-chain observer cannot determine how much yield any individual patient has accrued.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>stake(uint256)</code>, <code>unstake(uint256)</code>, <code>getPrivateBalance(address) → euint32</code>
-                        </p>
-                    </section>
-
-                    {/* 09 — Confidential ETH */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-blue-500/10 text-blue-500 rounded-2xl border border-blue-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">09</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">ConfidentialETH.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            An <strong>encrypted ERC-20 wrapper</strong> for ETH. Users "shield" plaintext ETH into encrypted <code>euint32</code> balance representations. Transfers between addresses add and subtract encrypted values using <code>FHE.add()</code> and <code>FHE.sub()</code> — the blockchain computes the transfer without knowing the amounts. Uses a <code>1e12</code> scaling factor to convert between wei (18 decimals) and <code>euint32</code> (max ~4.29 billion).
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>shield(uint256)</code>, <code>unshield(uint256)</code>, <code>transferEncrypted(address, euint32)</code>
-                        </p>
-                    </section>
-
-                    {/* 10 — MedVault Automation */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-rose-500/10 text-rose-500 rounded-2xl border border-rose-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">10</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">MedVaultAutomation.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            Implements Chainlink's <code>AutomationCompatibleInterface</code> for <strong>trustless, time-based triggers</strong>. The <code>checkUpkeep()</code> function scans for trials with pending milestone payouts, and <code>performUpkeep()</code> executes the distribution via <code>SponsorIncentiveVault</code>. This removes the need for any centralized cron job or human trigger — Chainlink Keepers autonomously call the contract when conditions are met.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>checkUpkeep(bytes calldata) → (bool, bytes memory)</code>, <code>performUpkeep(bytes calldata)</code>
-                        </p>
-                    </section>
-
-                    {/* 11 — Data Access Log */}
-                    <section>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20">
-                                <span className="font-mono font-bold text-lg leading-none">11</span>
-                            </div>
-                            <h2 className="m-0 border-0 pb-0">DataAccessLog.sol</h2>
-                        </div>
-                        <p className="max-w-prose">
-                            A centralized, <strong>immutable on-chain audit recorder</strong> for every sensitive state change in MedVault. Only whitelisted MedVault contracts (MedVaultRegistry, EligibilityEngine, ConsentManager, SponsorIncentiveVault) can write to the log — external contracts cannot inject entries. Each entry contains an <code>ActionType</code> enum, trial ID, anonymized <code>keccak256</code> hash, and block timestamp.
-                        </p>
-                        <p>
-                            <strong>Key functions:</strong> <code>log(ActionType, uint256, bytes32)</code>, <code>authorizeLogger(address)</code>
-                        </p>
-                        <p>
-                            <strong>ActionType enum:</strong> <code>PATIENT_REGISTERED</code>, <code>ELIGIBILITY_CHECKED</code>, <code>CONSENT_GRANTED</code>, <code>CONSENT_REVOKED</code>, <code>STATUS_CHANGED</code>, <code>REWARD_DISTRIBUTED</code>
-                        </p>
-                    </section>
-                </div>
-
-                <hr className="my-12 border-slate-200" />
-
-                {/* Contract Interaction Matrix */}
-                <h2>Contract Interaction Matrix</h2>
-                <p>
-                    The following table summarizes cross-contract call relationships in the MedVault protocol:
+                <p className="text-sm text-slate-600">
+                    Contracts are grouped below by role. For FHE type semantics see{" "}
+                    <Link to="/docs/fhe-primitives" className="font-semibold text-[#00685f] hover:underline">
+                        FHE primitives
+                    </Link>
+                    ; for scoring mechanics see{" "}
+                    <Link to="/docs/engine" className="font-semibold text-[#00685f] hover:underline">
+                        Eligibility engine
+                    </Link>
+                    ; for keepers see{" "}
+                    <Link to="/docs/automation" className="font-semibold text-[#00685f] hover:underline">
+                        Chainlink Automation
+                    </Link>
+                    .
                 </p>
 
-                <div className="not-prose my-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                <div className="not-prose space-y-4 my-8">
+                    {PROTOCOL_CONTRACTS.map((c) => (
+                        <ProtocolContractSection key={c.name} contract={c} />
+                    ))}
+                </div>
+
+                <h2>Optional: ZK verifier</h2>
+                <div className="not-prose space-y-4 my-6">
+                    {PROTOCOL_OPTIONAL_CONTRACTS.map((c) => (
+                        <ProtocolContractSection key={c.name} contract={c} />
+                    ))}
+                </div>
+
+                <h2>Cross-contract interaction matrix</h2>
+                <p className="text-sm">
+                    Primary call paths (read-only views and state-changing flows used in integration tests):
+                </p>
+
+                <div className="not-prose my-6 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50">
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 text-xs">Caller</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 text-xs">Callee</th>
-                                    <th className="text-left px-4 py-3 font-bold text-slate-700 text-xs">Call Purpose</th>
+                                    <th className="text-left px-3 py-2 font-bold text-slate-700 text-xs">Caller</th>
+                                    <th className="text-left px-3 py-2 font-bold text-slate-700 text-xs">Callee</th>
+                                    <th className="text-left px-3 py-2 font-bold text-slate-700 text-xs">Purpose</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {[
-                                    { caller: "EligibilityEngine", callee: "MedVaultRegistry", purpose: "Read encrypted patient health metrics" },
-                                    { caller: "EligibilityEngine", callee: "TrialManager", purpose: "Read encrypted trial requirement bounds" },
-                                    { caller: "TrialManager", callee: "SponsorRegistry", purpose: "Validate sponsor authorization (isVerifiedSponsor)" },
-                                    { caller: "TrialManager", callee: "Chainlink PriceFeed", purpose: "Fetch live ETH/USD for compensation math" },
-                                    { caller: "SponsorIncentiveVault", callee: "StakingManager", purpose: "Route participant rewards to yield generation" },
-                                    { caller: "StakingManager", callee: "ConfidentialETH", purpose: "Shield/unshield encrypted balance wrappers" },
-                                    { caller: "StakingManager", callee: "Aave V3 Pool", purpose: "Supply/withdraw from lending pool" },
-                                    { caller: "MedVaultAutomation", callee: "SponsorIncentiveVault", purpose: "Trigger milestone-based reward distribution" },
-                                    { caller: "MedVaultRegistry", callee: "DataAccessLog", purpose: "Log registration/unregistration actions" },
-                                    { caller: "ConsentManager", callee: "DataAccessLog", purpose: "Log consent grant/revocation actions" },
-                                    { caller: "EligibilityEngine", callee: "DataAccessLog", purpose: "Log eligibility computation events" },
-                                ].map((row, i) => (
-                                    <tr key={`${row.caller}-${row.callee}`} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                                        <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold">{row.caller}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.callee}</td>
-                                        <td className="px-4 py-3 text-xs text-slate-500">{row.purpose}</td>
+                                {CONTRACT_INTERACTION_ROWS.map((row, i) => (
+                                    <tr
+                                        key={`${row.caller}-${row.callee}`}
+                                        className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                                    >
+                                        <td className="px-3 py-2 font-mono text-xs text-[#00685f] font-bold">
+                                            {row.caller}
+                                        </td>
+                                        <td className="px-3 py-2 font-mono text-xs text-slate-600">{row.callee}</td>
+                                        <td className="px-3 py-2 text-xs text-slate-500">{row.purpose}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -301,6 +111,12 @@ mapping(address => PatientInfo) private registry;`}
                     </div>
                 </div>
 
+                <Callout type="warning" title="CoFHE ACL & proof accounts">
+                    Client encryption must set the correct <strong>proof account</strong> in{" "}
+                    <code>@cofhe/sdk</code> (must match <code>msg.sender</code> at the FHE verify site). Example:
+                    MedVaultRegistry address when registering through the vault; patient EOA for direct consent grants.
+                    See <Link to="/docs/testing/infrastructure">test infrastructure docs</Link> for mock patterns.
+                </Callout>
             </Prose>
         </motion.div>
     );

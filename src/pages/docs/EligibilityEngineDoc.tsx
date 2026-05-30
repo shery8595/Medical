@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
@@ -5,93 +6,47 @@ import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
 
 import { motion } from "framer-motion";
 
-const fheSequenceChart = `
-sequenceDiagram
-    participant P as Patient
-    participant EE as EligibilityEngine
-    participant PR as MedVaultRegistry
-    participant TM as TrialManager
-
-    P->>EE: computeEligibility(patient, trialId)
-    EE->>PR: getPatientEncryptedMetrics(patient)
-    PR-->>EE: euint32[] (Age, HbA1c, etc.)
-    EE->>TM: getTrialEncryptedRequirements(trialId)
-    TM-->>EE: euint32[] (MinAge, MaxHbA1c, etc.)
-    
-    rect rgb(20, 20, 30)
-        Note over EE: Fhenix FHE Processing
-        EE->>EE: FHE.ge(age, minAge) -> ebool
-        EE->>EE: FHE.le(hba1c, maxHba1c) -> ebool
-        EE->>EE: FHE.cmux(isMatch, score, 0) -> euint32
-    end
-
-    EE->>EE: storeScore(trialId, patient, finalScore)
-    Note over EE: Final Score is still Encrypted!
-`;
-
 export function EligibilityEngineDoc() {
     return (
         <motion.div>
             <Prose className="max-w-none">
                 <DocsPageHeaderForRoute />
 
-                <hr className="my-12 border-slate-200" />
+                <Callout type="info" title="Production path: anonymous + consent">
+                    Patients register via <code>MedVaultRegistry</code> → <code>AnonymousPatientRegistry</code> (Semaphore
+                    commitment). Eligibility uses <code>stageAnonymousEligibility</code> /{" "}
+                    <code>finalizeAnonymousEligibility</code> and optional{" "}
+                    <code>checkAnonymousEligibilityWithConsent</code>. Legacy address-only{" "}
+                    <code>checkEligibility</code> is deprecated.
+                </Callout>
 
-                <h2>The Computation Flow</h2>
-                <p>
-                    Because FHE operations on `euint32` variables require significant computational power, executing multiple transactions to check individual health parameters is not feasible. The computation is therefore <strong>batched</strong> into a single function call: <code>computeEligibility(address patient, uint256 trialId)</code>.
+                <h2>Computation flow</h2>
+                <p className="text-sm">
+                    FHE work is batched in <code>_computeEligibility</code>: read encrypted profile + trial bounds, run
+                    comparisons, accumulate a weighted <code>euint8</code> score with <code>FHE.cmux</code>. Nothing is
+                    decrypted on-chain.
                 </p>
 
-                <p>
-                    The engine evaluates three core metrics simultaneously: Age, Blood Pressure, and HbA1c.
-                </p>
-
-                <div className="not-prose bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
-                    <h3 className="text-xl font-semibold text-slate-900 mb-4 m-0">FHE verification sequence</h3>
-                    <div className="text-slate-600 text-sm space-y-2">
-                        <p>1. <strong>Patient</strong> generates FHE ciphertexts locally representing their medical history.</p>
-                        <p>2. <strong>Patient</strong> calls Smart Contract <code>applyForTrial(ciphertexts)</code>.</p>
-                        <p>3. <strong>Smart Contract</strong> loads Sponsor's predefined FHE conditions (minAge, bgType, etc).</p>
-                        <p>4. <strong>Smart Contract</strong> performs homomorphic comparisons strictly on-chain.</p>
-                        <p>5. <strong>Smart Contract</strong> decrypts the final boolean result (1 = Match, 0 = Reject).</p>
-                        <p>6. <strong>Blockchain</strong> emits Match event while keeping all patient inputs completely secret.</p>
-                    </div>
+                <div className="not-prose bg-gradient-to-br from-violet-50 to-white p-4 rounded-xl border border-violet-200 mb-6">
+                    <h3 className="text-base font-semibold text-slate-900 mb-3 m-0">Anonymous apply sequence</h3>
+                    <ol className="text-slate-600 text-sm space-y-2 m-0 pl-4 list-decimal">
+                        <li>Patient encrypts metrics with <code>@cofhe/sdk</code> (proof account = MedVaultRegistry when registering).</li>
+                        <li><code>MedVaultRegistry</code> stores ciphertexts under Semaphore commitment in <code>AnonymousPatientRegistry</code>.</li>
+                        <li><code>stageAnonymousEligibility</code> runs FHE scoring (registry or engine caller per ACL).</li>
+                        <li>Patient grants <code>grantConsent(trialId, InEbool)</code> on <code>ConsentManager</code>.</li>
+                        <li><code>checkAnonymousEligibilityWithConsent</code> gates sponsor-facing flows; score stays encrypted.</li>
+                        <li>Patient decrypts score off-chain via CoFHE client — plaintext never appears in events or storage.</li>
+                    </ol>
                 </div>
 
                 <CodeBlock
-                    filename="EligibilityEngine.sol (Snippet: Engine Core)"
+                    filename="EligibilityEngine.sol (scoring pattern)"
                     language="solidity"
-                    code={`import "@fhenixprotocol/cofhe-contracts/FHE.sol";
-
-function _computeScore(address patient, uint256 trialId) internal returns (euint32) {
-    // 0. Initialize a new encrypted score of 0
-    euint32 score = FHE.asEuint32(0);
-    ebool isMatch;
-
-    // 1. Age Range Check
-    // We 'AND' two booleans together: is age >= minAge AND age <= maxAge?
-    isMatch = FHE.and(
-        FHE.ge(patientInfo.age, reqs.minAge),
-        FHE.le(patientInfo.age, reqs.maxAge)
-    );
-    // If isMatch is true (after decryption), add 40 to the score.
-    score = FHE.add(score, FHE.cmux(isMatch, FHE.asEuint32(40), FHE.asEuint32(0)));
-
-    // 2. Blood Pressure Check
-    isMatch = FHE.and(
-        FHE.ge(patientInfo.bloodPressure, reqs.minBloodPressure),
-        FHE.le(patientInfo.bloodPressure, reqs.maxBloodPressure)
-    );
-    // Add 30 points if the BP is within range
-    score = FHE.add(score, FHE.cmux(isMatch, FHE.asEuint32(30), FHE.asEuint32(0)));
-
-    // 3. HbA1c Check (Max threshold only)
-    isMatch = FHE.le(patientInfo.hba1c, reqs.maxHba1c);
-    // Add final 30 points
-    score = FHE.add(score, FHE.cmux(isMatch, FHE.asEuint32(30), FHE.asEuint32(0)));
-
-    return score;
-}`}
+                    code={`// Simplified — actual contract uses euint8 total score + anonymous mappings
+euint8 score = FHE.asEuint8(0);
+ebool ageOk = FHE.and(FHE.ge(age, minAge), FHE.le(age, maxAge));
+score = FHE.add(score, FHE.cmux(ageOk, FHE.asEuint8(40), FHE.asEuint8(0)));
+// + blood pressure (+30) and HbA1c (+30) via CMUX — all in ciphertext`}
                 />
 
                 <hr className="my-12 border-slate-200" />
@@ -159,21 +114,7 @@ function _computeScore(address patient, uint256 trialId) internal returns (euint
                     <strong>Never emit encrypted types in standard events.</strong> Doing so forces indexers to parse massive byte arrays and creates unnecessary ciphertext exposure surface. Store ciphertexts securely in contract state mappings instead, and emit only non-sensitive metadata (trial ID, patient address, status enum).
                 </Callout>
 
-                <p>Instead, MedVault maps the score securely in the contract state:</p>
-
-                <CodeBlock
-                    language="solidity"
-                    code={`// Mapping: trialId => patientAddress => encryptedScore
-mapping(uint256 => mapping(address => euint32)) private trialApplicantScores;
-
-function storeScore(uint256 trialId, address patient, euint32 score) internal {
-    trialApplicantScores[trialId][patient] = score;
-    // Grant decryption rights ONLY to the patient
-    FHE.allow(score, patient);
-    // Allow this contract to read the score for future operations
-    FHE.allowThis(score);
-}`}
-                />
+                <p>Scores are stored in encrypted mappings (address or nullifier keyed) with <code>FHE.allow</code> / <code>FHE.allowThis</code> for authorized contracts only.</p>
 
                 <hr className="my-12 border-slate-200" />
 
@@ -195,22 +136,14 @@ function storeScore(uint256 trialId, address patient, euint32 score) internal {
                     A single patient can apply to multiple trials simultaneously. The <code>EligibilityEngine</code> evaluates each application independently because the scoring mapping is keyed by <code>(trialId, patientAddress)</code>. This design means:
                 </p>
                 <ul>
-                    <li><strong>No re-encryption needed:</strong> The patient's encrypted health data is stored once in <code>MedVaultRegistry</code>. Each <code>computeEligibility()</code> call reads the same ciphertext handles. The FHE ACL ensures the Engine has read access.</li>
-                    <li><strong>Independent scoring:</strong> Score for Trial #1 does not affect or leak information about score for Trial #2. Each trial has its own encrypted requirements, producing its own encrypted score.</li>
-                    <li><strong>Gas per application:</strong> Each <code>computeEligibility()</code> call costs approximately the same gas regardless of how many other trials the patient has applied to — there is no accumulating state read overhead.</li>
+                    <li><strong>No re-encryption needed:</strong> Profile ciphertexts live once in <code>AnonymousPatientRegistry</code>; each trial application reuses handles with ACL.</li>
+                    <li><strong>Independent scoring:</strong> Scores are keyed by <code>(trialId, nullifier)</code> or legacy address — trials do not leak across each other.</li>
+                    <li><strong>Gas per application:</strong> Dominated by FHE comparison + CMUX count; see <Link to="/docs/testing" className="font-semibold text-[#00685f]">test suite</Link> for regression coverage (EE-* cases).</li>
                 </ul>
 
-                <Callout type="tip" title="Gas Cost Estimation">
-                    A typical <code>computeEligibility()</code> transaction on Fhenix Sepolia uses approximately <strong>3-5 million gas</strong> due to the 5 FHE comparison operations and 3 CMUX multiplexing operations. Each FHE precompile call costs roughly 300,000-500,000 gas. Transaction confirmation takes 15-60 seconds due to the coprocessor's polynomial math processing time.
+                <Callout type="tip" title="Gas & latency">
+                    FHE transactions on Arbitrum Sepolia are significantly more expensive than plain transfers. Expect variable confirmation time while the coprocessor evaluates ciphertexts. Profile with <code>npm run test:unit</code> locally using CoFHE mocks before testnet experiments.
                 </Callout>
-
-                <h3>Decoupling Storage from Computation</h3>
-                <p>
-                    Why not update the <code>Applied Trials</code> array right here in the Engine? Because updating complex array structures while simultaneously performing heavy FHE opcodes would routinely exceed the Fhenix Sepolia block gas limits.
-                </p>
-                <p>
-                    Therefore, the <code>EligibilityEngine</code> calculates the score and stores it. The frontend <code>MedVaultRegistry</code> and Subgraph then index the simple <code>ApplicationStatusUpdated</code> event (which contains the trial ID but <em>not</em> the score) to update the user's dashboard asynchronously.
-                </p>
 
             </Prose>
         </motion.div>

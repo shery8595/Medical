@@ -1,6 +1,7 @@
 import { Prose } from "../../components/docs/Prose";
 import { Callout } from "../../components/docs/Callout";
 import { AnimatedDiagram } from "../../components/docs/AnimatedDiagram";
+import { DocsCopyActions } from "../../components/docs/DocsPageToolbar";
 import { motion } from "framer-motion";
 import {
     Activity, Shield, Users, Database, ArrowRight, Lock, Key,
@@ -14,12 +15,21 @@ import { cn } from "../../lib/utils";
 import { DOCS_CONTRACT_COUNT } from "../../lib/docsNav";
 
 const INTRO_STAT_TONE: Record<string, string> = {
-    teal: "bg-teal-100 text-teal-600",
-    emerald: "bg-emerald-100 text-emerald-600",
-    purple: "bg-purple-100 text-purple-600",
-    blue: "bg-blue-100 text-blue-600",
-    amber: "bg-amber-100 text-amber-600",
-    rose: "bg-rose-100 text-rose-600",
+    teal: "bg-teal-500 text-white",
+    emerald: "bg-emerald-500 text-white",
+    purple: "bg-violet-500 text-white",
+    blue: "bg-blue-500 text-white",
+    amber: "bg-amber-500 text-white",
+    rose: "bg-rose-500 text-white",
+};
+
+const INTRO_STAT_SURFACE: Record<string, string> = {
+    teal: "border-teal-200 bg-gradient-to-b from-teal-50 to-white",
+    emerald: "border-emerald-200 bg-gradient-to-b from-emerald-50 to-white",
+    purple: "border-violet-200 bg-gradient-to-b from-violet-50 to-white",
+    blue: "border-blue-200 bg-gradient-to-b from-blue-50 to-white",
+    amber: "border-amber-200 bg-gradient-to-b from-amber-50 to-white",
+    rose: "border-rose-200 bg-gradient-to-b from-rose-50 to-white",
 };
 
 const STEP_ROW_ICON: Record<string, string> = {
@@ -43,6 +53,7 @@ const SECTION_BADGE: Record<string, string> = {
     blue: "bg-blue-100 text-blue-700",
     amber: "bg-amber-100 text-amber-800",
     emerald: "bg-emerald-100 text-emerald-700",
+    rose: "bg-rose-100 text-rose-800",
 };
 
 // ─── Animated Counter Stat ───
@@ -51,18 +62,21 @@ const AnimatedStat = ({ value, label, icon, color }: { value: string; label: str
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-200 bg-white shadow-sm text-center group hover:shadow-lg transition-all duration-300"
+        className={cn(
+            "flex flex-col items-center justify-center p-4 rounded-xl border shadow-sm text-center group hover:shadow-md transition-all duration-300",
+            INTRO_STAT_SURFACE[color] ?? "border-slate-200 bg-white"
+        )}
     >
         <div
             className={cn(
-                "p-2.5 rounded-xl mb-3 group-hover:scale-110 transition-transform duration-300",
-                INTRO_STAT_TONE[color] ?? "bg-slate-100 text-slate-600"
+                "p-2 rounded-lg mb-2 group-hover:scale-105 transition-transform duration-300 shadow-sm",
+                INTRO_STAT_TONE[color] ?? "bg-slate-500 text-white"
             )}
         >
             {icon}
         </div>
-        <div className="text-3xl font-black font-display text-slate-900 tracking-tight">{value}</div>
-        <div className="text-xs font-medium text-slate-500 mt-1 tracking-wide">{label}</div>
+        <div className="text-2xl font-black font-display text-slate-900 tracking-tight">{value}</div>
+        <div className="text-[11px] font-semibold text-slate-600 mt-0.5 tracking-wide">{label}</div>
     </motion.div>
 );
 
@@ -76,30 +90,37 @@ const Divider = () => (
 );
 
 // ─── Architecture Flow Diagram (CSS/SVG) ───
-const layerStyles: Record<string, { container: string; dot: string; label: string; iconBg: string }> = {
+const layerStyles: Record<
+    string,
+    { container: string; dot: string; label: string; iconBg: string; nodeBorder: string }
+> = {
     blue: {
-        container: "bg-blue-950/40 border-blue-500/20",
+        container: "bg-blue-50/90 border-blue-200",
         dot: "bg-blue-500",
-        label: "text-blue-400",
-        iconBg: "bg-blue-900/40 text-blue-400",
+        label: "text-blue-800",
+        iconBg: "bg-blue-100 text-blue-700",
+        nodeBorder: "border-blue-100 hover:border-blue-300",
     },
     teal: {
-        container: "bg-blue-950/40 border-blue-500/20",
-        dot: "bg-blue-500",
-        label: "text-blue-400",
-        iconBg: "bg-blue-900/40 text-blue-400",
+        container: "bg-teal-50/90 border-teal-200",
+        dot: "bg-teal-600",
+        label: "text-teal-800",
+        iconBg: "bg-teal-100 text-teal-700",
+        nodeBorder: "border-teal-100 hover:border-teal-300",
     },
     purple: {
-        container: "bg-purple-950/40 border-purple-500/20",
-        dot: "bg-purple-500",
-        label: "text-purple-400",
-        iconBg: "bg-purple-900/40 text-purple-400",
+        container: "bg-violet-50/90 border-violet-200",
+        dot: "bg-violet-500",
+        label: "text-violet-800",
+        iconBg: "bg-violet-100 text-violet-700",
+        nodeBorder: "border-violet-100 hover:border-violet-300",
     },
     amber: {
-        container: "bg-amber-950/40 border-amber-500/20",
+        container: "bg-amber-50/90 border-amber-200",
         dot: "bg-amber-500",
-        label: "text-amber-400",
-        iconBg: "bg-amber-900/40 text-amber-400",
+        label: "text-amber-900",
+        iconBg: "bg-amber-100 text-amber-800",
+        nodeBorder: "border-amber-100 hover:border-amber-300",
     },
 };
 
@@ -144,7 +165,7 @@ const ArchitectureFlowDiagram = () => {
     ];
 
     return (
-        <div className="not-prose my-12 p-6 md:p-8 rounded-3xl border border-slate-200 bg-white relative overflow-hidden">
+        <div className="not-prose my-8 p-5 md:p-6 rounded-2xl border border-slate-200 bg-white relative overflow-hidden">
             {/* Background Grid */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px]" />
             {/* Glow accents */}
@@ -153,7 +174,7 @@ const ArchitectureFlowDiagram = () => {
 
             <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-8">
-                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                    <div className="p-2 rounded-xl bg-teal-100 text-teal-700 border border-teal-200">
                         <Layers className="w-5 h-5" />
                     </div>
                     <div>
@@ -186,7 +207,10 @@ const ArchitectureFlowDiagram = () => {
                                             whileInView={{ opacity: 1, scale: 1 }}
                                             transition={{ delay: layerIdx * 0.15 + nodeIdx * 0.05 }}
                                             viewport={{ once: true }}
-                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/90 shadow-sm hover:shadow-md hover:bg-white transition-all duration-300 group cursor-default"
+                                            className={cn(
+                                                "flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white border shadow-sm hover:shadow-md transition-all duration-300 group cursor-default",
+                                                styles.nodeBorder
+                                            )}
                                         >
                                             <div className={`p-1.5 rounded-lg ${styles.iconBg} group-hover:scale-110 transition-transform`}>
                                                 {node.icon}
@@ -401,73 +425,81 @@ export function IntroductionDoc() {
                 {/* ═══════════════════════════════════════════════════════════════════════
                     HERO SECTION — Premium Landing
                 ═══════════════════════════════════════════════════════════════════════ */}
-                <div className="not-prose relative -mt-4 mb-16">
+                <div className="not-prose relative mb-10">
                     <motion.div
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
-                        className="w-full rounded-3xl overflow-hidden border border-slate-200/90 bg-white shadow-[0_20px_50px_-24px_rgba(0,104,95,0.15)] relative"
+                        className="w-full rounded-2xl overflow-hidden border border-slate-200/90 bg-white shadow-[0_12px_40px_-20px_rgba(0,104,95,0.2)] relative"
                     >
+                        <DocsCopyActions className="absolute top-3 right-3 z-20" />
                         <div className="absolute inset-0 bg-gradient-to-br from-[#00685f]/[0.06] via-transparent to-blue-500/[0.05] pointer-events-none" />
-                        <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0 items-stretch">
-                            <div className="p-8 md:p-12 flex flex-col justify-center relative z-10">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-2 h-2 rounded-full bg-[#00685f] animate-pulse" />
-                                    <span className="text-[#00685f] text-xs font-black uppercase tracking-[0.2em]">
-                                        Technical documentation
+                        <div className="grid md:grid-cols-[1.18fr_0.76fr] gap-0 items-stretch">
+                            <div className="p-5 md:p-8 flex flex-col justify-center relative z-10 pr-28 md:pr-8">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#00685f] animate-pulse" />
+                                    <span className="text-[#00685f] text-[10px] font-black uppercase tracking-[0.18em]">
+                                        Getting started
                                     </span>
                                 </div>
-                                <h1 className="text-4xl md:text-5xl font-display font-black text-slate-900 tracking-tight mb-4 leading-[1.1] m-0">
+                                <h1 className="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight mb-2 leading-tight m-0">
                                     MedVault<span className="text-[#00685f]">.</span>
                                 </h1>
-                                <p className="text-lg text-slate-600 max-w-xl leading-relaxed font-medium m-0">
+                                <p className="text-sm md:text-base text-slate-600 max-w-xl leading-relaxed m-0">
                                     FHE-powered clinical trial matching on{" "}
-                                    <strong className="text-slate-900">Arbitrum Sepolia</strong> using the fhEVM coprocessor
-                                    — compute on encrypted medical data without exposing it.
+                                    <strong className="text-slate-900">Arbitrum Sepolia</strong> with{" "}
+                                    <strong className="text-slate-900">CoFHE</strong> — homomorphic eligibility on
+                                    ciphertexts, Semaphore identity, and consent-gated access.
                                 </p>
-                                <div className="flex flex-wrap gap-2 mt-8">
+                                <div className="flex flex-wrap gap-2 mt-5">
                                     <Link
                                         to="/docs/architecture"
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#00685f] text-white text-xs font-bold shadow-md hover:bg-[#005a52] transition-colors"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#00685f] text-white text-xs font-bold shadow-sm hover:bg-[#005a52] transition-colors"
                                     >
                                         <Cpu className="w-3.5 h-3.5" /> Architecture
                                         <ArrowRight className="w-3 h-3" />
                                     </Link>
                                     <Link
                                         to="/docs/engine"
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
                                     >
                                         <Activity className="w-3.5 h-3.5" /> Engine
                                     </Link>
                                     <Link
+                                        to="/docs/testing"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-900 text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                    >
+                                        <CheckCircle2 className="w-3.5 h-3.5" /> Tests (191+)
+                                    </Link>
+                                    <Link
                                         to="/docs/security-model"
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
                                     >
                                         <Shield className="w-3.5 h-3.5" /> Security
                                     </Link>
                                 </div>
                             </div>
-                            <div className="relative min-h-[200px] md:min-h-[280px] border-t md:border-t-0 md:border-l border-slate-100">
+                            <div className="relative flex min-h-[125px] md:min-h-[179px] items-center justify-center p-3 md:p-4">
                                 <img
                                     src="/assets/images/medvault_fhe_hero.png"
                                     alt="MedVault architecture"
-                                    className="absolute inset-0 w-full h-full object-cover object-center opacity-95"
+                                    className="relative z-[1] w-[90%] max-w-full h-auto max-h-[125px] md:max-h-[179px] object-contain object-center opacity-95"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent md:bg-gradient-to-l" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent md:bg-gradient-to-l pointer-events-none" />
                             </div>
                         </div>
                     </motion.div>
                 </div>
 
                 {/* ─── Platform Statistics Bar ─── */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 my-12 not-prose">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 my-8 not-prose">
                     <AnimatedStat
                         value={String(DOCS_CONTRACT_COUNT)}
                         label="Production contracts"
                         icon={<FileCode2 className="w-5 h-5" />}
                         color="teal"
                     />
-                    <AnimatedStat value="100+" label="Tests Passing" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                    <AnimatedStat value="191+" label="Hardhat tests" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                     <AnimatedStat value="3" label="DeFi Protocols" icon={<TrendingUp className="w-5 h-5" />} color="purple" />
                     <AnimatedStat value="0" label="Data Exposed" icon={<Shield className="w-5 h-5" />} color="blue" />
                     <AnimatedStat value="4" label="FHE Type System" icon={<Lock className="w-5 h-5" />} color="amber" />
@@ -737,8 +769,12 @@ export function IntroductionDoc() {
 
                 <Callout type="warning" title="Testnet environment">
                     The app targets <strong>Arbitrum Sepolia</strong> (chainId 421614) with Privy embedded wallets. FHE
-                    operations use the fhEVM coprocessor and can take longer to confirm than plain transfers—plan for
-                    variable latency during heavy FHE calls.
+                    operations use the Fhenix <strong>CoFHE</strong> coprocessor and can take longer to confirm than plain
+                    transfers—plan for variable latency during heavy FHE calls. Contract behavior is covered by{" "}
+                    <Link to="/docs/testing" className="font-semibold text-[#00685f] hover:underline">
+                        191+ Hardhat tests
+                    </Link>{" "}
+                    with local CoFHE mocks.
                 </Callout>
 
                 <Divider />
@@ -756,8 +792,9 @@ export function IntroductionDoc() {
                         { id: "S1", title: "Core Concepts", desc: "Architecture overviews, Fhenix integration deep-dive, and guide to FHE.sol encrypted types.", color: "teal", links: [{ label: "Architecture", href: "/docs/architecture" }, { label: "FHE Primitives", href: "/docs/fhe-primitives" }] },
                         { id: "S2", title: "Smart Contracts", desc: `Reference for ${DOCS_CONTRACT_COUNT} production contracts, EligibilityEngine scoring mechanics, Chainlink Automation, and consent-gated decryption.`, color: "purple", links: [{ label: "Engine", href: "/docs/engine" }, { label: "Contracts", href: "/docs/contracts" }, { label: "Sponsors", href: "/docs/sponsor-system" }, { label: "Chainlink Automation", href: "/docs/automation" }] },
                         { id: "S3", title: "Integration & Frontend", desc: "Client-side encryption with @cofhe/sdk, subgraph indexing, React architecture, Semaphore / relayer / faucet tooling.", color: "blue", links: [{ label: "Encryption", href: "/docs/client-encryption" }, { label: "Subgraph", href: "/docs/subgraph" }, { label: "Frontend", href: "/docs/frontend" }, { label: "Identity & tooling", href: "/docs/identity-privacy" }] },
-                        { id: "S4", title: "Operations & Guides", desc: "User workflows, private yield staking, deployment guides, and the verification suite.", color: "amber", links: [{ label: "Workflows", href: "/docs/guides" }, { label: "Staking", href: "/docs/staking" }, { label: "Testing", href: "/docs/testing" }, { label: "Deploy", href: "/docs/deployment" }] },
-                        { id: "S5", title: "Security & Compliance", desc: "Threat model, FHE security guarantees, HIPAA/GDPR compliance, and immutable audit trail.", color: "emerald", links: [{ label: "Security Model", href: "/docs/security-model" }, { label: "Compliance", href: "/docs/compliance" }, { label: "FAQ", href: "/docs/faq" }] },
+                        { id: "S4", title: "Operations", desc: "User workflows, private yield staking, deployment, and release notes.", color: "amber", links: [{ label: "Workflows", href: "/docs/guides" }, { label: "Staking", href: "/docs/staking" }, { label: "Deploy", href: "/docs/deployment" }, { label: "Changelog", href: "/docs/changelog" }] },
+                        { id: "S6", title: "Tests & verification", desc: "191+ Hardhat cases: unit, integration, CoFHE mocks, matrix IDs, and CI.", color: "emerald", links: [{ label: "Overview", href: "/docs/testing" }, { label: "Matrix", href: "/docs/testing/matrix" }, { label: "Fixtures", href: "/docs/testing/infrastructure" }, { label: "CI", href: "/docs/testing/ci" }] },
+                        { id: "S5", title: "Security & Compliance", desc: "Threat model, FHE security guarantees, HIPAA/GDPR compliance, and immutable audit trail.", color: "rose", links: [{ label: "Security Model", href: "/docs/security-model" }, { label: "Compliance", href: "/docs/compliance" }, { label: "FAQ", href: "/docs/faq" }] },
                     ].map(section => (
                         <div key={section.id} className="p-5 border border-slate-200 rounded-2xl group hover:bg-slate-50 transition-colors">
                             <div className="flex items-center gap-4 mb-3">

@@ -223,6 +223,11 @@ contract SponsorIncentiveVault {
 
         pools[_trialId].screeningDistributed = true;
 
+        if (hasMilestones) {
+            milestoneDistributed[_trialId][0] = true;
+            emit MilestoneRewardsDistributed(_trialId, 0, perParticipantWei);
+        }
+
         if (address(dataAccessLog) != address(0)) {
             dataAccessLog.logAction(
                 DataAccessLog.ActionType.REWARDS_DISTRIBUTED,
@@ -284,20 +289,15 @@ contract SponsorIncentiveVault {
         // CRIT-1: First pass: count TOTAL eligible participants across ALL participants (not just this batch)
         // This ensures perParticipantWei is consistent across all batches
         uint256 totalEligibleCount = 0;
-        uint256 eligibleInThisBatch = 0;
         for (uint256 i = 0; i < pCount; i++) {
             address p = pools[_trialId].participants[i];
             bool isEligible = (_milestoneIndex == 0) ||
                 (milestoneManager.getParticipantProgress(_trialId, p) >= _milestoneIndex + 1);
             if (isEligible && !participantMilestonePaid[_trialId][p][_milestoneIndex]) {
                 totalEligibleCount++;
-                if (i >= _startIndex && i < endIndex) {
-                    eligibleInThisBatch++;
-                }
             }
         }
 
-        require(eligibleInThisBatch > 0, "No eligible participants in batch");
         require(totalEligibleCount > 0, "No eligible participants for this milestone");
 
         // CRIT-1: Compute perParticipantWei based on TOTAL eligible count, not batch-local count
@@ -531,39 +531,80 @@ contract SponsorIncentiveVault {
         IncentivePool storage pool = pools[_trialId];
         require(pool.totalDepositedWei > 0, "No incentive pool");
         require(!pool.screeningDistributed, "Screening already finalized");
-        require(!pool.isRegistered[msg.sender], "Already registered");
+
+        // Fetch patient address from the EligibilityEngine
+        address patient = eligibilityEngine.decryptPermitHolder(_nullifier);
+        require(patient != address(0), "No permit holder found");
+
+        require(!pool.isRegistered[patient], "Already registered");
         // FINDING 5: Cap on participants
         require(pool.participants.length < MAX_PARTICIPANTS, "Pool at capacity");
 
         // HIGH-3: Prevent same nullifier being used for multiple registrations
         require(!nullifierUsedForRegistration[_trialId][_nullifier], "Nullifier already used for registration");
-        nullifierUsedForRegistration[_trialId][_nullifier] = true;
 
         // Check anonymous application status
         EligibilityEngine.ApplicationStatus status = eligibilityEngine.getAnonymousApplicationStatus(_nullifier, _trialId);
         require(status == EligibilityEngine.ApplicationStatus.Accepted, "Anonymous application must be accepted");
+
+        // Access control: only the patient themselves or the trial sponsor can register
+        TrialManager.Trial memory trial = trialManager.getTrial(_trialId);
+        require(msg.sender == patient || msg.sender == trial.sponsor, "Only patient or sponsor can register");
+
+        nullifierUsedForRegistration[_trialId][_nullifier] = true;
 
         // LOW-4: Lock funding once first participant registers
         if (pool.participants.length == 0) {
             pool.fundingLocked = true;
         }
 
-        pool.participants.push(msg.sender);
-        pool.isRegistered[msg.sender] = true;
+        pool.participants.push(patient);
+        pool.isRegistered[patient] = true;
 
         if (address(dataAccessLog) != address(0)) {
             dataAccessLog.logAction(
                 DataAccessLog.ActionType.PARTICIPANT_JOINED_POOL,
                 _trialId,
-                keccak256(abi.encodePacked(msg.sender, block.timestamp))
+                keccak256(abi.encodePacked(patient, block.timestamp))
             );
         }
-        emit ParticipantRegistered(_trialId, msg.sender);
+        emit ParticipantRegistered(_trialId, patient);
+    }
+
+    /**
+     * @notice Allows a patient's main wallet (or a relayer) to withdraw the patient's
+     *         distributed rewards from their ephemeral balance to their main wallet (destination)
+     *         by presenting a Threshold Network signature from their ephemeral address.
+     * @param _trialId The trial ID
+     * @param _nullifier The patient's nullifier
+     * @param _destination The recipient address of the withdrawn native ETH
+     * @param units The amount to withdraw in micro-ETH units
+     * @param balanceSig Threshold Network signature for FHE.verifyDecryptResult(bal, balance, balanceSig) only
+     * @param balance Claimed plaintext balance of the ephemeral address (must match signature)
+     * @dev WARNING: The TN attestation does NOT bind _destination, units, or msg.sender. A party with a
+     *      valid in-flight balanceSig could redirect withdrawals. Mitigated on FCFS chains (no public mempool).
+     */
+    function claimParticipantRewards(
+        uint256 _trialId,
+        uint256 _nullifier,
+        address _destination,
+        uint64 units,
+        bytes calldata balanceSig,
+        uint64 balance
+    ) external {
+        address patient = eligibilityEngine.decryptPermitHolder(_nullifier);
+        require(patient != address(0), "No permit holder found");
+        require(pools[_trialId].isRegistered[patient], "Patient not registered");
+        require(_destination != address(0), "Zero destination address");
+
+        // Call withdrawTo on ConfidentialETH to move the ETH to the destination wallet
+        cETH.withdrawTo(patient, _destination, units, balanceSig, balance);
     }
 
     /**
      * @notice Reclaim undistributed ETH after trial ends (CRIT-1 fix)
-     * @dev MED-3: Callable by owner OR sponsor after trial end and screening distribution.
+     * @dev MED-3: Callable by owner OR sponsor after trial end and screening distribution
+     *      (or after trial end with zero participants — screening distribute never runs).
      *      Sends remaining balance to sponsor.
      * @param _trialId The trial ID
      */
@@ -574,7 +615,11 @@ contract SponsorIncentiveVault {
             "Not authorized: only owner or sponsor"
         );
         require(block.timestamp >= trial.endTime, "Trial not yet ended");
-        require(pools[_trialId].screeningDistributed, "Screening not yet distributed");
+        bool noParticipants = pools[_trialId].participants.length == 0;
+        require(
+            pools[_trialId].screeningDistributed || noParticipants,
+            "Screening not yet distributed"
+        );
         require(!reclaimFinalized[_trialId], "Already reclaimed");
 
         uint256 remaining = pools[_trialId].totalDepositedWei - pools[_trialId].totalDistributedWei;

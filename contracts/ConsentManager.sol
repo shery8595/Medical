@@ -12,16 +12,36 @@ import {FHE, ebool, InEbool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
  *      the final result on consent - a beautiful FHE composition story.
  */
 contract ConsentManager {
+    address public eligibilityEngine;
+
     // FHENIX: Encrypted consent mapping - no plaintext consent on chain
     mapping(address => mapping(uint256 => ebool)) private encryptedConsent;
 
     // FHENIX: Encrypted consent allows sender to view their own consent
     mapping(address => mapping(uint256 => bool)) private consentExists;
 
+    /// @notice Global consent epoch per patient; revokeAllConsent increments this to invalidate prior grants.
+    mapping(address => uint256) public patientConsentEpoch;
+
+    /// @notice Epoch at which consent was granted for each patient/trial pair.
+    mapping(address => mapping(uint256 => uint256)) private consentGrantEpoch;
+
     event ConsentGranted(address indexed patient, uint256 indexed trialId);
     // M-2: Include old consent handle in revocation event for off-chain tracking
     event ConsentRevoked(address indexed patient, uint256 indexed trialId, ebool oldConsent);
+    event ConsentEpochRevoked(address indexed patient, uint256 newEpoch);
     event EncryptedConsentGranted(address indexed patient, uint256 indexed trialId, ebool consent);
+
+    function setEligibilityEngine(address _engine) external {
+        require(_engine != address(0), "Zero engine");
+        eligibilityEngine = _engine;
+    }
+
+    function _allowConsentConsumers(ebool c) private {
+        if (eligibilityEngine != address(0)) {
+            FHE.allow(c, eligibilityEngine);
+        }
+    }
 
     /**
      * @notice Grant encrypted consent for a specific trial
@@ -32,32 +52,36 @@ contract ConsentManager {
         ebool c = FHE.asEbool(_consent);
         FHE.allowThis(c);
         FHE.allow(c, msg.sender);
+        _allowConsentConsumers(c);
         encryptedConsent[msg.sender][_trialId] = c;
         consentExists[msg.sender][_trialId] = true;
+        consentGrantEpoch[msg.sender][_trialId] = patientConsentEpoch[msg.sender];
         emit EncryptedConsentGranted(msg.sender, _trialId, c);
+        emit ConsentGranted(msg.sender, _trialId);
     }
 
     /**
-     * @notice Revoke consent for a specific trial (sets to encrypted false)
-     * @dev M-2: SECURITY NOTE: FHENIX does not support revoking FHE permissions once granted.
-     *      The old ciphertext handle remains accessible to parties who previously received FHE.allow().
-     *      This function sets consent to encrypted false and marks consentExists as false,
-     *      but contracts that already hold permissions for the old handle can still decrypt it.
-     *      Emitting ConsentRevoked allows off-chain systems to track this state change.
-     * @param _trialId The trial ID
+     * @notice Test / legacy helper: grant encrypted-true consent without an off-chain FHE SDK proof.
+     * @dev For production UI, prefer `grantConsent(uint256, InEbool)` so the client proves ciphertext correctness.
      */
-    function grantConsent(uint256 _trialId, uint256 _durationSeconds) external {
-        _ensureEpoch(msg.sender);
-        uint256 ce = consentEpoch[msg.sender];
-        trialConsentEpoch[msg.sender][_trialId] = ce;
+    function grantConsent(uint256 _trialId, uint256 /* _durationSeconds */) external {
+        ebool c = FHE.asEbool(true);
+        FHE.allowThis(c);
+        FHE.allow(c, msg.sender);
+        _allowConsentConsumers(c);
+        encryptedConsent[msg.sender][_trialId] = c;
+        consentExists[msg.sender][_trialId] = true;
+        consentGrantEpoch[msg.sender][_trialId] = patientConsentEpoch[msg.sender];
+        emit EncryptedConsentGranted(msg.sender, _trialId, c);
+        emit ConsentGranted(msg.sender, _trialId);
+    }
 
-        uint256 expiresAt = 0;
-        if (_durationSeconds > 0) {
-            expiresAt = block.timestamp + _durationSeconds;
-        }
-        trialConsentExpiresAt[msg.sender][_trialId] = expiresAt;
-
-        emit ConsentGranted(msg.sender, _trialId, ce, expiresAt);
+    /**
+     * @notice Kill-switch: invalidate all prior consent grants for the caller without enumerating trials.
+     */
+    function revokeAllConsent() external {
+        patientConsentEpoch[msg.sender]++;
+        emit ConsentEpochRevoked(msg.sender, patientConsentEpoch[msg.sender]);
     }
 
     function revokeConsent(uint256 _trialId) external {
@@ -106,6 +130,17 @@ contract ConsentManager {
     function getActiveConsent(address _patient, uint256 _trialId) external returns (ebool) {
         ebool consent = encryptedConsent[_patient][_trialId];
         ebool exists = FHE.asEbool(consentExists[_patient][_trialId]);
-        return FHE.and(consent, exists);
+        ebool epochValid = FHE.asEbool(consentGrantEpoch[_patient][_trialId] == patientConsentEpoch[_patient]);
+        ebool active = FHE.and(FHE.and(consent, exists), epochValid);
+        FHE.allowThis(active);
+        FHE.allow(active, msg.sender);
+        return active;
+    }
+
+    /**
+     * @notice Returns the patient's current global consent epoch (for off-chain filtering).
+     */
+    function getPatientConsentEpoch(address _patient) external view returns (uint256) {
+        return patientConsentEpoch[_patient];
     }
 }

@@ -2,6 +2,7 @@ import { useSubgraph } from "./useSubgraph";
 import { Match } from "../types";
 import { useMemo } from "react";
 import { normalizeAddress, isConsentRowEffective } from "../lib/consentEffective";
+import { isSponsorVisibleAnonymousStatus } from "../lib/anonymousApplicationStatus";
 
 const GET_SPONSOR_DATA = `
   query GetSponsorData($sponsor: Bytes!) {
@@ -42,6 +43,10 @@ const GET_SPONSOR_DATA = `
         submittedAt
         status
         statusUpdatedAt
+        fhePropensityCommittedAt
+        noirCertified
+        noirEligible
+        noirCertifiedAt
       }
     }
   }
@@ -164,21 +169,31 @@ export function useMatches(sponsorAddress?: string) {
 
       trial.anonymousSubmissions?.forEach((anon: any) => {
         const status = anon.status || "Pending";
+        if (!isSponsorVisibleAnonymousStatus(status)) {
+          return;
+        }
+        const fheAt = anon.fhePropensityCommittedAt
+          ? String(anon.fhePropensityCommittedAt)
+          : null;
         allMatches.push({
           id: anon.id,
           trialId: trial.id,
           trialName: trial.name,
           patientAddress: "0x0000000000000000000000000000000000000000",
-          patientId: `Anonymous-${anon.nullifier.slice(0, 8)}...`,
+          patientId: `Anonymous-${String(anon.nullifier).slice(0, 8)}...`,
           status: status,
           timestamp: new Date(Number(anon.submittedAt) * 1000).toLocaleString(),
           rawTimestamp: Number(anon.submittedAt),
-          matchScore: 100,
+          matchScore: undefined,
           applicationStatus: ["Pending", "Accepted", "Rejected"].includes(status) ? status : "None",
           applicationMessage: undefined,
           currentMilestone: 0,
           isAnonymous: true,
-          nullifier: anon.nullifier,
+          nullifier: String(anon.nullifier),
+          fhePropensityCommittedAt: fheAt,
+          noirCertified: anon.noirCertified === true,
+          noirEligible:
+            anon.noirEligible === true || anon.noirEligible === false ? anon.noirEligible : null,
         });
       });
     });

@@ -14,6 +14,7 @@ export function handleActionLogged(event: ActionLogged): void {
     else if (action == 3) actionType = "APPLICATION_STATUS_CHANGED"
     else if (action == 4) actionType = "MILESTONE_COMPLETED"
     else if (action == 5) actionType = "REWARDS_DISTRIBUTED"
+    else if (action == 6) actionType = "PARTICIPANT_JOINED_POOL"
 
     log.action = actionType
     log.actionType = actionType

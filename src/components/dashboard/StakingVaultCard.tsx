@@ -11,7 +11,6 @@ import {
     Unlock,
     Loader2,
     ArrowDownRight,
-    Sparkles,
     Info,
 } from "lucide-react";
 import { useStaking } from "../../hooks/useStaking";
@@ -28,14 +27,12 @@ export function StakingVaultCard() {
         revealBalance,
         unstake,
         stakeFromWallet,
-        stakeFromConfidential,
         getUnstakeNonce,
         generateUnstakeSignature
     } = useStaking();
-    const { apy, loading: apyLoading } = useAaveYield();
+    const { apy, loading: apyLoading, source: apySource } = useAaveYield();
     const [isUnstaking, setIsUnstaking] = useState(false);
     const [isStaking, setIsStaking] = useState(false);
-    const [stakeMode, setStakeMode] = useState<"wallet" | "confidential">("wallet");
     const [stakeAmount, setStakeAmount] = useState("0.1");
     const [showStakeInput, setShowStakeInput] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
@@ -44,15 +41,9 @@ export function StakingVaultCard() {
         if (!stakeAmount || parseFloat(stakeAmount) <= 0) return;
         try {
             setIsStaking(true);
-            setStatus(stakeMode === "wallet" ? "Staking from wallet..." : "Staking from Reward Enclave...");
-            
-            if (stakeMode === "wallet") {
-                await stakeFromWallet(stakeAmount);
-            } else {
-                await stakeFromConfidential(stakeAmount);
-            }
-            
-            setStatus(`Success! ETH staked on Aave via ${stakeMode === "wallet" ? "wallet" : "Reward Enclave"}.`);
+            setStatus("Staking from wallet...");
+            await stakeFromWallet(stakeAmount);
+            setStatus("Success! ETH staked on Aave from your wallet.");
             setShowStakeInput(false);
         } catch (err: any) {
             setStatus(`Failed: ${err.message}`);
@@ -137,6 +128,13 @@ export function StakingVaultCard() {
                                     </span>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">APY</span>
                                 </div>
+                                <p className="text-[9px] text-slate-400 mt-2 font-medium leading-snug">
+                                    {apySource === "protocol"
+                                        ? "From Aave reserve liquidity rate (linear approx.)"
+                                        : apySource === "wrong_chain"
+                                          ? "Showing reference — switch to Arbitrum Sepolia for live read"
+                                          : "Using conservative fallback when pool read fails"}
+                                </p>
                             </div>
                             <div className="space-y-1.5 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Protocol</p>
@@ -203,30 +201,9 @@ export function StakingVaultCard() {
                                         exit={{ opacity: 0, height: 0 }}
                                         className="w-full space-y-3"
                                     >
-                                        <div className="flex gap-1 p-1 bg-white/5 dark:bg-slate-100/50 rounded-xl border border-white/10 dark:border-slate-200">
-                                            <button
-                                                onClick={() => setStakeMode("wallet")}
-                                                className={cn(
-                                                    "flex-1 py-1.5 text-[9px] font-bold rounded-lg transition-all",
-                                                    stakeMode === "wallet" 
-                                                        ? "bg-emerald-500 text-slate-900 shadow-sm" 
-                                                        : "text-white/40 dark:text-slate-400 hover:text-white dark:hover:text-slate-600"
-                                                )}
-                                            >
-                                                Wallet
-                                            </button>
-                                            <button
-                                                onClick={() => setStakeMode("confidential")}
-                                                className={cn(
-                                                    "flex-1 py-1.5 text-[9px] font-bold rounded-lg transition-all",
-                                                    stakeMode === "confidential" 
-                                                        ? "bg-emerald-500 text-slate-900 shadow-sm" 
-                                                        : "text-white/40 dark:text-slate-400 hover:text-white dark:hover:text-slate-600"
-                                                )}
-                                            >
-                                                Enclave
-                                            </button>
-                                        </div>
+                                        <p className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-widest text-white/60 dark:border-slate-200 dark:bg-slate-100/50 dark:text-slate-500">
+                                            Wallet ETH to Aave
+                                        </p>
                                         <div className="relative">
                                             <input
                                                 type="number"
@@ -277,28 +254,13 @@ export function StakingVaultCard() {
                                         </Button>
 
                                         {!isRevealed && (
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    className="flex-1 h-10 rounded-xl border-white/20 dark:border-slate-300 text-white/70 dark:text-slate-500 hover:bg-white/5 dark:hover:bg-slate-100 text-[10px] font-bold uppercase tracking-widest transition-all"
-                                                    onClick={() => {
-                                                        setStakeMode("wallet");
-                                                        setShowStakeInput(true);
-                                                    }}
-                                                >
-                                                    <Coins className="h-3 w-3 mr-2" /> Wallet
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    className="flex-1 h-10 rounded-xl border-white/20 dark:border-slate-300 text-white/70 dark:text-slate-500 hover:bg-white/5 dark:hover:bg-slate-100 text-[10px] font-bold uppercase tracking-widest transition-all"
-                                                    onClick={() => {
-                                                        setStakeMode("confidential");
-                                                        setShowStakeInput(true);
-                                                    }}
-                                                >
-                                                    <Sparkles className="h-3 w-3 mr-2 text-emerald-500" /> Enclave
-                                                </Button>
-                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                className="w-full h-10 rounded-xl border-white/20 dark:border-slate-300 text-white/70 dark:text-slate-500 hover:bg-white/5 dark:hover:bg-slate-100 text-[10px] font-bold uppercase tracking-widest transition-all"
+                                                onClick={() => setShowStakeInput(true)}
+                                            >
+                                                <Coins className="h-3 w-3 mr-2" /> Stake Wallet ETH
+                                            </Button>
                                         )}
                                     </div>
                                 )}

@@ -1,7 +1,14 @@
 import React from "react";
 import { Sidebar } from "./Sidebar";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import brandLogoUrl from "../../../logo/logo.png";
 import { cn } from "../../lib/utils";
+import {
+  dashboardMainInset,
+  dashboardMainInsetCompact,
+  dashboardSidebarOffsetClass,
+  dashboardSidebarWidthClass,
+} from "../../lib/dashboardLayout";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -10,6 +17,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   const { pathname } = useLocation();
+  const compactSponsorPage = role === "sponsor" && pathname.includes("/active-trials");
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -19,19 +27,54 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   }, [pathname]);
 
   return (
-    <div className={cn(
-      "flex min-h-screen relative overflow-hidden transition-colors duration-300",
-      role === "patient" ? "bg-slate-50 text-slate-900" : "bg-slate-50 text-slate-900"
-    )}>
-      <aside className={cn(
-        "sticky top-0 h-screen shrink-0 z-10 w-64 lg:w-72 hidden md:block border-r transition-colors duration-300",
-        role === "patient" ? "bg-slate-50 border-slate-200" : "bg-slate-50 border-slate-200"
-      )}>
+    <div
+      className={cn(
+        "relative h-[100dvh] max-h-[100dvh] w-full overflow-hidden transition-colors duration-300",
+        role === "patient" ? "bg-slate-50 text-slate-900" : "bg-slate-50 text-slate-900",
+      )}
+    >
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden md:flex flex-col border-r",
+          dashboardSidebarWidthClass,
+          role === "patient" ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50",
+        )}
+      >
         <Sidebar role={role} />
       </aside>
-      <div className="flex flex-1 flex-col overflow-hidden relative z-10">
-        <main ref={scrollRef} className="flex-1 overflow-y-auto p-6 md:p-8 lg:p-10 scrollbar-hide">
-          {children}
+
+      <div className={cn("flex h-full min-h-0 min-w-0 flex-col", dashboardSidebarOffsetClass)}>
+        <header className="md:hidden shrink-0 flex items-center gap-2.5 border-b border-slate-200 bg-white px-4 py-3">
+          <Link
+            to={role === "patient" ? "/patient/dashboard" : "/sponsor/dashboard"}
+            className="inline-flex items-center gap-2.5 min-w-0"
+          >
+            <img
+              src={brandLogoUrl}
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 rounded-lg object-contain"
+              aria-hidden
+            />
+            <span className="font-bold text-slate-900 leading-none">MedVault</span>
+            <span
+              className={cn(
+                "text-[10px] font-bold uppercase tracking-wider",
+                role === "patient" ? "text-teal-700/80" : "text-[#1D2634]",
+              )}
+            >
+              {role === "patient" ? "Patient" : "Sponsor"}
+            </span>
+          </Link>
+        </header>
+        <main
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
+        >
+          <div className={cn(compactSponsorPage ? dashboardMainInsetCompact : dashboardMainInset)}>
+            {children}
+          </div>
         </main>
       </div>
     </div>

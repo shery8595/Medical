@@ -31,30 +31,12 @@ export function handlePatientRegistered(event: PatientRegistered): void {
   patient.save();
 }
 
-export function handleAnonymousApplyStaged(event: AnonymousApplyStaged): void {
-  let trialId = event.params.trialId.toString();
-  let nullifier = event.params.nullifierHash.toString();
-  let applicationId = nullifier + "-" + trialId;
-
-  let trial = Trial.load(trialId);
-  if (trial == null) {
-    return;
-  }
-
-  let application = AnonymousSubmission.load(applicationId);
-  if (!application) {
-    application = new AnonymousSubmission(applicationId);
-    application.trial = trialId;
-    application.trialId = event.params.trialId;
-    application.nullifier = event.params.nullifierHash;
-    application.submittedAt = event.block.timestamp;
-    application.status = "Staged";
-    application.statusUpdatedAt = event.block.timestamp;
-  }
-
-  application.stagedAt = event.block.timestamp;
-  application.finalCt = event.params.finalCt;
-  application.save();
+/**
+ * Staging only runs FHE eligibility — sponsors must not see applicants until finalize
+ * (AnonymousApplication + AnonymousEncryptedPropensityCommitted).
+ */
+export function handleAnonymousApplyStaged(_event: AnonymousApplyStaged): void {
+  return;
 }
 
 export function handleAnonymousApplication(event: AnonymousApplication): void {
@@ -77,6 +59,7 @@ export function handleAnonymousApplication(event: AnonymousApplication): void {
     application.submittedAt = event.block.timestamp;
     application.status = "Pending";
     application.statusUpdatedAt = event.block.timestamp;
+    application.noirCertified = false;
     application.save();
     return;
   }

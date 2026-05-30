@@ -16,6 +16,7 @@ import { useWeb3 } from "../lib/Web3Context";
 import { cn } from "../lib/utils";
 import { Link } from "react-router-dom";
 import { SectionTopBar } from "../components/layout/SectionTopBar";
+import { PatientConnectPrompt } from "../components/dashboard/PatientConnectPrompt";
 import { formatPhaseBadge } from "../lib/trialDisplay";
 import type { Trial } from "../types";
 
@@ -27,7 +28,8 @@ const LOC_ALL = "all";
 
 export function PatientTrialsPage() {
   const { account } = useWeb3();
-  const { trials, loading } = useTrials(account || undefined);
+  const isConnected = Boolean(account);
+  const { trials, loading, refetch } = useTrials(account || undefined);
   const [activeTab, setActiveTab] = useState<TabType>("discover");
   const [searchQuery, setSearchQuery] = useState("");
   const [phaseFilter, setPhaseFilter] = useState(PHASE_ALL);
@@ -37,6 +39,10 @@ export function PatientTrialsPage() {
   const [visibleCount, setVisibleCount] = useState(8);
 
   const filteredByTab = useMemo(() => {
+    if (!isConnected) {
+      if (activeTab === "discover") return trials.filter((t) => !t.isExpired);
+      return [];
+    }
     switch (activeTab) {
       case "eligible":
         return trials.filter((t) => t.hasComputed && !t.isExpired);
@@ -45,7 +51,7 @@ export function PatientTrialsPage() {
       default:
         return trials.filter((t) => !t.isExpired);
     }
-  }, [trials, activeTab]);
+  }, [trials, activeTab, isConnected]);
 
   const phaseOptions = useMemo(() => {
     const set = new Set<string>();
@@ -315,6 +321,15 @@ export function PatientTrialsPage() {
             Loading trials…
           </p>
         </div>
+      ) : !isConnected && activeTab !== "discover" ? (
+        <PatientConnectPrompt
+          title={activeTab === "applied" ? "Connect to see applied trials" : "Connect to see eligible trials"}
+          description={
+            activeTab === "applied"
+              ? "Trials you have applied to appear here after you connect your wallet."
+              : "Encrypted eligibility matches for your vault appear here after you connect."
+          }
+        />
       ) : (
         <div className="space-y-10">
           <AnimatePresence mode="wait">
@@ -332,6 +347,7 @@ export function PatientTrialsPage() {
                   trial={trial}
                   index={i}
                   variant="discover"
+                  onApplySuccess={refetch}
                 />
               ))}
             </motion.div>

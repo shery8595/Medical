@@ -2,17 +2,31 @@
   "name": "medvault-fhevm",
   "version": "0.1.0",
   "private": true,
+  "overrides": {
+    "ox": "0.14.20",
+    "@aztec/bb.js": "5.0.0-nightly.20260324"
+  },
   "engines": {
     "node": ">=20",
     "npm": ">=7.0.0"
   },
+  "ts-node": {
+    "compilerOptions": {
+      "module": "commonjs",
+      "moduleResolution": "node"
+    }
+  },
   "dependencies": {
+    "@aztec/bb.js": "5.0.0-nightly.20260324",
     "@chainlink/contracts": "^1.5.0",
-    "@cofhe/sdk": "^0.5.1",
+    "@cofhe/sdk": "^0.5.2",
     "@fhenixprotocol/cofhe-contracts": "^0.1.0",
     "@fhevm/solidity": "^0.9.1",
-    "@noir-lang/backend_barretenberg": "0.36.0",
-    "@noir-lang/noir_js": "0.36.0",
+    "@headlessui/react": "^2.2.10",
+    "@heroicons/react": "^2.2.0",
+    "@noir-lang/acvm_js": "1.0.0-beta.21",
+    "@noir-lang/noir_js": "1.0.0-beta.21",
+    "@noir-lang/noirc_abi": "1.0.0-beta.21",
     "@privy-io/react-auth": "^3.22.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
@@ -22,7 +36,9 @@
     "@semaphore-protocol/identity": "^4.14.2",
     "@semaphore-protocol/proof": "^4.14.2",
     "@tailwindcss/typography": "^0.5.19",
+    "@tremor/react": "^3.18.7",
     "@types/three": "^0.183.1",
+    "@xyflow/react": "^12.10.2",
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
@@ -101,8 +117,25 @@
     "preview": "vite preview",
     "clean": "rimraf ./fhevmTemp ./artifacts ./cache ./coverage ./types ./coverage.json ./dist && npm run typechain",
     "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
-    "test": "hardhat test",
+    "test": "node scripts/hardhat-test-suite.mjs default",
+    "test:unit": "node scripts/hardhat-test-suite.mjs unit",
+    "test:integration": "node scripts/hardhat-test-suite.mjs integration",
+    "test:crypto": "node scripts/hardhat-test-suite.mjs crypto",
+    "test:honk": "node scripts/hardhat-test-suite.mjs honk",
+    "test:coverage": "hardhat coverage",
     "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
-    "build:circuit": "node scripts/compile-circuit.js"
+    "build:circuit": "node scripts/compile-circuit.js",
+    "generate:honk-verifier": "node scripts/generate-honk-verifier.js",
+    "sync-abis": "node scripts/sync-abis.js",
+    "deploy:vault:arb-sepolia": "hardhat run scripts/redeploy-screening-vault.ts --network arbitrumSepolia",
+    "deploy:wiring:arb-sepolia": "hardhat run scripts/finish-wiring.ts --network arbitrumSepolia",
+    "deploy:check-wiring:arb-sepolia": "hardhat run scripts/check-wiring-status.ts --network arbitrumSepolia",
+    "deploy:chainlink-forwarder:arb-sepolia": "hardhat run scripts/set-chainlink-forwarder.ts --network arbitrumSepolia",
+    "deploy:subgraph:sync": "node scripts/update-subgraph-yaml.js && npm run subgraph:deploy",
+    "subgraph:set-start-near-head": "node scripts/set-subgraph-start-near-head.mjs",
+    "subgraph:deploy:near-head": "node scripts/set-subgraph-start-near-head.mjs && node scripts/update-subgraph-yaml.js && node scripts/redeploy-subgraph.js",
+    "subgraph:prepare": "npm run sync-abis && cd subgraph && npm run codegen && npm run build",
+    "subgraph:deploy": "node scripts/redeploy-subgraph.js 0.1.2",
+    "subgraph:deploy:studio": "cd subgraph && npm run deploy:studio"
   }
 }

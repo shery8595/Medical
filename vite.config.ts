@@ -30,6 +30,8 @@ export default defineConfig(({ mode }) => {
       dedupe: ['viem', 'ox', 'ethers'],
       alias: {
         '@': path.resolve(__dirname, './src'),
+        // Noir certify: use bb.js browser bundle so barretenberg .wasm URLs resolve correctly
+        '@aztec/bb.js': path.resolve(__dirname, 'node_modules/@aztec/bb.js/dest/browser/index.js'),
         'tfhe/tfhe_bg.wasm': path.resolve(__dirname, 'public/tfhe_bg.wasm'),
         'tkms/kms_lib_bg.wasm': path.resolve(__dirname, 'public/kms_lib_bg.wasm'),
         'fetch-retry': path.resolve(__dirname, 'node_modules/fetch-retry/index.js'),
@@ -42,8 +44,24 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ['keccak', 'buffer', 'fetch-retry', 'stream-browserify', 'crypto-browserify'], // Update to include stream-browserify and crypto-browserify
-      exclude: ['@fhenix-fhe/relayer-sdk', 'tfhe', 'tkms'],
+      include: [
+        'keccak',
+        'buffer',
+        'fetch-retry',
+        'stream-browserify',
+        'crypto-browserify',
+        '@xyflow/react',
+        '@xyflow/system',
+      ],
+      exclude: [
+        '@fhenix-fhe/relayer-sdk',
+        'tfhe',
+        'tkms',
+        '@aztec/bb.js',
+        '@noir-lang/noir_js',
+        '@noir-lang/acvm_js',
+        '@noir-lang/noirc_abi',
+      ],
       esbuildOptions: {
         target: 'esnext',
       },

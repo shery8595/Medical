@@ -16,9 +16,8 @@ import {
 import { useAuditLogs } from "../hooks/useAuditLogs";
 import { useWeb3 } from "../lib/Web3Context";
 import { Link } from "react-router-dom";
-
-const cardShell =
-  "rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_12px_-2px_rgba(15,23,42,0.05)]";
+import { sponsorCardHeader, sponsorCardShell } from "../lib/sponsorUi";
+import { cn } from "../lib/utils";
 
 export function SponsorAuditLogPage() {
   const { logs, loading, error } = useAuditLogs();
@@ -92,7 +91,8 @@ export function SponsorAuditLogPage() {
             Regulatory audit trail
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-            Immutable-style event log for consents, eligibility, and access actions. Filter and export for reporting.
+            On-chain DataAccessLog entries for your protocols, merged with any indexed subgraph events. Filter and
+            export for reporting.
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1 text-xs font-semibold">
             <Link
@@ -110,8 +110,8 @@ export function SponsorAuditLogPage() {
         </div>
       </header>
 
-      <Card className={`${cardShell} overflow-hidden border-0`}>
-        <CardHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-5 md:px-6">
+      <Card className={cn(sponsorCardShell, "overflow-hidden border-0")}>
+        <CardHeader className={cn(sponsorCardHeader, "px-5 py-5 md:px-6")}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <CardTitle className="font-display flex items-center gap-2 text-base font-semibold text-slate-900">
               <FileText className="h-5 w-5 text-slate-400" strokeWidth={2} />
@@ -196,8 +196,8 @@ export function SponsorAuditLogPage() {
 
                 {!loading &&
                   !error &&
-                  filteredLogs.map((log, i) => (
-                    <tr key={`${log.patientHash}-${i}`} className="transition-colors hover:bg-slate-50/90">
+                  filteredLogs.map((log) => (
+                    <tr key={log.id} className="transition-colors hover:bg-slate-50/90">
                       <td className="px-5 py-4 md:px-6">
                         <div className="flex items-center gap-2">
                           <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -228,7 +228,10 @@ export function SponsorAuditLogPage() {
                         <div className="flex items-center gap-2">
                           <Activity className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                           <span className="font-mono text-xs text-slate-600">
-                            {log.performer === account ? "You (this wallet)" : formatHash(log.performer)}
+                            {account &&
+                            log.performer.toLowerCase() === account.toLowerCase()
+                              ? "You (this wallet)"
+                              : formatHash(log.performer)}
                           </span>
                         </div>
                       </td>

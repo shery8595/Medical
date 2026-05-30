@@ -1,12 +1,10 @@
 {
-    "AnonymousPatientRegistry": 264191794,
-    "SponsorRegistry": 264191813,
-    "TrialManager": 264191835,
-    "ConsentManager": 264191851,
-    "DataAccessLog": 264191871,
-    "EligibilityEngine": 264191895,
-    "SponsorIncentiveVault": 264191993,
-    "TrialMilestoneManager": 264192010,
-    "StakingManager": 264192041,
-    "MedVaultRegistry": 264192054
+    "AnonymousPatientRegistry": 272205848,
+    "SponsorRegistry": 272205848,
+    "TrialManager": 272205848,
+    "ConsentManager": 272205848,
+    "EligibilityEngine": 272205848,
+    "SponsorIncentiveVault": 272205848,
+    "TrialMilestoneManager": 272205848,
+    "MedVaultRegistry": 272205848
 }
