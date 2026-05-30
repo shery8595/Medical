@@ -4,8 +4,9 @@
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-191%2B%20Cases-emerald?style=for-the-badge)](docs/TEST_MATRIX.md)
 [![Network](https://img.shields.io/badge/Network-Arbitrum%20Sepolia-2D374B?style=for-the-badge)](https://sepolia.arbiscan.io/)
+[![Chainlink](https://img.shields.io/badge/Automation-Chainlink-375BD2?style=for-the-badge)](https://chain.link/automation)
 
-**MedVault** is built around **[Fhenix CoFHE](https://fhenix.io)** — confidential smart contracts on **Arbitrum Sepolia** where trial eligibility, consent, and incentives run on **encrypted health data**, not plaintext. Semaphore and Noir add anonymous identity and ZK binding; **Fhenix is the engine that makes private matching possible.**
+**MedVault** is built around **[Fhenix CoFHE](https://fhenix.io)** — confidential smart contracts on **Arbitrum Sepolia** where trial eligibility, consent, and incentives run on **encrypted health data**, not plaintext. **[Chainlink Automation](https://chain.link/automation)** closes expired protocols on a schedule (distribute incentive pools + deactivate trials). Semaphore and Noir add anonymous identity and ZK binding.
 
 **Live app:** deploy via [Vercel](https://vercel.com) (see [Deployment](#deployment)).  
 **Repo:** [github.com/shery8595/Med-Vault](https://github.com/shery8595/Med-Vault)
@@ -25,10 +26,11 @@
 9. [Testing](#testing)
 10. [Noir circuit & Honk verifier](#noir-circuit--honk-verifier)
 11. [Semaphore (anonymous trials)](#semaphore-anonymous-trials)
-12. [The Graph subgraph](#the-graph-subgraph)
-13. [Gasless relayer](#gasless-relayer)
-14. [Deployment](#deployment)
-15. [Documentation](#documentation)
+12. [Chainlink Automation](#chainlink-automation)
+13. [The Graph subgraph](#the-graph-subgraph)
+14. [Gasless relayer](#gasless-relayer)
+15. [Deployment](#deployment)
+16. [Documentation](#documentation)
 
 ---
 
@@ -207,7 +209,7 @@ graph TD
 
 **Indexing:** The Graph (`subgraph/`) for trials, applications, consents, anonymous submissions, incentive pools — not for all audit data until `DataAccessLog` is deployed to Studio.
 
-**Automation:** Chainlink Automation → `MedVaultAutomation` for milestone upkeep (not indexed by subgraph).
+**Automation:** [Chainlink Automation](#chainlink-automation) finalizes expired trials via `MedVaultAutomation` (not indexed by subgraph).
 
 ---
 
@@ -225,7 +227,7 @@ Deployed addresses: `src/lib/contracts/addresses.json` (`arbSepolia`).
 | `SponsorRegistry` | Sponsor verification |
 | `SponsorIncentiveVault` | Trial incentive pools & payouts |
 | `TrialMilestoneManager` | Milestone weights & completion |
-| `MedVaultAutomation` | Chainlink `performUpkeep` |
+| `MedVaultAutomation` | Chainlink Automation — trial expiry finalization |
 | `DataAccessLog` | Immutable audit entries (`ActionLogged` / `DetailedActionLogged`) |
 | `HonkVerifier` | Noir Honk proof verification |
 | `ConfidentialETH` / `StakingManager` | Encrypted balances & Aave yield (where enabled) |
@@ -395,6 +397,71 @@ Tests: `test/integration/medvault-registry.test.ts`, `test/integration/eligibili
 
 ---
 
+## Chainlink Automation
+
+MedVault uses **[Chainlink Automation](https://chain.link/automation)** on **Arbitrum Sepolia** so expired clinical protocols finalize **without a sponsor manually clicking “distribute & close.”** This is separate from FHE matching (CoFHE) and from **milestone** payouts (`TrialMilestoneManager`), which sponsors trigger during an active trial.
+
+### What `MedVaultAutomation.sol` does
+
+| Step | On-chain action |
+|------|-----------------|
+| **`checkUpkeep`** | Scans **active** trial IDs (tracked when `TrialManager` creates/deactivates trials). Returns `true` when `block.timestamp >= trial.endTime` and the trial is not yet finalized. |
+| **`performUpkeep`** (task type `1`) | Marks trial finalized → calls `SponsorIncentiveVault.distribute(trialId)` → calls `TrialManager.deactivateTrial(trialId)`. |
+
+```mermaid
+sequenceDiagram
+    participant CL as Chainlink Automation
+    participant MVA as MedVaultAutomation
+    participant TM as TrialManager
+    participant SIV as SponsorIncentiveVault
+
+    loop Each upkeep round
+        CL->>MVA: checkUpkeep()
+        alt Trial past endTime and not finalized
+            CL->>MVA: performUpkeep(type=1, trialId)
+            MVA->>SIV: distribute(trialId)
+            MVA->>TM: deactivateTrial(trialId)
+        end
+    end
+```
+
+### Security model
+
+- **`onlyForwarder`** — `performUpkeep` accepts calls only from the configured **Chainlink forwarder** (or `owner` for testing).
+- **`setChainlinkForwarder`** — Owner sets the forwarder address from the Chainlink Automation UI after registering upkeep.
+- **Two-step ownership** — Same pattern as other admin contracts (`proposeOwnership` / `acceptOwnership`).
+
+### Related Chainlink usage
+
+| Component | Chainlink feature |
+|-----------|-------------------|
+| `MedVaultAutomation` | **Automation** — expiry finalization |
+| `TrialManager` | **Price feeds** (optional) — ETH/USD style compensation helpers where configured |
+
+### Operator setup (testnet)
+
+1. Deploy stack (`scripts/deploy.ts`, `finish-wiring.ts`) so `MedVaultAutomation` points at `TrialManager` + `SponsorIncentiveVault`.
+2. Register an upkeep in the [Chainlink Automation app](https://automation.chain.link/) for `MedVaultAutomation` on Arbitrum Sepolia (`checkUpkeep` / `performUpkeep`).
+3. Set the forwarder on-chain (required — upkeep simulations revert until this is set):
+
+```bash
+CHAINLINK_FORWARDER=0xYourForwarderFromChainlinkUI \
+  npm run deploy:chainlink-forwarder:arb-sepolia
+```
+
+4. Diagnose wiring:
+
+```bash
+npx hardhat run scripts/diagnose-automation-upkeep.ts --network arbitrumSepolia
+```
+
+### Tests & docs
+
+- Hardhat: `test/unit/medvault-automation.test.ts` (case IDs `MVA-01`–`MVA-06` in [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md))
+- In-app: **Docs → Chainlink Automation** (`/docs/chainlink-automation`)
+
+---
+
 ## The Graph subgraph
 
 - **Schema:** `subgraph/schema.graphql` — `Trial`, `Application`, `Consent`, `AnonymousSubmission`, `IncentivePool`, `AuditLog`, …
@@ -462,6 +529,16 @@ npx hardhat run scripts/finish-wiring.ts --network arbitrumSepolia
 npm run deploy:check-wiring:arb-sepolia
 ```
 
+### Chainlink Automation
+
+After deploy, register upkeep in the Chainlink UI and set the forwarder:
+
+```bash
+CHAINLINK_FORWARDER=0x... npm run deploy:chainlink-forwarder:arb-sepolia
+```
+
+See [Chainlink Automation](#chainlink-automation) and `scripts/diagnose-automation-upkeep.ts`.
+
 ### Subgraph
 
 ```bash
@@ -475,7 +552,7 @@ npm run subgraph:deploy:near-head -- <version>
 
 | Resource | Location |
 |----------|----------|
-| In-app docs (architecture, **Fhenix & CoFHE**, FHE primitives, Semaphore, Noir, compliance) | `/docs` in the dApp |
+| In-app docs (architecture, **Fhenix & CoFHE**, FHE primitives, Semaphore, Noir, **Chainlink Automation**, compliance) | `/docs` in the dApp |
 | Testing guide | [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) |
 | Test matrix (case IDs) | [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md) |
 | Subgraph sync / versions | [docs/SUBGRAPH_SYNC.md](docs/SUBGRAPH_SYNC.md) |
@@ -493,7 +570,8 @@ npm run subgraph:deploy:near-head -- <version>
 | Web3 | ethers v6, viem (via Privy), TypeChain |
 | **Fhenix CoFHE** | **`@cofhe/sdk`, `@fhenixprotocol/cofhe-contracts`, `@cofhe/hardhat-plugin`** |
 | ZK | Noir 1.0.0-beta.21, `@aztec/bb.js`, Semaphore 4.14 |
-| Contracts | Solidity 0.8.27, Hardhat, Chainlink Automation |
+| **Chainlink** | **Automation** (`MedVaultAutomation`), optional **price feeds** (`TrialManager`) |
+| Contracts | Solidity 0.8.27, Hardhat, `@chainlink/contracts` |
 | Indexing | The Graph (Apollo-style hooks via `useSubgraph`) |
 | Hosting | Vercel (static + API rewrites) |
 
@@ -506,5 +584,5 @@ BSD-3-Clause-Clear — see [LICENSE](LICENSE).
 ---
 
 <div align="center">
-Powered by Fhenix CoFHE — confidential clinical research on Arbitrum Sepolia
+Powered by Fhenix CoFHE · Chainlink Automation — confidential clinical research on Arbitrum Sepolia
 </div>
