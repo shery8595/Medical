@@ -1437,7 +1437,7 @@ export function LandingPage() {
       </section>
 
       {/* ── Infrastructure ────────────────────────────────────────────────── */}
-      <section className="bg-white px-4 py-20 sm:px-8" id="for-doctors">
+      <section className="bg-white px-4 py-20 sm:px-8" id="for-sponsors">
         <div className="mx-auto max-w-screen-xl">
           <motion.div
             className="max-w-3xl"

@@ -49,7 +49,7 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
               Privacy
             </a>
             <Link to="/sponsor/dashboard" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
-              For Doctors
+              For Sponsors
             </Link>
             <Link to="/patient/dashboard" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
               For Patients
