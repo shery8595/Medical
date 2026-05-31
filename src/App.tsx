@@ -27,6 +27,7 @@ import { SponsorAuditLogPage } from './pages/SponsorAuditLogPage';
 import { ConsentLogPage } from "./pages/ConsentLogPage";
 import { TechnologyPage } from "./pages/TechnologyPage";
 import { SecurityPage } from "./pages/SecurityPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 import AdminSponsorsPage from "./pages/AdminSponsorsPage";
 import { SponsorGuard } from "./components/layout/SponsorGuard";
 import { DocsLayout } from "./pages/docs/DocsLayout";
@@ -144,6 +145,14 @@ function MedVaultRoutes() {
               element={
                 <LandingLayout>
                   <SecurityPage />
+                </LandingLayout>
+              }
+            />
+            <Route
+              path="/privacy"
+              element={
+                <LandingLayout>
+                  <PrivacyPage />
                 </LandingLayout>
               }
             />

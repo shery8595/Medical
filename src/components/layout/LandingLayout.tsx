@@ -45,9 +45,9 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
             <Link to="/docs" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
               How it Works
             </Link>
-            <a href="#privacy" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
+            <Link to="/privacy" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
               Privacy
-            </a>
+            </Link>
             <Link to="/sponsor/dashboard" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
               For Sponsors
             </Link>
@@ -86,6 +86,7 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-6 text-sm text-[#5a6a80]">
             <Link to="/docs" className="hover:text-[#00685f]">How it works</Link>
             <Link to="/technology" className="hover:text-[#00685f]">Technology</Link>
+            <Link to="/privacy" className="hover:text-[#00685f]">Privacy</Link>
             <Link to="/security" className="hover:text-[#00685f]">Security</Link>
             <Link to="/docs" className="hover:text-[#00685f]">Docs</Link>
           </div>
