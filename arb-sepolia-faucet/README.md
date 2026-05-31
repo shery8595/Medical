@@ -40,8 +40,9 @@ npm start
 | `ARBITRUM_SEPOLIA_RPC_URL` | No | `https://sepolia-rollup.arbitrum.io/rpc` (must resolve to **chain 421614**) |
 | `PORT` | No | `8787` |
 | `DRIP_ETH` | No | `0.0004` |
-| `COOLDOWN_MS` | No | `86400000` (24h per recipient address **and** per client IP) |
-| `FAUCET_CORS_ORIGIN` | No | `*` (set to your frontend origin in production) |
+| `COOLDOWN_MS` | No | `86400000` (24h window per recipient address **and** per client IP) |
+| `MAX_DRIPS_PER_WINDOW` | No | `3` (drips allowed per address/IP within each cooldown window) |
+| `FAUCET_CORS_ORIGIN` | No | `*` (set to your frontend origin in production, e.g. `https://med-vault.xyz`) |
 
 ## Frontend
 
@@ -60,8 +61,9 @@ Cool-downs are stored **in memory** and reset on process restart.
 1. New project from this repo.
 2. Set `FAUCET_PRIVATE_KEY` in the platform’s secrets (wallet funded on **Arbitrum Sepolia**).
 3. If you set `ARBITRUM_SEPOLIA_RPC_URL`, use an **Arbitrum Sepolia** endpoint only — or remove it to use the default public RPC.
-4. Optional: set `FAUCET_CORS_ORIGIN` to your production site (e.g. `https://med-vault.xyz`).
-5. Start command: `npm start` (uses `PORT` from the host if provided).
+4. Set `FAUCET_CORS_ORIGIN` to your production site origin (e.g. `https://med-vault.xyz` — scheme + host, no path). Use `*` only for local testing.
+5. Optional: `MAX_DRIPS_PER_WINDOW=3` (default) lets each wallet drip up to 3 times per `COOLDOWN_MS` window.
+6. Start command: `npm start` (uses `PORT` from the host if provided).
 
 ## License
 
