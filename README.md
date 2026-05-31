@@ -458,7 +458,7 @@ npx hardhat run scripts/diagnose-automation-upkeep.ts --network arbitrumSepolia
 ### Tests & docs
 
 - Hardhat: `test/unit/medvault-automation.test.ts` (case IDs `MVA-01`–`MVA-06` in [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md))
-- In-app: **Docs → Chainlink Automation** (`/docs/chainlink-automation`)
+- In-app: **Docs → Chainlink Automation** (`/docs/automation`)
 
 ---
 
@@ -492,10 +492,10 @@ VITE_SUBGRAPH_URL=https://api.studio.thegraph.com/query/<id>/medvault-final/<ver
 
 Optional service for **`finalizeAnonymousApplication`** when the patient should not pay gas.
 
-    ```bash
+```bash
 cd relayer
 cp .env.example .env
-    npm install
+npm install
 node server.js
 ```
 
@@ -543,7 +543,7 @@ See [Chainlink Automation](#chainlink-automation) and `scripts/diagnose-automati
 
 ### Subgraph
 
-    ```bash
+```bash
 npm run subgraph:deploy:near-head -- <version>
 # Update VITE_SUBGRAPH_URL in Vercel env to the new Studio version URL
 ```
