@@ -25,6 +25,7 @@ import {
   parseIdentityBackupPayload,
   restoreIdentityFromBackup,
 } from "../lib/semaphore";
+import { WalletSendCard } from "../components/identity/WalletSendCard";
 
 const NULLIFIERS_KEY = "medvault_anon_nullifiers";
 
@@ -272,6 +273,10 @@ export function PatientIdentityPage() {
               )}
             </div>
           </motion.section>
+
+          <motion.div {...fadeUp(0.08)}>
+            <WalletSendCard />
+          </motion.div>
 
           <motion.section
             {...fadeUp(0.1)}
