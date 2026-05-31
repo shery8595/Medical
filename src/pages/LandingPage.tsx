@@ -1344,7 +1344,7 @@ export function LandingPage() {
               From vault to trial — with proofs, not exposure
             </h2>
             <Link
-              to="/docs"
+              to="/how-it-works"
               className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#00685f]/30 bg-[#00685f]/5 px-5 py-2.5 text-sm font-semibold text-[#00685f] transition hover:bg-[#00685f]/10"
             >
               Explore the full walkthrough

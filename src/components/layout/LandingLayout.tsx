@@ -42,7 +42,7 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
             <span>MedVault</span>
           </Link>
           <div className="hidden items-center gap-8 md:flex">
-            <Link to="/docs" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
+            <Link to="/how-it-works" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
               How it Works
             </Link>
             <Link to="/privacy" className="text-[#3d4947] transition-colors hover:text-[#00685f]">
@@ -84,7 +84,7 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
             <span className="font-semibold text-[#00685f]">MedVault</span> — encrypted clinical trial matching.
           </p>
           <div className="flex items-center gap-6 text-sm text-[#5a6a80]">
-            <Link to="/docs" className="hover:text-[#00685f]">How it works</Link>
+            <Link to="/how-it-works" className="hover:text-[#00685f]">How it works</Link>
             <Link to="/technology" className="hover:text-[#00685f]">Technology</Link>
             <Link to="/privacy" className="hover:text-[#00685f]">Privacy</Link>
             <Link to="/security" className="hover:text-[#00685f]">Security</Link>
