@@ -1,0 +1,23 @@
+{
+  "name": "@medvault/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "medvault-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/http.ts --format esm --clean",
+    "dev": "tsup src/index.ts --format esm --watch --onSuccess \"node dist/index.js\""
+  },
+  "dependencies": {
+    "@medvault/core": "*",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "ethers": "6.16.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
+  }
+}

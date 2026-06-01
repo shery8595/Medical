@@ -99,6 +99,20 @@ const faqs: { q: string; a: ReactNode }[] = [
         ),
     },
     {
+        q: "What is the MedVault MCP server?",
+        a: (
+            <>
+                A <strong>local</strong> Model Context Protocol server in <code>mcp-server/</code> for developers and sponsors
+                to query trials, matches, and audit data and run sponsor transactions from AI tools (Cursor, Codex, etc.). It
+                is <strong>not hosted</strong> on Vercel and does not replace the browser app. Setup:{" "}
+                <Link to="/docs/mcp" className="text-[#00685f] font-semibold hover:underline">
+                    MCP server docs
+                </Link>
+                .
+            </>
+        ),
+    },
+    {
         q: "What is the ephemeral wallet?",
         a: (
             <>

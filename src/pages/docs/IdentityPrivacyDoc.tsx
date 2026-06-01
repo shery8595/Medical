@@ -11,11 +11,12 @@ export function IdentityPrivacyDoc() {
             <Prose className="max-w-none">
                 <DocsPageHeaderForRoute />
 
-                <div className="not-prose grid sm:grid-cols-3 gap-3 my-6">
+                <div className="not-prose grid sm:grid-cols-2 lg:grid-cols-4 gap-3 my-6">
                     {[
                         { href: "/docs/fhenix-cofhe", title: "Fhenix & CoFHE", desc: "SDK, coprocessor, ACL, proof accounts" },
                         { href: "/docs/semaphore", title: "Semaphore", desc: "Anonymous apply, nullifiers, ephemeral wallet" },
                         { href: "/docs/noir", title: "Noir & Honk", desc: "Circuit, browser prove, on-chain verify" },
+                        { href: "/docs/mcp", title: "MCP server", desc: "Local AI tools for sponsors & devs (Cursor, Codex, …)" },
                     ].map((card) => (
                         <Link
                             key={card.href}

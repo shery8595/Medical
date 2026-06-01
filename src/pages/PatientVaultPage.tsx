@@ -41,7 +41,14 @@ const fadeIn = (delay = 0) => ({
 export function PatientVaultPage() {
   const { account, provider, signer, isFHEReady, connect, isConnecting, error: connectError, chainId } = useWeb3();
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const { profile, loading, hasProfile, error: profileError, refetch: refetchPatient } = usePatientProfile(account || undefined);
+  const {
+    profile,
+    loading,
+    hasProfile,
+    hasProfileFromGraph,
+    error: profileError,
+    refetch: refetchPatient,
+  } = usePatientProfile(account || undefined);
   const [fhirPrefill, setFhirPrefill] = useState<FhirMappedProfile | null>(null);
   const [fhirIssues, setFhirIssues] = useState<FhirImportIssue[]>([]);
   const fhirInputRef = useRef<HTMLInputElement>(null);
@@ -80,13 +87,13 @@ export function PatientVaultPage() {
 
   // Subgraph often lags the confirmed registerPatient tx; poll briefly while on-chain says "member" but Patient entity is missing.
   useEffect(() => {
-    if (!account || onChainRegistered !== true || hasProfile || loading) return;
+    if (!account || onChainRegistered !== true || hasProfileFromGraph || loading) return;
     let cancelled = false;
     let n = 0;
     console.debug("[PatientVault] starting subgraph polling for patient profile", {
       account,
       onChainRegistered,
-      hasProfile,
+      hasProfileFromGraph,
     });
     const tick = async () => {
       if (cancelled || n >= 30) return;
@@ -118,7 +125,7 @@ export function PatientVaultPage() {
       window.clearTimeout(id);
       console.debug("[PatientVault] stopped subgraph polling loop");
     };
-  }, [account, onChainRegistered, hasProfile, loading, refetchPatient]);
+  }, [account, onChainRegistered, hasProfileFromGraph, loading, refetchPatient]);
 
   const openManualUpload = () => {
     setUploadNonce((n) => n + 1);
@@ -284,7 +291,7 @@ export function PatientVaultPage() {
           <div className="col-span-full h-64 flex items-center justify-center">
             <Sparkles className="h-8 w-8 text-teal-600 animate-pulse" />
           </div>
-        ) : isRegistered && hasProfile ? (
+        ) : profile ? (
           <motion.div {...fadeUp(0.2)}>
             <VaultCard
               signer={signer}
@@ -296,11 +303,11 @@ export function PatientVaultPage() {
               age: 0,
               hasDiabetes: false,
               hbLevel: 0,
-              timestamp: new Date(parseInt(profile.profileUpdatedAt) * 1000).toLocaleString(),
+              timestamp: new Date(parseInt(profile.profileUpdatedAt, 10) * 1000).toLocaleString(),
               txHash: profile.profileTxHash
             }} />
           </motion.div>
-        ) : onChainRegistered === true && !hasProfile ? (
+        ) : isRegistered && !profile ? (
           /* On-chain Semaphore member via MedVaultRegistry, but Patient(wallet) missing in this subgraph deployment */
           <motion.div
             {...fadeUp(0.2)}
@@ -368,7 +375,7 @@ export function PatientVaultPage() {
               <Plus className="h-8 w-8" />
             </div>
             <div className="text-center">
-              <p className="font-bold text-slate-900 mb-1">{hasProfile ? "Add Additional Records" : "Upload First Record"}</p>
+              <p className="font-bold text-slate-900 mb-1">{profile ? "Add Additional Records" : "Upload First Record"}</p>
               <p className="text-xs text-slate-400 font-medium">Self-reported metrics, encrypted on your device</p>
             </div>
           </motion.button>

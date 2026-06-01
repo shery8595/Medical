@@ -1,8 +1,11 @@
 /** Fixed dashboard nav sidebar width (280px − 12% ≈ 246px). */
 export const DASHBOARD_SIDEBAR_WIDTH_PX = 246;
+export const DASHBOARD_SIDEBAR_COLLAPSED_WIDTH_PX = 72;
 
 export const dashboardSidebarWidthClass = "w-[246px]";
+export const dashboardSidebarCollapsedWidthClass = "w-[72px]";
 export const dashboardSidebarOffsetClass = "md:pl-[246px]";
+export const dashboardSidebarCollapsedOffsetClass = "md:pl-[72px]";
 
 /** Main content inset — minimal left gutter after sidebar, comfortable right padding. */
 export const dashboardMainInset =

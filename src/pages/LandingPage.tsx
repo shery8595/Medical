@@ -34,6 +34,8 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { McpLandingSection } from "../components/landing/McpLandingSection";
+import { LandingClosingSection } from "../components/landing/LandingClosingSection";
 
 /* ─── shared animation config ─────────────────────────────────────────────── */
 
@@ -1422,6 +1424,8 @@ export function LandingPage() {
 
       <PoweredByFhenixSection />
 
+      <McpLandingSection />
+
       {/* ── Stats — hairline-grid strip ───────────────────────────────────── */}
       <section className="border-y border-[#bcc9c6]/40 bg-[#f7f9fb] px-4 sm:px-8">
         <div className="mx-auto max-w-screen-lg">
@@ -1680,6 +1684,8 @@ export function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      <LandingClosingSection />
 
     </div>
   );

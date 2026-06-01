@@ -21,6 +21,7 @@ import {
     ScrollText,
     Fingerprint,
     Bot,
+    Plug,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -51,6 +52,9 @@ const HREF_ICONS: Record<string, LucideIcon> = {
     "/docs/testing/infrastructure": FlaskConical,
     "/docs/testing/ci": FlaskConical,
     "/docs/deployment": Terminal,
+    "/docs/mcp": Plug,
+    "/docs/mcp/setup": Terminal,
+    "/docs/mcp/tools": Bot,
     "/docs/changelog": ScrollText,
     "/docs/security-model": Shield,
     "/docs/compliance": Scale,

@@ -12,6 +12,12 @@ export const APP_PNG_PATHS = [
   "/images/analytics_component.png",
   "/images/audit_component.png",
   "/assets/images/medvault_fhe_hero.png",
+  "/images/cursor_logo.png",
+  "/images/codex%20logo.jpeg",
+  "/images/claude%20logo.png",
+  "/images/chat%20gpt%20lgo.png",
+  "/images/antigravity_logo.jpeg",
+  "/images/open%20claw%20logo.png",
 ] as const;
 
 const BUNDLED_IMAGE_URLS = [brandLogoUrl] as const;

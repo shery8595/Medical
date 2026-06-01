@@ -12,6 +12,7 @@ export type DocsTabId =
     | "semaphore"
     | "noir"
     | "clients"
+    | "mcp"
     | "operations"
     | "testing"
     | "security";
@@ -52,6 +53,11 @@ export const DOCS_TABS: DocsTab[] = [
         id: "clients",
         label: "Clients & indexing",
         subtitle: "Encryption in the browser, subgraph, frontend structure, and identity tooling.",
+    },
+    {
+        id: "mcp",
+        label: "MCP",
+        subtitle: "Local Model Context Protocol server for AI assistants: setup, tools, and sponsor workflows.",
     },
     {
         id: "operations",
@@ -322,6 +328,63 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
             "Deploying contracts, subgraph, and production frontend at med-vault.xyz (Vercel + relayer CORS).",
     },
     {
+        title: "Overview",
+        href: "/docs/mcp",
+        tabId: "mcp",
+        section: "MCP server",
+        keywords: [
+            "mcp",
+            "model context protocol",
+            "overview",
+            "medvault",
+            "ai",
+            "agent",
+            "local",
+        ],
+        pageTitle: "MCP server for developers & sponsors",
+        pageDescription:
+            "Local Model Context Protocol bridge: read trials/matches/audit data and sponsor writes — no production hosting.",
+    },
+    {
+        title: "Setup & clients",
+        href: "/docs/mcp/setup",
+        tabId: "mcp",
+        section: "MCP server",
+        keywords: [
+            "cursor",
+            "codex",
+            "claude",
+            "chatgpt",
+            "antigravity",
+            "openclaw",
+            "env",
+            "config",
+            "stdio",
+            "http",
+            "export",
+        ],
+        pageTitle: "MCP setup & AI clients",
+        pageDescription:
+            "Build the server, set environment variables, and connect Cursor, Codex, Claude Code, ChatGPT, Antigravity, and OpenClaw.",
+    },
+    {
+        title: "Tool reference",
+        href: "/docs/mcp/tools",
+        tabId: "mcp",
+        section: "Reference",
+        keywords: [
+            "tools",
+            "medvault_get_config",
+            "medvault_create_trial",
+            "subgraph",
+            "sponsor",
+            "write",
+            "read",
+        ],
+        pageTitle: "MCP tool reference",
+        pageDescription: "All medvault_* read and sponsor write tools exposed by the local MCP server (v1).",
+    },
+    {
         title: "Changelog",
         href: "/docs/changelog",
         tabId: "operations",
@@ -375,6 +438,9 @@ export function getTabForPath(pathname: string): DocsTabId {
     }
     if (pathname.startsWith("/docs/noir")) {
         return "noir";
+    }
+    if (pathname.startsWith("/docs/mcp")) {
+        return "mcp";
     }
     return pathToTab.get(pathname) ?? DEFAULT_TAB;
 }

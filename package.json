@@ -2,6 +2,10 @@
   "name": "medvault-fhevm",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "mcp-server"
+  ],
   "overrides": {
     "ox": "0.14.20",
     "@aztec/bb.js": "5.0.0-nightly.20260324",
@@ -140,6 +144,11 @@
     "subgraph:deploy:near-head": "node scripts/set-subgraph-start-near-head.mjs && node scripts/update-subgraph-yaml.js && node scripts/redeploy-subgraph.js",
     "subgraph:prepare": "npm run sync-abis && cd subgraph && npm run codegen && npm run build",
     "subgraph:deploy": "node scripts/redeploy-subgraph.js 0.1.2",
-    "subgraph:deploy:studio": "cd subgraph && npm run deploy:studio"
+    "subgraph:deploy:studio": "cd subgraph && npm run deploy:studio",
+    "mcp:build": "npm run build -w @medvault/core && npm run build -w @medvault/mcp-server",
+    "mcp:dev": "npm run dev -w @medvault/mcp-server",
+    "mcp:export-config": "node mcp-server/scripts/export-mcp-config.mjs --client all",
+    "mcp:http": "node mcp-server/dist/http.js",
+    "mcp:smoke": "npm run mcp:build && node mcp-server/scripts/smoke-test.mjs"
   }
 }

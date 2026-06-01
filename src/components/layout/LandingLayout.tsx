@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { motion, useReducedMotion, useScroll } from "framer-motion";
 import brandLogoUrl from "../../../logo/logo.png";
 const walletIconUrl = "/images/icon-wallet.svg";
@@ -27,6 +27,8 @@ function LandingScrollProgress() {
 }
 
 export function LandingLayout({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const showCompactFooter = pathname !== "/";
   const reduce = useReducedMotion();
   const footerVariants = reduce
     ? { hidden: { opacity: 0 }, visible: { opacity: 1 } }
@@ -71,27 +73,33 @@ export function LandingLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <motion.footer
-        className="border-t border-[#bcc9c6]/60 bg-white py-8"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.2 }}
-        variants={footerVariants}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-4 px-6 lg:flex-row lg:px-10">
-          <p className="text-sm text-[#5a6a80]">
-            <span className="font-semibold text-[#00685f]">MedVault</span> — encrypted clinical trial matching.
-          </p>
-          <div className="flex items-center gap-6 text-sm text-[#5a6a80]">
-            <Link to="/how-it-works" className="hover:text-[#00685f]">How it works</Link>
-            <Link to="/technology" className="hover:text-[#00685f]">Technology</Link>
-            <Link to="/privacy" className="hover:text-[#00685f]">Privacy</Link>
-            <Link to="/security" className="hover:text-[#00685f]">Security</Link>
-            <Link to="/docs" className="hover:text-[#00685f]">Docs</Link>
+      {showCompactFooter ? (
+        <motion.footer
+          className="border-t border-[#6bd8cb]/10 bg-[#020605] py-5"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.2 }}
+          variants={footerVariants}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-3 px-6 text-center sm:flex-row sm:text-left lg:px-10">
+            <p className="text-xs text-slate-500 m-0">
+              <span className="font-semibold text-[#6bd8cb]/90">MedVault</span> — encrypted clinical trial matching
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500 sm:justify-end">
+              <Link to="/how-it-works" className="transition hover:text-slate-300">
+                How it works
+              </Link>
+              <Link to="/privacy" className="transition hover:text-slate-300">
+                Privacy
+              </Link>
+              <Link to="/docs" className="transition hover:text-slate-300">
+                Docs
+              </Link>
+            </div>
           </div>
-        </div>
-      </motion.footer>
+        </motion.footer>
+      ) : null}
     </div>
   );
 }

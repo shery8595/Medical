@@ -4,6 +4,15 @@ import { motion } from "framer-motion";
 
 const entries: { date: string; title: string; items: string[] }[] = [
     {
+        date: "2026-06",
+        title: "MCP server (local AI tools)",
+        items: [
+            "Added mcp-server/ and packages/medvault-core/ — Model Context Protocol tools for sponsors and developers (read + sponsor writes on Arbitrum Sepolia).",
+            "Multi-client config pack: Cursor, Codex, Claude Code, ChatGPT, Antigravity, OpenClaw (config/mcp/, npm run mcp:export-config).",
+            "In-app documentation at /docs/mcp; no production hosting required.",
+        ],
+    },
+    {
         date: "2026-05",
         title: "One-week incorporation wave",
         items: [

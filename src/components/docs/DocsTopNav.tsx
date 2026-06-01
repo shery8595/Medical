@@ -12,6 +12,7 @@ import {
     Wrench,
     Shield,
     FlaskConical,
+    Plug,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { DOCS_TABS, type DocsTabId, getTabForPath, searchDocsNav, getNavItemsForTab } from "../../lib/docsNav";
@@ -23,6 +24,7 @@ const tabIcons: Record<DocsTabId, typeof Rocket> = {
     semaphore: Fingerprint,
     noir: GitBranch,
     clients: Code2,
+    mcp: Plug,
     operations: Wrench,
     testing: FlaskConical,
     security: Shield,

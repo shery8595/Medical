@@ -47,9 +47,10 @@ const patientSecondaryNavItems = [
 
 interface SidebarProps {
   role: "patient" | "sponsor";
+  collapsed?: boolean;
 }
 
-export function Sidebar({ role }: SidebarProps) {
+export function Sidebar({ role, collapsed = false }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useWeb3();
@@ -81,13 +82,16 @@ export function Sidebar({ role }: SidebarProps) {
     return (
       <Link
         to={href}
+        title={collapsed ? title : undefined}
+        aria-label={collapsed ? title : undefined}
         className={cn(
-          "group flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm font-semibold transition-all",
+          "group flex items-center rounded-xl text-sm font-semibold transition-all",
+          collapsed ? "justify-center p-2.5" : "gap-2.5 rounded-full px-3.5 py-2.5",
           isPatient ? patientClasses : sponsorClasses
         )}
       >
-        <Icon className="h-4 w-4" />
-        <span>{title}</span>
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed ? <span className="truncate">{title}</span> : null}
       </Link>
     );
   };
@@ -99,54 +103,88 @@ export function Sidebar({ role }: SidebarProps) {
         isPatient ? "bg-white" : "bg-slate-50"
       )}
     >
-      <div className={cn("shrink-0 px-5 pt-6 pb-4", isPatient ? "border-b border-slate-100" : "border-b border-slate-200")}>
-        <Link to={homeLink} className="flex items-center gap-3 min-w-0">
+      <div
+        className={cn(
+          "shrink-0 pb-4",
+          collapsed ? "flex justify-center px-2 pt-5" : "border-b px-5 pt-6 pb-4",
+          isPatient ? (!collapsed ? "border-slate-100" : "") : !collapsed ? "border-slate-200" : ""
+        )}
+      >
+        <Link
+          to={homeLink}
+          title="MedVault home"
+          className={cn("flex min-w-0 items-center", collapsed ? "justify-center" : "gap-3")}
+        >
           <img
             src={brandLogoUrl}
             alt=""
             width={40}
             height={40}
-            className="h-10 w-10 shrink-0 rounded-xl object-contain"
+            className={cn("shrink-0 rounded-xl object-contain", collapsed ? "h-9 w-9" : "h-10 w-10")}
             aria-hidden
           />
-          <div className="min-w-0">
-            <p className="font-bold text-slate-800 leading-none">MedVault</p>
-            <p
-              className={cn(
-                "text-[10px] font-bold uppercase tracking-wider mt-1",
-                isPatient ? "text-teal-700/80" : "text-[#1D2634]"
-              )}
-            >
-              {portalName} Console
-            </p>
-          </div>
+          {!collapsed ? (
+            <div className="min-w-0">
+              <p className="font-bold text-slate-800 leading-none">MedVault</p>
+              <p
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-wider mt-1",
+                  isPatient ? "text-teal-700/80" : "text-[#1D2634]"
+                )}
+              >
+                {portalName} Console
+              </p>
+            </div>
+          ) : null}
         </Link>
       </div>
 
-      <nav className="shrink-0 px-3 pt-4 pb-3 space-y-1" aria-label="Main navigation">
+      <nav
+        className={cn("shrink-0 space-y-1 pb-3", collapsed ? "px-2 pt-3" : "px-3 pt-4")}
+        aria-label="Main navigation"
+      >
         {navItems.map((item) => (
           <NavItem key={item.href} title={item.title} href={item.href} icon={item.icon} />
         ))}
       </nav>
 
       {role === "patient" ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-slate-100">
-          <p className="shrink-0 px-5 pt-4 pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Patient area
-          </p>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 space-y-1.5 scrollbar-hide">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-hidden",
+            !collapsed && "border-t border-slate-100"
+          )}
+        >
+          {!collapsed ? (
+            <p className="shrink-0 px-5 pt-4 pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Patient area
+            </p>
+          ) : null}
+          <div
+            className={cn(
+              "min-h-0 flex-1 space-y-1.5 overflow-y-auto scrollbar-hide",
+              collapsed ? "px-2 pb-3" : "px-4 pb-3"
+            )}
+          >
             {patientSecondaryNavItems.map((item) => (
               <NavItem key={item.href} title={item.title} href={item.href} icon={item.icon} />
             ))}
           </div>
         </div>
       ) : (
-        <div className="flex-1 min-h-0" aria-hidden />
+        <div className="min-h-0 flex-1" aria-hidden />
       )}
 
-      <div className={cn("shrink-0 px-3 py-4", isPatient ? "border-t border-slate-100" : "border-t border-slate-200")}>
+      <div
+        className={cn(
+          "shrink-0 py-4",
+          collapsed ? "px-2" : "px-3",
+          isPatient ? "border-t border-slate-100" : "border-t border-slate-200"
+        )}
+      >
         <button
           type="button"
+          title={collapsed ? "Log out" : undefined}
           onClick={() => {
             void (async () => {
               await logout();
@@ -154,14 +192,15 @@ export function Sidebar({ role }: SidebarProps) {
             })();
           }}
           className={cn(
-            "w-full text-left flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm font-semibold transition-all",
+            "flex w-full items-center text-sm font-semibold transition-all",
+            collapsed ? "justify-center rounded-xl p-2.5" : "gap-2.5 rounded-full px-3.5 py-2.5 text-left",
             isPatient
               ? "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               : "text-slate-500 hover:bg-slate-200 hover:text-slate-800"
           )}
         >
-          <LogOut className="h-4 w-4" />
-          <span>Log out</span>
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed ? <span>Log out</span> : null}
         </button>
       </div>
     </div>

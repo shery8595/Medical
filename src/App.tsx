@@ -57,6 +57,9 @@ import { SemaphoreDoc } from "./pages/docs/SemaphoreDoc";
 import { NoirDoc } from "./pages/docs/NoirDoc";
 import { FhenixCofheDoc } from "./pages/docs/FhenixCofheDoc";
 import { ChainlinkAutomationDoc } from "./pages/docs/ChainlinkAutomationDoc";
+import { McpServerDoc } from "./pages/docs/McpServerDoc";
+import { McpSetupDoc } from "./pages/docs/McpSetupDoc";
+import { McpToolsDoc } from "./pages/docs/McpToolsDoc";
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { arbitrumSepolia } from "viem/chains";
@@ -314,6 +317,30 @@ function MedVaultRoutes() {
               element={
                 <DocsLayout>
                   <DeploymentGuideDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/mcp"
+              element={
+                <DocsLayout>
+                  <McpServerDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/mcp/setup"
+              element={
+                <DocsLayout>
+                  <McpSetupDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/mcp/tools"
+              element={
+                <DocsLayout>
+                  <McpToolsDoc />
                 </DocsLayout>
               }
             />
