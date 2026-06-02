@@ -11,8 +11,9 @@ export function McpServerDoc() {
             <Prose className="max-w-none">
                 <DocsPageHeaderForRoute />
 
-                <div className="not-prose grid sm:grid-cols-2 gap-3 my-6">
+                <div className="not-prose grid sm:grid-cols-2 lg:grid-cols-3 gap-3 my-6">
                     {[
+                        { href: "/docs/mcp/sdk", title: "TypeScript SDK", desc: "MedVaultSDK — trials, sponsor, relayer" },
                         { href: "/docs/mcp/setup", title: "Setup & clients", desc: "Env vars, Cursor, Codex, HTTP" },
                         { href: "/docs/mcp/tools", title: "Tool reference", desc: "All medvault_* read & write tools" },
                     ].map((card) => (
@@ -81,10 +82,19 @@ export function McpServerDoc() {
                 <h2>Repository layout</h2>
                 <CodeBlock
                     language="text"
-                    code={`mcp-server/              # MCP entry (stdio + optional HTTP)
-packages/medvault-core/  # RPC, contracts, subgraph client
+                    code={`packages/medvault-sdk/   # @medvault/sdk — integrator facade
+packages/medvault-core/  # RPC, contracts, subgraph (SDK dependency)
+mcp-server/              # MCP entry (stdio + optional HTTP)
 config/mcp/              # Client config snippets`}
                 />
+
+                <p>
+                    Integrators can use the SDK without MCP — see{" "}
+                    <Link to="/docs/mcp/sdk" className="text-[#00685f] font-semibold hover:underline">
+                        TypeScript SDK
+                    </Link>
+                    .
+                </p>
 
                 <h2>Quick start</h2>
                 <CodeBlock

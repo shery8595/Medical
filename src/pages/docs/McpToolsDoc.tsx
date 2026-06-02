@@ -94,6 +94,10 @@ export function McpToolsDoc() {
                         Setup &amp; clients
                     </Link>{" "}
                     ·{" "}
+                    <Link to="/docs/mcp/sdk" className="text-[#00685f] font-semibold hover:underline">
+                        TypeScript SDK
+                    </Link>
+                    ,{" "}
                     <Link to="/docs/mcp" className="text-[#00685f] font-semibold hover:underline">
                         MCP overview
                     </Link>

@@ -29,9 +29,10 @@
 12. [Chainlink Automation](#chainlink-automation)
 13. [The Graph subgraph](#the-graph-subgraph)
 14. [Gasless relayer](#gasless-relayer)
-15. [MCP server (AI tools)](#mcp-server-ai-tools)
-16. [Deployment](#deployment)
-17. [Documentation](#documentation)
+15. [TypeScript SDK](#typescript-sdk)
+16. [MCP server (AI tools)](#mcp-server-ai-tools)
+17. [Deployment](#deployment)
+18. [Documentation](#documentation)
 
 ---
 
@@ -247,8 +248,9 @@ medvault/
 ├── src/                    # React dApp (patient + sponsor portals)
 ├── subgraph/               # The Graph schema + mappings
 ├── relayer/                # Optional gasless finalize server
+├── packages/medvault-sdk/  # @medvault/sdk — integrator facade (trials, sponsor, relayer client)
+├── packages/medvault-core/ # Protocol helpers (contracts, subgraph, sponsor ops)
 ├── mcp-server/             # Local MCP server (stdio + optional HTTP)
-├── packages/medvault-core/ # Shared logic for MCP (contracts, subgraph, sponsor ops)
 ├── config/mcp/             # MCP client config snippets (Cursor, Codex, …)
 ├── test/                   # Hardhat tests (see Testing)
 ├── test-support/           # deployMedVaultStack, FHE, Semaphore helpers
@@ -510,20 +512,55 @@ Production example in `.env.example` (Railway).
 
 ---
 
+## TypeScript SDK
+
+**`@medvault/sdk`** — TypeScript library for integrators and scripts. **No hosting required** (unlike the relayer). Wraps `@medvault/core` with `MedVaultSDK.create()` and modules for trials, sponsor ops, protocol metadata, and relayer HTTP.
+
+| Item | Location |
+|------|----------|
+| Package | `packages/medvault-sdk/` |
+| Package README | [packages/medvault-sdk/README.md](packages/medvault-sdk/README.md) |
+| In-app docs | [/docs/mcp/sdk](https://med-vault.xyz/docs/mcp/sdk) |
+
+```bash
+npm run sdk:build
+npm run sdk:test
+
+# After contract / ABI updates:
+npm run sync-sdk-assets
+```
+
+```typescript
+import { MedVaultSDK } from "@medvault/sdk";
+
+const sdk = MedVaultSDK.create({
+  subgraphUrl: process.env.MEDVAULT_SUBGRAPH_URL!,
+  relayerUrl: process.env.MEDVAULT_RELAYER_URL,
+});
+
+await sdk.trials.listActive({ first: 10 });
+await sdk.relayer.health();
+```
+
+**v1 scope:** subgraph reads, sponsor writes (with `signer`), `sdk.relayer.*` for gasless anonymous apply. Patient FHE / Semaphore / Noir stay in the browser dApp.
+
+---
+
 ## MCP server (AI tools)
 
-Local **[Model Context Protocol](https://modelcontextprotocol.io)** server for **developers** and **sponsors** — query trials, matches, audit logs, and run **sponsor transactions** from Cursor, Codex, Claude Code, ChatGPT Desktop, Google Antigravity, or OpenClaw. **Not hosted** on Vercel; each user runs it from the repo.
+Local **[Model Context Protocol](https://modelcontextprotocol.io)** server for **developers** and **sponsors** — query trials, matches, audit logs, and run **sponsor transactions** from Cursor, Codex, Claude Code, ChatGPT Desktop, Google Antigravity, or OpenClaw. **Not hosted** on Vercel; each user runs it from the repo. Uses `@medvault/sdk` for config addresses.
 
 | Item | Location |
 |------|----------|
 | Server | `mcp-server/` |
-| Shared logic | `packages/medvault-core/` |
+| SDK | `packages/medvault-sdk/` |
+| Core | `packages/medvault-core/` |
 | Client configs | `config/mcp/` (run `npm run mcp:export-config`) |
-| In-app docs | [/docs/mcp](https://med-vault.xyz/docs/mcp) |
+| In-app docs | [/docs/mcp](https://med-vault.xyz/docs/mcp) · [SDK](https://med-vault.xyz/docs/mcp/sdk) |
 | Maintainer guide | [docs/MCP_SERVER.md](docs/MCP_SERVER.md) |
 
 ```bash
-npm run mcp:build
+npm run mcp:build          # builds core + sdk + mcp-server
 npm run mcp:export-config
 npm run mcp:smoke          # optional sanity check
 ```
@@ -591,6 +628,7 @@ npm run subgraph:deploy:near-head -- <version>
 | Resource | Location |
 |----------|----------|
 | In-app docs (architecture, **Fhenix & CoFHE**, FHE primitives, Semaphore, Noir, **Chainlink Automation**, compliance) | `/docs` in the dApp |
+| **TypeScript SDK** | [/docs/mcp/sdk](https://med-vault.xyz/docs/mcp/sdk) · [packages/medvault-sdk/README.md](packages/medvault-sdk/README.md) |
 | **MCP server (AI tools)** | [/docs/mcp](https://med-vault.xyz/docs/mcp) · [docs/MCP_SERVER.md](docs/MCP_SERVER.md) |
 | Testing guide | [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) |
 | Test matrix (case IDs) | [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md) |
@@ -611,6 +649,7 @@ npm run subgraph:deploy:near-head -- <version>
 | **Chainlink** | **Automation** (`MedVaultAutomation`), optional **price feeds** (`TrialManager`) |
 | Contracts | Solidity 0.8.27, Hardhat, `@chainlink/contracts` |
 | Indexing | The Graph (Apollo-style hooks via `useSubgraph`) |
+| **SDK** | `@medvault/sdk` + `@medvault/core` — integrator TypeScript (monorepo) |
 | **MCP** | `@modelcontextprotocol/sdk` — local stdio server for sponsors/devs |
 | Hosting | Vercel (static + API rewrites) |
 

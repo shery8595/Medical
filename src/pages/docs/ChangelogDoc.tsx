@@ -5,11 +5,12 @@ import { motion } from "framer-motion";
 const entries: { date: string; title: string; items: string[] }[] = [
     {
         date: "2026-06",
-        title: "MCP server (local AI tools)",
+        title: "TypeScript SDK & MCP",
         items: [
-            "Added mcp-server/ and packages/medvault-core/ — Model Context Protocol tools for sponsors and developers (read + sponsor writes on Arbitrum Sepolia).",
-            "Multi-client config pack: Cursor, Codex, Claude Code, ChatGPT, Antigravity, OpenClaw (config/mcp/, npm run mcp:export-config).",
-            "In-app documentation at /docs/mcp; no production hosting required.",
+            "Added @medvault/sdk (packages/medvault-sdk/) — MedVaultSDK facade for trials, sponsor ops, protocol metadata, and relayer HTTP.",
+            "Self-contained @medvault/core data/ assets; npm run sync-sdk-assets after contract deploys.",
+            "MCP server (mcp-server/) and packages/medvault-core/ — Model Context Protocol tools for sponsors and developers.",
+            "In-app docs: /docs/mcp, /docs/mcp/sdk, /docs/mcp/setup, /docs/mcp/tools; no production MCP hosting required.",
         ],
     },
     {

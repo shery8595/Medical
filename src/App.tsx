@@ -60,6 +60,7 @@ import { ChainlinkAutomationDoc } from "./pages/docs/ChainlinkAutomationDoc";
 import { McpServerDoc } from "./pages/docs/McpServerDoc";
 import { McpSetupDoc } from "./pages/docs/McpSetupDoc";
 import { McpToolsDoc } from "./pages/docs/McpToolsDoc";
+import { SdkDoc } from "./pages/docs/SdkDoc";
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { arbitrumSepolia } from "viem/chains";
@@ -325,6 +326,14 @@ function MedVaultRoutes() {
               element={
                 <DocsLayout>
                   <McpServerDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/mcp/sdk"
+              element={
+                <DocsLayout>
+                  <SdkDoc />
                 </DocsLayout>
               }
             />

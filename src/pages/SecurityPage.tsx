@@ -78,12 +78,12 @@ export function SecurityPage() {
       <section className="py-20 px-6 lg:px-14 bg-slate-100 relative overflow-hidden">
         <div className="max-w-[1220px] mx-auto flex flex-col lg:flex-row items-center gap-20">
           <div className="flex-1">
-            <motion.h2 {...fadeUp(0)} className="text-4xl font-bold mb-8 tracking-tight text-slate-900">Institutional Compliance</motion.h2>
+            <motion.h2 {...fadeUp(0)} className="text-4xl font-bold mb-8 tracking-tight text-slate-900">Privacy & compliance goals</motion.h2>
             <div className="space-y-6">
               {[
-                { title: "HIPAA Compliant Infrastructure", status: "Active" },
-                { title: "GDPR Data Sovereignty Protocol", status: "Active" },
-                { title: "fhEVM Key Management System (KMS)", status: "Active" },
+                { title: "Health-data privacy patterns", status: "In design" },
+                { title: "Data residency & export controls", status: "In design" },
+                { title: "fhEVM Key Management System (KMS)", status: "On testnet" },
               ].map((row, i) => (
                 <motion.div 
                   key={row.title}
@@ -91,7 +91,15 @@ export function SecurityPage() {
                   className="flex items-center justify-between p-6 rounded-2xl bg-white border border-slate-200"
                 >
                   <span className="font-semibold text-slate-900">{row.title}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full">{row.status}</span>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full ${
+                      row.status === "On testnet"
+                        ? "text-teal-700 bg-teal-100"
+                        : "text-slate-600 bg-slate-100"
+                    }`}
+                  >
+                    {row.status}
+                  </span>
                 </motion.div>
               ))}
             </div>

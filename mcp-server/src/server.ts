@@ -11,7 +11,6 @@ import {
   fetchAuditLogsFromChain,
   fundTrialPool,
   getContract,
-  getContractAddresses,
   getSponsorVerification,
   getTrialPoolReclaimStatus,
   postSubgraph,
@@ -23,6 +22,7 @@ import {
   normalizeTxError,
   type ContractName,
 } from "@medvault/core";
+import { MedVaultSDK } from "@medvault/sdk";
 import type { MedVaultMcpContext } from "./context.js";
 import { SERVER_VERSION as MCP_VERSION } from "./context.js";
 
@@ -43,22 +43,30 @@ export function createMedVaultMcpServer(ctx: MedVaultMcpContext): McpServer {
     "Deployed addresses, env URLs, server version, and optional signer address (if MCP_PRIVATE_KEY set).",
     {},
     async () => {
+      let signer = null;
       let signerAddress: string | null = null;
       try {
-        signerAddress = await ctx.getSigner().getAddress();
+        signer = ctx.getSigner();
+        signerAddress = await signer.getAddress();
       } catch {
         /* no key */
       }
+      const sdk = MedVaultSDK.create({
+        ...ctx.config,
+        provider: ctx.provider,
+        signer: signer ?? undefined,
+      });
       return jsonText({
         serverVersion: MCP_VERSION,
+        sdkPackage: "@medvault/sdk",
         networkKey: ctx.config.networkKey,
-        chainId: 421614,
+        chainId: Number(sdk.chainId),
         rpcUrl: ctx.config.rpcUrl,
         subgraphUrl: ctx.config.subgraphUrl || null,
         relayerUrl: ctx.config.relayerUrl || null,
         sponsorOpenAccess: ctx.config.sponsorOpenAccess ?? false,
         signerAddress,
-        addresses: getContractAddresses(ctx.config.networkKey),
+        addresses: sdk.protocol.getAddresses(),
       });
     }
   );

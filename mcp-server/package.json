@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@medvault/core": "*",
+    "@medvault/sdk": "*",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "ethers": "6.16.0",
     "zod": "^3.24.2"

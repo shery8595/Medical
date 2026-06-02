@@ -1,0 +1,44 @@
+{
+    "arbitrum": {
+        "Reclaim": "0x9F0472FD02Ca1BC2d6C3A1702803Ba822C7C7E91",
+        "Semaphore": "0x9c04BEb93d3c84f94A89e4102a24475e29084dBE",
+        "SemaphoreVerifier": "0x058C9A4D97f338fdec082da0E2965ac3E9191b65"
+    },
+    "arbSepolia": {
+        "AnonymousPatientRegistry": "0xDB7ec7853D08cC73a6E8FcC368Ce2912C037ebAe",
+        "SponsorRegistry": "0x4052efC4070adD9E67eD7Ec779cAcE4f4cDf4f09",
+        "TrialManager": "0x8874c4D2e1D2F048e5fb579648b62DC53d75837E",
+        "ConsentManager": "0xdD5A1d0875D77B250842476d4fD96d115AaE0B2f",
+        "DataAccessLog": "0x34649EAbba62B176d995892439FFC81726287b26",
+        "MedVaultRegistry": "0xd0B2aBe1734B3b44564D0e970C33a321bc1af6ee",
+        "EligibilityEngine": "0x064f227265cd22203D038F84AAf38Bc0F0B3eAb3",
+        "SponsorIncentiveVault": "0x6b2074CDA53f2AF338e37b903A0E7ce4BB6E1921",
+        "TrialMilestoneManager": "0x59DedD8Dc02d2B797F1A5A3417919B75736278ED",
+        "MedVaultAutomation": "0xA7c7f983177Ecc6EBC67d3D5C3207a794EeF541c",
+        "ConfidentialETH": "0x9B770b466eD5ab8DE1571273bC5753B60B2135d3",
+        "Semaphore": "0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D",
+        "Reclaim": "0x4D1ee04EB5CeE02d4C123d4b67a86bDc7cA2E62A",
+        "ReclaimSemaphore": "0x02991C5f64a463C41dE158692Cc5A603cAA2ad00",
+        "SemaphoreVerifier": "0xe4377A529A47Ba2fBE34EfA6B0a4A8cD12eb93BC",
+        "EncryptedConsentGate": "0xC85fd10Fb46d8b20474E780DF5C8Ae85e539D294",
+        "EncryptedScoreLeaderboard": "0xf8164FA9D3dFC0dc886b6e83213A06c33D8124A4",
+        "StakingManager": "0x30977E28C648C8ca67a5A05e77Ec14b4a47e60e6",
+        "EligibilityVerifier": "0x67fCD71cDf42fb178da1ABf740AFa116d7A401f8",
+        "HonkVerifier": "0x67fCD71cDf42fb178da1ABf740AFa116d7A401f8",
+        "HonkVerifierVkFingerprint": "bc74914c9f1601d5c8466efa179ed1974cd37c614575f422b6cb9491f8b33fbd"
+    },
+    "hardhat": {
+        "AnonymousPatientRegistry": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "SponsorRegistry": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        "TrialManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "ConsentManager": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+        "DataAccessLog": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+        "MedVaultRegistry": "0x0000000000000000000000000000000000000000",
+        "EligibilityEngine": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+        "SponsorIncentiveVault": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+        "TrialMilestoneManager": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+        "MedVaultAutomation": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+        "ConfidentialETH": "0x883c1Ae19DD2de5E8cDD1E773bf5332D1d0609e1",
+        "Semaphore": "0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D"
+    }
+}

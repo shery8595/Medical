@@ -45,9 +45,16 @@ export function McpSetupDoc() {
                 <CodeBlock
                     language="bash"
                     code={`npm install
-npm run mcp:build
+npm run mcp:build           # builds @medvault/core, @medvault/sdk, and mcp-server
 npm run mcp:export-config   # regenerates config/mcp/* with absolute paths`}
                 />
+                <p>
+                    For integrator scripts without MCP, see{" "}
+                    <Link to="/docs/mcp/sdk" className="text-[#00685f] font-semibold hover:underline">
+                        TypeScript SDK
+                    </Link>{" "}
+                    (<code>npm run sdk:build</code>).
+                </p>
 
                 <h2>Environment variables</h2>
                 <div className="not-prose overflow-x-auto my-4">

@@ -91,11 +91,11 @@ export type TrialPoolReclaimStatus = {
 };
 
 export async function getTrialPoolReclaimStatus(
-  signer: ethers.Signer,
+  signerOrProvider: ethers.Signer | ethers.Provider,
   trialId: string,
   trialEndTimeSec?: string | number | null
 ): Promise<TrialPoolReclaimStatus> {
-  const vault = getSponsorIncentiveVault(signer);
+  const vault = getSponsorIncentiveVault(signerOrProvider);
   const tid = BigInt(trialId);
   const endSec = trialEndTimeSec != null ? Number(trialEndTimeSec) : 0;
   const trialEnded = endSec > 0 && Math.floor(Date.now() / 1000) >= endSec;

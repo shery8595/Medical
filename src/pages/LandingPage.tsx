@@ -75,7 +75,7 @@ const steps = [
 ];
 
 const trustSignals = [
-  "HIPAA Compliant",
+  "Health-data aware",
   "Zero-Knowledge Proofs",
   "Patient-Owned Keys",
   "256-bit Encryption",
@@ -85,7 +85,7 @@ const trustSignals = [
 const stats = [
   { label: "Patient Records Protected", value: 12400, suffix: "+" },
   { label: "Healthcare Providers", value: 340, suffix: "+" },
-  { label: "Data Breaches", value: 0, suffix: "" },
+  { label: "Consent checkpoints", value: 4, suffix: "" },
   { label: "Uptime", value: 99.97, suffix: "%", decimals: 2 },
 ];
 
@@ -116,7 +116,7 @@ const infraLayers = [
 const infraFlow = ["Wallet Auth", "Consent Policy", "Encrypted Match", "ZK Proof", "Audit Log"];
 
 const trustItems = [
-  { label: "HIPAA Compliant", Icon: Shield },
+  { label: "Health-data aware", Icon: Shield },
   { label: "Zero-Knowledge Proofs", Icon: Eye },
   { label: "Patient-Owned Keys", Icon: KeyRound },
   { label: "256-bit Encryption", Icon: Lock },
@@ -1105,7 +1105,7 @@ export function LandingPage() {
                 className="inline-flex w-fit items-center gap-2 rounded-full border border-[#bcc9c6]/50 bg-white/70 px-3 py-1 text-[11px] font-medium tracking-[0.18em] text-[#3d4947]"
               >
                 <span className="h-2 w-2 rounded-full bg-[#6bd8cb]" />
-                ENCRYPTED • HIPAA-READY • PATIENT-OWNED
+                ENCRYPTED • CONSENT-FIRST • PATIENT-OWNED
               </motion.p>
 
               <motion.h1

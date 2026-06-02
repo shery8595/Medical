@@ -56,8 +56,8 @@ export const DOCS_TABS: DocsTab[] = [
     },
     {
         id: "mcp",
-        label: "MCP",
-        subtitle: "Local Model Context Protocol server for AI assistants: setup, tools, and sponsor workflows.",
+        label: "MCP & SDK",
+        subtitle: "TypeScript SDK for integrators, local MCP server for AI assistants, setup, and sponsor workflows.",
     },
     {
         id: "operations",
@@ -344,6 +344,25 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
         pageTitle: "MCP server for developers & sponsors",
         pageDescription:
             "Local Model Context Protocol bridge: read trials/matches/audit data and sponsor writes — no production hosting.",
+    },
+    {
+        title: "TypeScript SDK",
+        href: "/docs/mcp/sdk",
+        tabId: "mcp",
+        section: "MCP server",
+        keywords: [
+            "sdk",
+            "typescript",
+            "npm",
+            "medvault-sdk",
+            "integrator",
+            "relayer",
+            "api",
+            "MedVaultSDK",
+        ],
+        pageTitle: "TypeScript SDK (@medvault/sdk)",
+        pageDescription:
+            "MedVaultSDK facade: trials, sponsor ops, protocol metadata, and relayer HTTP client — no hosting required.",
     },
     {
         title: "Setup & clients",

@@ -1,0 +1,34 @@
+{
+  "name": "@medvault/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for MedVault — private clinical trials on Arbitrum Sepolia",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --external ethers --external @medvault/core",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@medvault/core": "*"
+  },
+  "peerDependencies": {
+    "ethers": "6.16.0"
+  },
+  "devDependencies": {
+    "ethers": "6.16.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

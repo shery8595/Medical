@@ -2,9 +2,13 @@
 
 Generated snippets for connecting AI tools to the MedVault MCP server.
 
+## TypeScript SDK
+
+Integrators can use `@medvault/sdk` without MCP — see [packages/medvault-sdk/README.md](../../packages/medvault-sdk/README.md) and in-app [/docs/mcp/sdk](https://med-vault.xyz/docs/mcp/sdk).
+
 ## Prerequisites
 
-1. `npm run mcp:build` from the repo root
+1. `npm run mcp:build` from the repo root (builds core, SDK, and mcp-server)
 2. Environment variables (never commit secrets):
    - `ARBITRUM_SEPOLIA_RPC_URL` — Arbitrum Sepolia RPC
    - `MEDVAULT_SUBGRAPH_URL` — same as `VITE_SUBGRAPH_URL` in the dapp

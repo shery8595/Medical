@@ -1,6 +1,22 @@
 # MedVault MCP Server
 
-Standalone MCP server for **developers** and **sponsors** on Arbitrum Sepolia. Does not modify the React dapp runtime; lives in `mcp-server/` and `packages/medvault-core/`.
+Standalone MCP server for **developers** and **sponsors** on Arbitrum Sepolia. Does not modify the React dapp runtime; lives in `mcp-server/`, `packages/medvault-core/`, and `packages/medvault-sdk/`.
+
+## TypeScript SDK
+
+| Resource | Location |
+|----------|----------|
+| Package | `packages/medvault-sdk/` (`@medvault/sdk`) |
+| README | [packages/medvault-sdk/README.md](../packages/medvault-sdk/README.md) |
+| In-app docs | [/docs/mcp/sdk](https://med-vault.xyz/docs/mcp/sdk) |
+
+```bash
+npm run sdk:build
+npm run sdk:test
+npm run sync-sdk-assets   # copy addresses/ABIs from src/lib/contracts after deploy
+```
+
+`MedVaultSDK` provides `trials`, `sponsor`, `protocol`, and `relayer` modules. MCP `medvault_get_config` uses the SDK for deployed addresses. Integrators can use the SDK without running MCP.
 
 ## Quick start
 
@@ -21,13 +37,13 @@ Set environment variables (see below), then enable MCP in your client using [con
 | `MCP_PRIVATE_KEY` | Writes only | Hot wallet for sponsor transactions |
 | `MEDVAULT_SPONSOR_OPEN_ACCESS` | No | `true` skips SponsorRegistry verification (testnet only) |
 | `MCP_MAX_ETH_PER_TX` | No | Max ETH per `medvault_fund_trial_pool` |
-| `MEDVAULT_RELAYER_URL` | No | Base URL for `medvault_relayer_health` |
+| `MEDVAULT_RELAYER_URL` | No | Base URL for `medvault_relayer_health` / SDK `sdk.relayer` |
 
 ## Tools (v1)
 
 ### Read
 
-- `medvault_get_config` — addresses, URLs, server version
+- `medvault_get_config` — addresses, URLs, server version (via `@medvault/sdk`)
 - `medvault_list_protocol_contracts` — protocol catalog
 - `medvault_check_wiring` — vault/automation/milestone cross-checks
 - `medvault_subgraph_query` — allowlisted GraphQL only

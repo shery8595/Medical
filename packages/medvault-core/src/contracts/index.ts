@@ -1,19 +1,19 @@
 import { ethers } from "ethers";
-import addresses from "../../../../src/lib/contracts/addresses.json" with { type: "json" };
-import AnonymousPatientRegistryAbi from "../../../../src/lib/contracts/abis/AnonymousPatientRegistry.json" with { type: "json" };
-import TrialManagerAbi from "../../../../src/lib/contracts/abis/TrialManager.json" with { type: "json" };
-import ConsentManagerAbi from "../../../../src/lib/contracts/abis/ConsentManager.json" with { type: "json" };
-import EligibilityEngineAbi from "../../../../src/lib/contracts/abis/EligibilityEngine.json" with { type: "json" };
-import ConfidentialETHAbi from "../../../../src/lib/contracts/abis/ConfidentialETH.json" with { type: "json" };
-import SponsorIncentiveVaultAbi from "../../../../src/lib/contracts/abis/SponsorIncentiveVault.json" with { type: "json" };
-import DataAccessLogAbi from "../../../../src/lib/contracts/abis/DataAccessLog.json" with { type: "json" };
-import TrialMilestoneManagerAbi from "../../../../src/lib/contracts/abis/TrialMilestoneManager.json" with { type: "json" };
-import SponsorRegistryAbi from "../../../../src/lib/contracts/abis/SponsorRegistry.json" with { type: "json" };
-import MedVaultAutomationAbi from "../../../../src/lib/contracts/abis/MedVaultAutomation.json" with { type: "json" };
-import StakingManagerAbi from "../../../../src/lib/contracts/abis/StakingManager.json" with { type: "json" };
-import MedVaultRegistryAbi from "../../../../src/lib/contracts/abis/MedVaultRegistry.json" with { type: "json" };
-import EncryptedScoreLeaderboardAbi from "../../../../src/lib/contracts/abis/EncryptedScoreLeaderboard.json" with { type: "json" };
-import HonkVerifierAbi from "../../../../src/lib/contracts/abis/HonkVerifier.json" with { type: "json" };
+import addresses from "../../data/addresses.json" with { type: "json" };
+import AnonymousPatientRegistryAbi from "../../data/abis/AnonymousPatientRegistry.json" with { type: "json" };
+import TrialManagerAbi from "../../data/abis/TrialManager.json" with { type: "json" };
+import ConsentManagerAbi from "../../data/abis/ConsentManager.json" with { type: "json" };
+import EligibilityEngineAbi from "../../data/abis/EligibilityEngine.json" with { type: "json" };
+import ConfidentialETHAbi from "../../data/abis/ConfidentialETH.json" with { type: "json" };
+import SponsorIncentiveVaultAbi from "../../data/abis/SponsorIncentiveVault.json" with { type: "json" };
+import DataAccessLogAbi from "../../data/abis/DataAccessLog.json" with { type: "json" };
+import TrialMilestoneManagerAbi from "../../data/abis/TrialMilestoneManager.json" with { type: "json" };
+import SponsorRegistryAbi from "../../data/abis/SponsorRegistry.json" with { type: "json" };
+import MedVaultAutomationAbi from "../../data/abis/MedVaultAutomation.json" with { type: "json" };
+import StakingManagerAbi from "../../data/abis/StakingManager.json" with { type: "json" };
+import MedVaultRegistryAbi from "../../data/abis/MedVaultRegistry.json" with { type: "json" };
+import EncryptedScoreLeaderboardAbi from "../../data/abis/EncryptedScoreLeaderboard.json" with { type: "json" };
+import HonkVerifierAbi from "../../data/abis/HonkVerifier.json" with { type: "json" };
 
 export type ContractName =
   | "AnonymousPatientRegistry"
