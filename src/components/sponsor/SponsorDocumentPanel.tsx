@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { FileText, Loader2, Download, AlertTriangle } from "lucide-react";
-import { cn } from "../lib/utils";
-import { Button } from "./ui/Button";
-import { useSponsorDocumentDecrypt } from "../hooks/useSponsorDocumentDecrypt";
-import { useMatchHasDocument } from "../hooks/useMatchHasDocument";
-import { useWeb3 } from "../lib/Web3Context";
+import { cn } from "../../lib/utils";
+import { Button } from "../ui/Button";
+import { useSponsorDocumentDecrypt } from "../../hooks/useSponsorDocumentDecrypt";
+import { useMatchHasDocument } from "../../hooks/useMatchHasDocument";
+import { useWeb3 } from "../../lib/Web3Context";
 
 type Props = {
   nullifier: string;
