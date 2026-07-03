@@ -21,7 +21,7 @@
 | Lib modules (top-level) | 64 | `src/lib/*.{ts,tsx}` (excl. `contracts/`, `__tests__/`) |
 | HTTP routes | 21 | relayer 10, ai-service 4, indexer 5, MCP HTTP 2 |
 | MCP tools | 33 | 23 read, 10 write — `mcp-server/src/server.ts` |
-| Background jobs | 5 | relayer watcher, batch-exit queue, indexer sync/reconcile, Chainlink upkeep |
+| Background jobs | 5 | relayer watcher, batch-exit queue, indexer sync/reconcile, Chainlink CRE workflow |
 | Scripts | 36 | 33 `scripts/*` + 3 `scripts/lib/*` |
 | Test files (TS) | 96 | `test/`, `packages/**/tests`, `src/lib/__tests__` |
 | Registered test cases | ~2,020 | 491 literal `it()` + 832 parametric + fuzz loop expansion |
@@ -255,7 +255,7 @@ Every major system has **one canonical doc home**. Cross-links point here; dupli
 | Private withdrawals / public exit | `docs/PRIVATE_WITHDRAWALS.md`, `/docs/private-withdrawals` | Both |
 | Private staking (cETH + Aave) | `/docs/staking` | In-app |
 | Sponsor KYC & trial funding | `/docs/sponsor-system` | In-app |
-| Chainlink trial finalization | `/docs/automation`, `contracts/MedVaultAutomation.sol` | Both |
+| Chainlink trial finalization | `/docs/automation`, `contracts/MedVaultAutomation.sol`, `contracts/cre/AutomationReceiver.sol`, `cre/` | Both |
 | Timelock admin wiring | `docs/TIMELOCK_WIRING.md`, `/docs/timelock-wiring` | Both |
 | Compliance audit trail | `/docs/compliance`, `DataAccessLog` in `/docs/contracts` | Both |
 | Android demo APK | `docs/ANDROID_APK.md`, `/docs/mobile/android-apk` | Both |

@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-483%20Cases-emerald?style=for-the-badge)](docs/TEST_MATRIX.md)
 [![Network](https://img.shields.io/badge/Network-Ethereum%20Sepolia-2D374B?style=for-the-badge)](https://sepolia.etherscan.io/)
-[![Chainlink](https://img.shields.io/badge/Automation-Chainlink-375BD2?style=for-the-badge)](https://chain.link/automation)
+[![Chainlink](https://img.shields.io/badge/CRE-Chainlink-375BD2?style=for-the-badge)](https://docs.chain.link/cre)
 [![npm](https://img.shields.io/badge/npm-@medvault%2Fsdk-red?style=for-the-badge)](https://www.npmjs.com/package/@medvault/sdk)
 
 ## Judges — start here
@@ -268,7 +268,7 @@ graph TD
 
 **Indexing:** The Graph (`subgraph/`) for trials, applications, consents, anonymous submissions, incentive pools — not for all audit data until `DataAccessLog` is deployed to Studio.
 
-**Automation:** [Chainlink Automation](#chainlink-automation) (appendix) finalizes expired trials via `MedVaultAutomation` (not indexed by subgraph).
+**Automation:** [Chainlink CRE](#chainlink-cre-trial-finalization) finalizes expired trials via `MedVaultAutomation` + `AutomationReceiver` (not indexed by subgraph).
 
 ---
 
@@ -293,7 +293,7 @@ Deployed addresses: `src/lib/contracts/addresses.json` (`sepolia`).
 | 11 | `StakingManager.sol` | Public Aave stake + confidential cETH stake/unstake |
 | 12 | `ConfidentialETH7984.sol` | **IERC7984** canonical implementation — encrypted balances, deposit, withdraw/exit, EIP-712 |
 | 13 | `ConfidentialETH.sol` | **Deploy alias** — `contract ConfidentialETH is ConfidentialETH7984 {}` |
-| 14 | `MedVaultAutomation.sol` | Chainlink Automation — trial expiry finalization |
+| 14 | `MedVaultAutomation.sol` | Trial expiry finalization (`checkUpkeep` / `performUpkeep`) — triggered by CRE via `AutomationReceiver` |
 | 15 | `DataAccessLog.sol` | Immutable audit entries (`ActionLogged` / `DetailedActionLogged`) |
 | 16 | `PatientDocumentStore.sol` | Hybrid IPFS CID + FHE-wrapped AES document keys |
 | 17 | `HonkVerifier.sol` | Noir Honk — plaintext criteria attestation (`eligibilityVerifier`) |
@@ -559,15 +559,21 @@ npm run deploy:wiring:sepolia
 npm run deploy:check-wiring:sepolia
 ```
 
-### Chainlink Automation
+### Chainlink CRE (trial finalization)
 
-After deploy, register upkeep in the Chainlink UI and set the forwarder:
+Chainlink Automation (CLA) upkeeps are sunset; use **Chainlink CRE** with the repo bridge pattern:
 
 ```bash
-CHAINLINK_FORWARDER=0x... npm run deploy:chainlink-forwarder:sepolia
+npm run deploy:cre-receiver:sepolia
+npm run wire:cre-receiver:sepolia
+# after ~6h timelock:
+npx hardhat run scripts/finish-wiring.ts --network sepolia
+cre login
+npm run cre:simulate
+npm run cre:deploy
 ```
 
-See [Chainlink Automation](#chainlink-automation) in the appendix and `scripts/diagnose-automation-upkeep.ts`.
+See [Chainlink CRE](#chainlink-cre-trial-finalization) in the appendix, in-app **Docs → Chainlink CRE** (`/docs/automation`), and `cre/README.md`.
 
 ### Subgraph
 
@@ -612,7 +618,7 @@ See also [docs/README.md](docs/README.md) for the full index.
 | **Zero-revelation rewards** | [docs/ZERO_REVELATION_REWARDS.md](docs/ZERO_REVELATION_REWARDS.md) |
 | **IERC7984 cETH** | [docs/ERC7984_CONFIDENTIAL_TOKEN.md](docs/ERC7984_CONFIDENTIAL_TOKEN.md) · [docs/FHE_AUDIT_README.md](docs/FHE_AUDIT_README.md) |
 | **Internal specs (SRS, DFD)** | [internal-docs/](internal-docs/README.md) |
-| In-app docs (architecture, **Zama FHE**, FHE primitives, Semaphore, Noir, **Chainlink Automation**, compliance) | `/docs` in the dApp |
+| In-app docs (architecture, **Zama FHE**, FHE primitives, Semaphore, Noir, **Chainlink CRE**, compliance) | `/docs` in the dApp |
 | **TypeScript SDK** | [/docs/mcp/sdk](https://med-vault.xyz/docs/mcp/sdk) · [packages/medvault-sdk/README.md](packages/medvault-sdk/README.md) |
 | **MCP server (AI tools)** | [/docs/mcp](https://med-vault.xyz/docs/mcp) · [docs/MCP_SERVER.md](docs/MCP_SERVER.md) |
 | Testing guide | [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) |
@@ -634,7 +640,7 @@ See also [docs/README.md](docs/README.md) for the full index.
 | Web3 | ethers v6, viem (via Privy), TypeChain |
 | **Zama FHE** | **`@zama-fhe/sdk`, `@fhevm/solidity`, `@fhevm/hardhat-plugin`** |
 | ZK | Noir 1.0.0-beta.21, `@aztec/bb.js`, Semaphore 4.14 |
-| **Chainlink** | **Automation** (`MedVaultAutomation`), optional **price feeds** (`TrialManager`) |
+| **Chainlink** | **CRE** trial finalization (`MedVaultAutomation` + `AutomationReceiver`), optional **price feeds** (`TrialManager`) |
 | Contracts | Solidity 0.8.27, Hardhat, `@chainlink/contracts` |
 | Indexing | The Graph (Apollo-style hooks via `useSubgraph`) |
 | **SDK** | `@medvault/sdk` + `@medvault/core` — integrator TypeScript (monorepo) |
@@ -658,7 +664,7 @@ These extend MedVault but are **not required** to demonstrate Zama FHE core matc
 |-------|------|
 | Semaphore | Anonymous apply without wallet↔application link |
 | Noir + Honk | FHE-bound attestation seal (`staged_fhe_handle` witness binding) |
-| Chainlink Automation | Trial expiry finalization |
+| Chainlink CRE | Trial expiry finalization via CRE workflow + `AutomationReceiver` bridge |
 | The Graph | Indexing trials, applications, attestation metadata |
 | Gasless relayer | `POST /relay/apply-*`, `POST /relay/register` |
 | `@medvault/sdk` / MCP | Sponsor/dev tooling |
@@ -673,9 +679,9 @@ These extend MedVault but are **not required** to demonstrate Zama FHE core matc
 - **Noir + Honk:** dual circuits — `eligibility_plaintext` (25 inputs → `HonkVerifier`) and `eligibility_encrypted` (15 inputs → `HonkVerifierEncrypted`).
 - **Tests:** `test/integration/eligibility-anonymous.test.ts`, `test/unit/attestation-binding.test.ts`.
 
-### Chainlink Automation
+### Chainlink CRE (trial finalization)
 
-`MedVaultAutomation.sol` finalizes expired trials via Chainlink Automation on Sepolia. See in-app **Docs → Chainlink Automation** (`/docs/automation`) and [docs/TIMELOCK_WIRING.md](docs/TIMELOCK_WIRING.md).
+`MedVaultAutomation.sol` finalizes expired trials; **Chainlink CRE** (not legacy Automation upkeeps) drives it on Sepolia via `cre/my-workflow` and `AutomationReceiver`. See in-app **Docs → Chainlink CRE** (`/docs/automation`), `cre/README.md`, and [docs/TIMELOCK_WIRING.md](docs/TIMELOCK_WIRING.md).
 
 ### The Graph subgraph
 
@@ -726,5 +732,5 @@ See [SECURITY.md](SECURITY.md), [docs/PRIVATE_WITHDRAWALS.md](docs/PRIVATE_WITHD
 ---
 
 <div align="center">
-Powered by Zama FHE · Chainlink Automation — confidential clinical research on Ethereum Sepolia
+Powered by Zama FHE · Chainlink CRE — confidential clinical research on Ethereum Sepolia
 </div>

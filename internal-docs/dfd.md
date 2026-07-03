@@ -110,17 +110,19 @@ flowchart TD
 
 **Indexer HTTP routes (5):** `GET /health`, `/alerts`, `/trials`, `/sponsor/:addr/stats`, `/trial/:id/applications`.
 
-## DFD-6 Chainlink automation upkeep
+## DFD-6 Chainlink CRE trial finalization
 
 ```mermaid
 flowchart LR
-    Keeper["Chainlink Automation / forwarder"] --> MVA["MedVaultAutomation.checkUpkeep"]
-    MVA -->|"performUpkeep"| Vault["SponsorIncentiveVault"]
+    CRE["CRE cron workflow"] --> MVA["MedVaultAutomation.checkUpkeep"]
+    CRE --> AR["AutomationReceiver.onReport"]
+    AR -->|"performUpkeep"| MVA
+    MVA --> Vault["SponsorIncentiveVault"]
     MVA --> TM["TrialManager"]
     TM -->|"trial lifecycle hooks"| MVA
 ```
 
-Background job: on-chain `MedVaultAutomation.sol` keeper `performUpkeep` (no separate Node process).
+Background job: CRE workflow + on-chain `MedVaultAutomation.sol` (no separate MedVault Node cron).
 
 ## DFD-7 MCP tool flows
 
@@ -176,4 +178,4 @@ Representative write tools: `medvault_create_trial`, `medvault_fund_trial_pool`,
 | 2 | Batch exit queue | `relayer/batch-exit-queue.mjs` |
 | 3 | Indexer sync | `indexer/src/sync.ts` |
 | 4 | Indexer reconcile | `indexer/src/reconcile.ts` |
-| 5 | Chainlink upkeep | `contracts/MedVaultAutomation.sol` |
+| 5 | Chainlink CRE | `contracts/MedVaultAutomation.sol`, `contracts/cre/AutomationReceiver.sol`, `cre/my-workflow` |

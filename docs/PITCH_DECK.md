@@ -86,7 +86,7 @@ flowchart LR
 - **17** production contracts (`EligibilityEngine`, `TrialManager`, `MedVaultRegistry`, …)
 - **5** runtime services (frontend, relayer, indexer, AI, MCP)
 - **The Graph** subgraph for trial/application indexing
-- **Optional:** Semaphore anonymity, Noir identity/policy attestation (compliance seal), Chainlink automation
+- **Optional:** Semaphore anonymity, Noir identity/policy attestation (compliance seal), Chainlink CRE trial finalization
 
 ---
 

@@ -141,7 +141,7 @@ These are **not required** for the FHE core story:
 |-------|------|
 | **Semaphore** | Anonymous apply — wallet decoupled from application |
 | **Noir + Honk** | Identity and policy attestation — compliance seal bound to Zama FHE stage handle hash (not fhEVM execution proof) |
-| **Chainlink Automation** | Trial expiry finalization |
+| **Chainlink CRE** | Trial expiry finalization |
 | **The Graph** | Trial/application indexing |
 | **Gasless relayer** | Patient gas abstraction |
 | **MCP + SDK** | Sponsor/developer integrations |

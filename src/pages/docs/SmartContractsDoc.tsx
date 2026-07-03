@@ -68,7 +68,7 @@ export function SmartContractsDoc() {
                     </Link>
                     ; for keepers see{" "}
                     <Link to="/docs/automation" className="font-semibold text-[#00685f] hover:underline">
-                        Chainlink Automation
+                        Chainlink CRE
                     </Link>
                     .
                 </p>

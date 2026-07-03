@@ -15,7 +15,8 @@ const envVars = [
     { key: "SEPOLIA_RPC_URL", required: true, desc: "JSON-RPC for Sepolia deploy, fork tests, and on-chain verification scripts." },
     { key: "GRAPH_STUDIO_DEPLOY_KEY", required: false, desc: "Graph Studio API key for subgraph deploy (or GRAPH_DEPLOY_KEY)." },
     { key: "GRAPH_SUBGRAPH_SLUG", required: false, desc: "Studio subgraph slug — default medvault." },
-    { key: "CHAINLINK_FORWARDER", required: false, desc: "Per-upkeep Chainlink Automation forwarder for set-chainlink-forwarder.ts." },
+    { key: "CRE_API_KEY", required: false, desc: "Chainlink CRE API key (alternative to cre login) for workflow simulate/deploy." },
+    { key: "CHAINLINK_FORWARDER", required: false, desc: "Legacy CLA per-upkeep forwarder only (superseded by CRE AutomationReceiver)." },
     { key: "TRUSTED_RELAYER_ADDRESS", required: false, desc: "Relayer EOA to schedule cETH contract auth during deploy/wire." },
     { key: "RELAYER_PRIVATE_KEY", required: false, desc: "Relayer service signing key (relayer/.env, not Vite)." },
     { key: "COVERAGE_MIN_PCT", required: false, desc: "CI coverage gate threshold (default 85)." },
@@ -51,7 +52,7 @@ const depChecklist = [
     { label: "Privy dashboard allows https://localhost (Android WebView origin)", cat: "Ops" },
     { label: "Android: android/local.properties → SDK path; JDK 21 for Gradle", cat: "Mobile" },
     { label: "Android: `npm run mobile:apk:debug` produces app-debug.apk", cat: "Mobile" },
-    { label: "Optional: Chainlink Automation upkeep for MedVaultAutomation + `setChainlinkForwarder`", cat: "Ops" },
+    { label: "Chainlink CRE: AutomationReceiver + workflow (`deploy:cre-receiver:sepolia`, `cre:deploy`)", cat: "Ops" },
 ];
 
 const catColorStyles: Record<string, { bg: string; text: string }> = {
@@ -444,8 +445,12 @@ npm run docker:smoke                                           # CI smoke test`}
                             <tr className="border-b"><td className="px-3 py-2 font-mono">finish-wiring.ts</td><td className="px-3 py-2">Apply pending timelocks after ~2 days</td></tr>
                             <tr className="border-b"><td className="px-3 py-2 font-mono">resume-sepolia-deploy.ts</td><td className="px-3 py-2">Resume partial deploy after RPC disconnect</td></tr>
                             <tr className="border-b"><td className="px-3 py-2 font-mono">check-wiring-status.ts</td><td className="px-3 py-2">Print on-chain wiring references</td></tr>
-                            <tr className="border-b"><td className="px-3 py-2 font-mono">set-chainlink-forwarder.ts</td><td className="px-3 py-2">Schedule/apply Chainlink forwarder on MedVaultAutomation</td></tr>
-                            <tr className="border-b"><td className="px-3 py-2 font-mono">diagnose-automation-upkeep.ts</td><td className="px-3 py-2">Debug why Chainlink upkeep is not firing</td></tr>
+                            <tr className="border-b"><td className="px-3 py-2 font-mono">deploy-cre-receiver.ts</td><td className="px-3 py-2">Deploy CRE AutomationReceiver bridge</td></tr>
+                            <tr className="border-b"><td className="px-3 py-2 font-mono">wire-cre-receiver.ts</td><td className="px-3 py-2">Allow performUpkeep, workflow identity, schedule forwarder</td></tr>
+                            <tr className="border-b"><td className="px-3 py-2 font-mono">verify-cre-receiver.ts</td><td className="px-3 py-2">On-chain CRE receiver + forwarder state</td></tr>
+                            <tr className="border-b"><td className="px-3 py-2 font-mono">check-forwarder-timelock.ts</td><td className="px-3 py-2">When applyChainlinkForwarder is allowed</td></tr>
+                            <tr className="border-b"><td className="px-3 py-2 font-mono">set-chainlink-forwarder.ts</td><td className="px-3 py-2">Legacy CLA forwarder only (deprecated)</td></tr>
+                            <tr className="border-b"><td className="px-3 py-2 font-mono">diagnose-automation-upkeep.ts</td><td className="px-3 py-2">Debug trial expiry / forwarder / checkUpkeep</td></tr>
                             <tr className="border-b"><td className="px-3 py-2 font-mono">upgrade-attestation-sepolia.ts</td><td className="px-3 py-2">Noir attestation + gasless-claim stack upgrade</td></tr>
                             <tr className="border-b"><td className="px-3 py-2 font-mono">finish-attestation-upgrade-sepolia.ts</td><td className="px-3 py-2">Complete interrupted attestation upgrade wiring</td></tr>
                             <tr className="border-b"><td className="px-3 py-2 font-mono">redeploy-screening-vault.ts</td><td className="px-3 py-2">Redeploy SponsorIncentiveVault (screening fix)</td></tr>
@@ -519,8 +524,12 @@ npm run deploy:check-wiring:sepolia
 npm run sync-abis && npm run sync-sdk-assets
 npm run subgraph:fetch-start-blocks
 npm run subgraph:deploy                    # Graph Studio medvault/v0.2.0
-# optional Chainlink:
-CHAINLINK_FORWARDER=0x... npm run deploy:chainlink-forwarder:sepolia
+# Chainlink CRE (trial finalization):
+npm run deploy:cre-receiver:sepolia
+npm run wire:cre-receiver:sepolia
+# wait ~6 hours, then:
+npm run deploy:wiring:sepolia
+cre login && npm run cre:simulate && npm run cre:deploy
 # frontend:
 npm run vercel:ship
 # relayer: deploy relayer/ to Railway; set relayer/.env from addresses.json`}
@@ -549,16 +558,27 @@ npm run subgraph:fetch-start-blocks && npm run subgraph:deploy`}
 # Edit PARTIAL addresses in script if resuming from a different checkpoint`}
                 />
 
-                <h3>Chainlink Automation ops</h3>
+                <h3>Chainlink CRE ops</h3>
                 <p>
-                    Task type <strong>1 only</strong>: finalize expired trials (distribute screening + deactivate).{" "}
-                    <code>performUpkeep</code> is <code>onlyForwarder</code>. Forwarder and vault pointers use 2-day timelock.
-                    See <Link to="/docs/automation" className="font-semibold text-[#00685f] hover:underline">Chainlink Automation</Link>.
+                    Task type <strong>1 only</strong>: finalize expired trials (distribute screening + deactivate). CRE
+                    workflow calls <code>checkUpkeep</code>; <code>AutomationReceiver</code> forwards{" "}
+                    <code>performUpkeep</code>. <code>MedVaultAutomation.chainlinkForwarder</code> must point at the
+                    receiver (6-hour timelock). See{" "}
+                    <Link to="/docs/automation" className="font-semibold text-[#00685f] hover:underline">
+                        Chainlink CRE
+                    </Link>{" "}
+                    and <code>cre/README.md</code>.
                 </p>
                 <CodeBlock
                     language="bash"
-                    code={`npx hardhat run scripts/diagnose-automation-upkeep.ts --network sepolia
-CHAINLINK_FORWARDER=0x... npm run deploy:chainlink-forwarder:sepolia`}
+                    code={`npm run deploy:cre-receiver:sepolia
+npm run wire:cre-receiver:sepolia
+npm run check:forwarder-timelock:sepolia
+npm run deploy:wiring:sepolia
+npm run verify:cre-receiver:sepolia
+cre login
+npm run cre:simulate
+npm run cre:deploy`}
                 />
 
                 <hr className="my-12 border-slate-200" />

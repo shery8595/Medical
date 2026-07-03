@@ -124,8 +124,10 @@ npm run deploy:wiring:sepolia
 # Verify references on-chain
 npm run deploy:check-wiring:sepolia
 
-# Optional: real Chainlink forwarder after upkeep registration
-CHAINLINK_FORWARDER=0x... npm run deploy:chainlink-forwarder:sepolia`}
+# Chainlink CRE (after deploy:cre-receiver + wire:cre-receiver)
+npm run check:forwarder-timelock:sepolia
+npm run deploy:wiring:sepolia
+npm run verify:cre-receiver:sepolia`}
                 />
 
                 <Callout type="warning" title="FHEVM on live networks">
@@ -134,11 +136,11 @@ CHAINLINK_FORWARDER=0x... npm run deploy:chainlink-forwarder:sepolia`}
                     with opaque plugin errors.
                 </Callout>
 
-                <Callout type="info" title="MedVaultAutomation constructor">
-                    Deploy passes a <strong>non-zero</strong> forwarder placeholder. Replace with the real Chainlink
-                    forwarder from your upkeep Details page via{" "}
+                <Callout type="info" title="MedVaultAutomation + CRE">
+                    Deploy passes a <strong>non-zero</strong> forwarder placeholder. For production, point{" "}
+                    <code>chainlinkForwarder</code> at your deployed <code>AutomationReceiver</code> via{" "}
                     <code>scheduleChainlinkForwarder</code> / <code>applyChainlinkForwarder</code> (or{" "}
-                    <code>deploy:chainlink-forwarder:sepolia</code>).
+                    <code>npm run wire:cre-receiver:sepolia</code>). Legacy CLA per-upkeep forwarders are deprecated.
                 </Callout>
 
                 <h2>III. Related API changes (same release)</h2>
@@ -215,7 +217,7 @@ await authorizeCethContract(cETH, owner, vaultAddress, true);`}
                 <ul className="text-sm">
                     <li>Full deploy: <code>deploy:sepolia</code> → wait 2 days → <code>deploy:wiring:sepolia</code></li>
                     <li>Wire only: <code>deploy:wire:sepolia</code></li>
-                    <li>Chainlink: <code>CHAINLINK_FORWARDER=0x… deploy:chainlink-forwarder:sepolia</code></li>
+                    <li>Chainlink CRE: <code>deploy:cre-receiver:sepolia</code> → <code>wire:cre-receiver:sepolia</code> → timelock → <code>cre:deploy</code></li>
                     <li>Attestation upgrade: <code>deploy:upgrade:sepolia</code> / <code>deploy:finish-upgrade:sepolia</code></li>
                 </ul>
 
@@ -225,7 +227,7 @@ await authorizeCethContract(cETH, owner, vaultAddress, true);`}
                     </Link>
                     ,{" "}
                     <Link to="/docs/automation" className="text-[#00685f] font-semibold">
-                        Chainlink Automation
+                        Chainlink CRE
                     </Link>
                     ,{" "}
                     <Link to="/docs/security-model" className="text-[#00685f] font-semibold">

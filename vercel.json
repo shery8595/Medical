@@ -10,6 +10,10 @@
             "destination": "https://relayer.testnet.zama.org/:path*"
         },
         {
+            "source": "/indexer/:path*",
+            "destination": "https://indexermedvault-production.up.railway.app/:path*"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }

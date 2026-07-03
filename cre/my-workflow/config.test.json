@@ -1,0 +1,9 @@
+{
+  "chainSelectorName": "ethereum-testnet-sepolia",
+  "receiverAddress": "0x95222329287039570BD4814633813838F40f0C97",
+  "targetAddress": "0x8310cF1984A591a19d06819730bf92666B622D2f",
+  "migrationType": "CUSTOM",
+  "schedule": "0 */5 * * * *",
+  "checkData": "0x",
+  "writeGasLimit": "520000"
+}

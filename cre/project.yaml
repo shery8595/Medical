@@ -1,0 +1,21 @@
+# ==========================================================================
+# CRE PROJECT SETTINGS FILE
+# ==========================================================================
+test-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/rtwAOMEZ9SRzYI81Qwtpc
+
+# ==========================================================================
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/rtwAOMEZ9SRzYI81Qwtpc
+
+# ==========================================================================
+production-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://eth-sepolia.g.alchemy.com/v2/rtwAOMEZ9SRzYI81Qwtpc
+    - chain-name: ethereum-mainnet
+      url: https://ethereum-rpc.publicnode.com

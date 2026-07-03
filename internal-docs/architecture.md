@@ -137,7 +137,7 @@ There is **no** `src/contexts/` or `src/routes/` directory. React contexts live 
 | Batch exit queue | `relayer/batch-exit-queue.mjs` | Batch private public-exit completions until `minBatchSize` or `maxWaitMs` |
 | Indexer sync | `indexer/src/sync.ts` | Subgraph + RPC event ingestion into MongoDB |
 | Indexer reconcile | `indexer/src/reconcile.ts` | Periodic subgraph vs DB trial-count desync alerts |
-| Chainlink upkeep | `contracts/MedVaultAutomation.sol` | Keeper-triggered milestone / pool automation |
+| Chainlink CRE | `contracts/MedVaultAutomation.sol`, `contracts/cre/AutomationReceiver.sol`, `cre/` | CRE workflow finalizes expired trials |
 
 ## HTTP surface (21 routes)
 

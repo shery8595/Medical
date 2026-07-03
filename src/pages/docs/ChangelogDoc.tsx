@@ -5,6 +5,16 @@ import { motion } from "framer-motion";
 const entries: { date: string; title: string; items: string[] }[] = [
     {
         date: "2026-07",
+        title: "Chainlink CRE migration (CLA sunset)",
+        items: [
+            "Ops: `AutomationReceiver` bridge on Sepolia; `deploy:cre-receiver:sepolia`, `wire:cre-receiver:sepolia`, `verify:cre-receiver:sepolia`, `cre:simulate`, `cre:deploy`.",
+            "CRE workflow in `cre/my-workflow` (automation-migration-ts template); `MedVaultAutomation.chainlinkForwarder` → receiver after timelock.",
+            "Docs: `/docs/automation`, `cre/README.md`, `docs/TIMELOCK_WIRING.md`, deployment guide — CLA upkeep registration deprecated.",
+            "Contracts: `contracts/cre/AutomationReceiver.sol` (Hardhat-deployable); legacy `checkUpkeep` / `performUpkeep` unchanged on `MedVaultAutomation`.",
+        ],
+    },
+    {
+        date: "2026-07",
         title: "Vault P5: confidential cETH funding guard (LOW-2)",
         items: [
             "Contract: `onConfidentialTransferReceived` reverts `ConfidentialFundingDisabled` until `confidentialFundingEnabled` and `confidentialFundingAccountingReady` are both true; `creditConfidentialFund` documented as FHE-only (no `totalDepositedWei` sync).",

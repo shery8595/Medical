@@ -1,6 +1,10 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { loadConfigFromEnv } from "@medvault/core";
 
+const repoRootEnv = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.env");
+dotenv.config({ path: repoRootEnv });
 dotenv.config();
 
 export interface AiServiceConfig {

@@ -99,7 +99,7 @@ export const PROTOCOL_CONTRACTS: ProtocolContractEntry[] = [
     id: "13",
     name: "MedVaultAutomation.sol",
     accent: "rose",
-    role: "Chainlink Automation",
+    role: "CRE trial finalization",
     summary: "Keeper upkeep for trial expiry and vault distribution; capped expired-trial prune.",
     keyFunctions: ["checkUpkeep(bytes)", "performUpkeep(bytes)"],
     quirks: ["MAX_PRUNE_PER_UPKEEP = 10 per upkeep."],

@@ -1545,3 +1545,5 @@ export class UpdateMerkleTreeDurationCall__Outputs {
     this._call = call;
   }
 }
+
+}

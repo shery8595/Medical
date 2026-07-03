@@ -37,7 +37,8 @@
         "VaultReclaimLib": "0xFe43a36BDf0D2666F3f4155fE6C3044bCbce73A1",
         "VaultChallengeLib": "0x7CB5ae900F8596B75F991ba4876FE2D08D76E081",
         "HonkVerifierEncrypted": "0xB218000Cc16535e837516441878e223BEc86C9f0",
-        "HonkVerifierEncryptedVkFingerprint": "6e53573ea8cfe5d49db845de3889cf44ede5375462e04af982f0d33b13146bbb"
+        "HonkVerifierEncryptedVkFingerprint": "6e53573ea8cfe5d49db845de3889cf44ede5375462e04af982f0d33b13146bbb",
+        "AutomationReceiver": "0x95222329287039570BD4814633813838F40f0C97"
     },
     "hardhat": {
         "AnonymousPatientRegistry": "0x5FbDB2315678afecb367f032d93F642f64180aa3",

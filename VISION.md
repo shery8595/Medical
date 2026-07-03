@@ -16,7 +16,7 @@ MedVault is privacy-centric clinical trial infrastructure on **Zama (Zama FHE)**
 | **Demo video** | https://www.youtube.com/watch?v=1wR01KflBOM&t=88s |
 | **Terminal demo** | `npm run demo:fhe` |
 
-**Stack** — Zama FHE · Semaphore · Noir/UltraHonk · Ethereum Sepolia · The Graph · Chainlink Automation · Hardhat
+**Stack** — Zama FHE · Semaphore · Noir/UltraHonk · Ethereum Sepolia · The Graph · Chainlink CRE · Hardhat
 
 **Verification** — **483** default Hardhat cases (**~2,020** registered incl. fuzz; see `src/lib/docsStats.ts`): FHE eligibility (encrypted patient + **encrypted sponsor criteria**), aggregates, batch matching, attestation binding, trust-gap payout gating, Phase 5 differential properties, Semaphore anonymity, relayer registration, incentives, end-to-end patient workflows.
 
@@ -57,7 +57,7 @@ Sponsors publish trial criteria via **`createTrialWithEncryptedCriteria`** (reco
 
 ### Confidential DeFi · Compliance
 
-`ConfidentialETH` + `StakingManager` (Aave V3) · `SponsorIncentiveVault` + `TrialMilestoneManager` · `MedVaultAutomation` + **Chainlink Automation** at `endTime`.
+`ConfidentialETH` + `StakingManager` (Aave V3) · `SponsorIncentiveVault` + `TrialMilestoneManager` · `MedVaultAutomation` + **Chainlink CRE** at `endTime`.
 
 | Actor | Capabilities |
 |:------|:-------------|
@@ -94,5 +94,5 @@ Sponsors publish trial criteria via **`createTrialWithEncryptedCriteria`** (reco
 
 <p align="center">
   <strong>Join the evolution of healthcare</strong><br><br>
-  Built with Zama FHE · Ethereum Sepolia · Chainlink Automation
+  Built with Zama FHE · Ethereum Sepolia · Chainlink CRE
 </p>

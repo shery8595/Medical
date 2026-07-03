@@ -106,13 +106,13 @@ export function FrontendArchitectureDoc() {
                     wraps <code>Web3Provider</code> before any routed UI. Users authenticate with Privy; the embedded
                     wallet is switched to <strong>Ethereum Sepolia</strong> inside <code>Web3Context.tsx</code>.
                     For Semaphore, ephemeral decrypt wallet, HTTP relayer (<code>/relay/apply-stage</code> / finalize),
-                    private faucet, Noir/Honk, and Chainlink Automation pointers, see the{" "}
+                    private faucet, Noir/Honk, and Chainlink CRE pointers, see the{" "}
                     <Link to="/docs/identity-privacy" className="text-blue-600 font-semibold no-underline hover:underline">
                         identity, relayer &amp; testnet
                     </Link>{" "}
                     and{" "}
                     <Link to="/docs/automation" className="text-blue-600 font-semibold no-underline hover:underline">
-                        Chainlink Automation
+                        Chainlink CRE
                     </Link>{" "}
                     docs.
                 </p>

@@ -31,7 +31,7 @@ stateDiagram-v2
     Decision --> Accepted: updateApplicationStatus(Accepted)
     Decision --> Rejected: updateApplicationStatus(Rejected)
     Accepted --> Enrolled: Automatic Vault Registration
-    Enrolled --> TrialEnds: Chainlink Automation triggers
+    Enrolled --> TrialEnds: Chainlink CRE finalizes trial
     TrialEnds --> [*]: Milestone 0 Paid out
 `;
 

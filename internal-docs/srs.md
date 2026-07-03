@@ -11,7 +11,7 @@ MedVault is a privacy-preserving clinical trial matching and incentive protocol 
 | Patient | Registers encrypted profile, applies to trials anonymously, claims rewards, withdraws privately |
 | Sponsor | Verified via `SponsorRegistry`; creates trials, funds incentives, releases milestones |
 | Relayer | Gasless registration/apply; completes KMS-gated withdraw-to and public exit |
-| Automation | Chainlink Automation finalizes expired trials |
+| Automation | Chainlink CRE finalizes expired trials via `MedVaultAutomation` + `AutomationReceiver` |
 | Protocol owner | Timelocked wiring, sponsor verification, emergency controls |
 
 ## 3. Functional requirements

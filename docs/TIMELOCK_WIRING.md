@@ -51,13 +51,20 @@ Scripts:
 
 **FHEVM on live networks:** call `ensureFhevmInitialized()` before txs so `@fhevm/hardhat-plugin` can format gas estimation errors.
 
-## Chainlink forwarder
+## Chainlink CRE (trial finalization)
 
-`MedVaultAutomation` constructor requires a **non-zero** forwarder placeholder at deploy. After registering upkeep in the Chainlink UI, set the real forwarder (also timelocked):
+Legacy **Chainlink Automation (CLA) upkeeps are sunset** (2026). MedVault uses **Chainlink CRE** with an `AutomationReceiver` bridge:
 
-```bash
-CHAINLINK_FORWARDER=0xYourForwarder npm run deploy:chainlink-forwarder:sepolia
-```
+1. `npm run deploy:cre-receiver:sepolia` — deploy receiver (Sepolia `KeystoneForwarder` in constructor).
+2. `npm run wire:cre-receiver:sepolia` — `setCallAllowed(performUpkeep)`, workflow identity, schedule forwarder on `MedVaultAutomation`.
+3. After `READER_CHANGE_DELAY` (~6 hours): `npm run deploy:wiring:sepolia` — applies `chainlinkForwarder` → `AutomationReceiver`.
+4. `cre login` → `npm run cre:simulate` → `npm run cre:deploy`.
+
+`MedVaultAutomation.chainlinkForwarder` must point at **`AutomationReceiver`** (the address that calls `performUpkeep`), not the Keystone forwarder directly.
+
+Legacy CLA-only path (deprecated): `CHAINLINK_FORWARDER=0xYourClaForwarder npm run deploy:chainlink-forwarder:sepolia`
+
+Full guide: `cre/README.md`, in-app `/docs/automation`.
 
 ## Other security-related API changes
 
@@ -78,13 +85,13 @@ CHAINLINK_FORWARDER=0xYourForwarder npm run deploy:chainlink-forwarder:sepolia
 
 | Runbook | Scripts / commands |
 |---------|-------------------|
-| **Full Sepolia deploy** | `deploy.ts` → `wire-sepolia.ts` (if needed) → wait 6 hours → `finish-wiring.ts` → `check-wiring-status.ts` → `sync-abis` → `sync-sdk-assets` → `subgraph:fetch-start-blocks` → `subgraph:deploy` → optional `set-chainlink-forwarder.ts` |
+| **Full Sepolia deploy** | `deploy.ts` → `wire-sepolia.ts` (if needed) → wait 6 hours → `finish-wiring.ts` → `check-wiring-status.ts` → `sync-abis` → `sync-sdk-assets` → `subgraph:fetch-start-blocks` → `subgraph:deploy` → `deploy:cre-receiver:sepolia` → `wire:cre-receiver:sepolia` → wait timelock → `finish-wiring.ts` → `cre:deploy` |
 | **Post-deploy wiring only** | `wire-sepolia.ts` |
 | **Apply timelocks** | `finish-wiring.ts` (`npm run deploy:wiring:sepolia`) |
 | **Attestation upgrade** | `upgrade-attestation-sepolia.ts` → `finish-attestation-upgrade-sepolia.ts` (if interrupted) |
 | **Screening vault redeploy** | `redeploy-screening-vault.ts` |
 | **Partial deploy resume** | `resume-sepolia-deploy.ts` (edit `PARTIAL` checkpoint) |
-| **Chainlink forwarder** | Register upkeep in Chainlink UI → `set-chainlink-forwarder.ts` → wait timelock → diagnose with `diagnose-automation-upkeep.ts` |
+| **Chainlink CRE** | `deploy:cre-receiver:sepolia` → `wire:cre-receiver:sepolia` → wait timelock → `finish-wiring.ts` → `verify:cre-receiver:sepolia` → `cre:simulate` / `cre:deploy` |
 | **Frontend ship** | `npm run vercel:ship` (Vercel prebuilt) |
 | **Relayer** | Deploy `relayer/` to Railway; `relayer/.env` from `addresses.json`; timelock cETH auth for relayer |
 | **Subgraph near-head** | `subgraph:deploy:near-head` |

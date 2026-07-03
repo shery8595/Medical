@@ -153,7 +153,7 @@ const ArchitectureFlowDiagram = () => {
             nodes: [
                 { icon: <Coins className="w-4 h-4" />, name: "IncentiveVault", detail: "Escrow Pool" },
                 { icon: <TrendingUp className="w-4 h-4" />, name: "StakingManager", detail: "Aave V3 Yield" },
-                { icon: <Bot className="w-4 h-4" />, name: "Automation", detail: "Chainlink Keeper" },
+                { icon: <Bot className="w-4 h-4" />, name: "Automation", detail: "Chainlink CRE" },
             ]
         },
         {
@@ -589,7 +589,7 @@ export function IntroductionDoc() {
                         { step: "2", title: "Sponsor Publishes Encrypted Trial Criteria", desc: "A verified pharmaceutical sponsor defines their trial eligibility criteria (e.g., Age 18-65, HbA1c < 7.0). These requirements are also encrypted as euint32 ciphertext values and stored on-chain in the TrialManager contract. The trial's structural metadata (name, phase, location) remains public.", icon: <Building2 className="w-6 h-6" />, color: "purple" },
                         { step: "3", title: "EligibilityEngine Computes on Encrypted Data", desc: "The EligibilityEngine smart contract performs FHE homomorphic operations (FHE.ge(), FHE.le(), FHE.cmux()) to compare encrypted patient values against encrypted trial bounds. The result is an encrypted eligibility score (0-100) stored on-chain. The network computes the match without decrypting any inputs.", icon: <Activity className="w-6 h-6" />, color: "teal" },
                         { step: "4", title: "Patient Decrypts Their Own Score", desc: "The encrypted score can only be decrypted by the patient. They sign an EIP-712 message in MetaMask to generate a cryptographic viewing key. The Zama KMS threshold decryption service verifies this signature and returns the decrypted score exclusively to the patient.", icon: <Key className="w-6 h-6" />, color: "amber" },
-                        { step: "5", title: "Optional Consent & Enrollment", desc: "If the score is 100 (perfect match), the patient may optionally grant identity access to the sponsor through ConsentManager. After sponsor accepts, the patient self-enrolls in the SponsorIncentiveVault reward pool (permit-holder-only — sponsor cannot call registerAnonymousParticipant). Chainlink Automation handles milestone payouts.", icon: <CheckCircle2 className="w-6 h-6" />, color: "emerald" },
+                        { step: "5", title: "Optional Consent & Enrollment", desc: "If the score is 100 (perfect match), the patient may optionally grant identity access to the sponsor through ConsentManager. After sponsor accepts, the patient self-enrolls in the SponsorIncentiveVault reward pool (permit-holder-only — sponsor cannot call registerAnonymousParticipant). Chainlink CRE automates trial-end finalization and screening payouts.", icon: <CheckCircle2 className="w-6 h-6" />, color: "emerald" },
                     ].map((s, i) => (
                         <motion.div
                             key={s.step}
@@ -705,7 +705,7 @@ export function IntroductionDoc() {
                     {[
                         { icon: <Activity className="w-8 h-8" />, title: "Encrypted Matching Engine", desc: "The EligibilityEngine computes weighted eligibility scores across 3+ health dimensions using FHE.cmux() conditional multiplexing — without decrypting any patient data. Scores accumulate entirely in ciphertext space.", gradient: "from-blue-500 to-emerald-500" },
                         { icon: <Coins className="w-8 h-8" />, title: "Private Yield Generation", desc: "Trial rewards live in ConfidentialETH (encrypted balances). Stake confidentially inside MedVault or use the public Aave path; private unstake returns to encrypted cETH without on-chain amount leaks from Aave events.", gradient: "from-purple-500 to-fuchsia-500" },
-                        { icon: <Bot className="w-8 h-8" />, title: "Automated Compliance Trail", desc: "Every sensitive operation is logged to DataAccessLog with anonymized keccak256 hashes. MedVaultAutomation uses Chainlink Keepers for trustless milestone payouts. Compliance-oriented audit trail — not a claim of HIPAA/GDPR certification.", gradient: "from-blue-500 to-cyan-500" },
+                        { icon: <Bot className="w-8 h-8" />, title: "Automated Compliance Trail", desc: "Every sensitive operation is logged to DataAccessLog with anonymized keccak256 hashes. MedVaultAutomation uses Chainlink CRE for trustless trial-end finalization. Compliance-oriented audit trail — not a claim of HIPAA/GDPR certification.", gradient: "from-blue-500 to-cyan-500" },
                     ].map(inn => (
                         <motion.div
                             key={inn.title}
@@ -739,8 +739,8 @@ export function IntroductionDoc() {
                     {[
                         { icon: <Heart className="w-6 h-6" />, title: "Patient", color: "teal", permissions: ["Encrypt & store health metrics on-chain", "Apply to unlimited clinical trials", "Decrypt their own eligibility scores (EIP-712)", "Grant/revoke identity access to sponsors", "Withdraw or stake rewards with encrypted amount staging", "Optional stealth-address public exit via relayer"] },
                         { icon: <Building2 className="w-6 h-6" />, title: "Sponsor", color: "purple", permissions: ["Create trials with public eligibility bounds (after KYC on mainnet; open on Sepolia demo)", "View anonymized match counts via Subgraph", "Accept/reject matched patients", "Fund trial incentive escrow pools", "Access consented patient profiles only"] },
-                        { icon: <ShieldCheck className="w-6 h-6" />, title: "Protocol Admin", color: "amber", permissions: ["Add/remove verified sponsors (multisig)", "Emergency halt trials via SponsorRegistry", "Authorize contracts in DataAccessLog", "Manage Chainlink Automation upkeep"] },
-                        { icon: <Bot className="w-6 h-6" />, title: "Chainlink Keeper", color: "blue", permissions: ["Trigger checkUpkeep() on MedVaultAutomation", "Execute performUpkeep() for milestone payouts", "Automate trial deadline enforcement", "No access to encrypted data"] },
+                        { icon: <ShieldCheck className="w-6 h-6" />, title: "Protocol Admin", color: "amber", permissions: ["Add/remove verified sponsors (multisig)", "Emergency halt trials via SponsorRegistry", "Authorize contracts in DataAccessLog", "Manage CRE workflow + AutomationReceiver wiring"] },
+                        { icon: <Bot className="w-6 h-6" />, title: "Chainlink CRE", color: "blue", permissions: ["Poll checkUpkeep() on MedVaultAutomation", "Forward performUpkeep() via AutomationReceiver", "Automate trial deadline enforcement", "No access to encrypted data"] },
                     ].map(role => (
                         <div
                             key={role.title}
@@ -797,13 +797,13 @@ export function IntroductionDoc() {
                 ═══════════════════════════════════════════════════════════════════════ */}
                 <h2>IX. Navigating the Technical Documentation</h2>
                 <p>
-                    This documentation is built for developers, auditors, and hackathon judges. It is organized into thematic sections below — covering protocol contracts (including Chainlink Automation), client integrations (encryption, subgraph, Semaphore / Noir / relayer / faucet), operations, and security.
+                    This documentation is built for developers, auditors, and hackathon judges. It is organized into thematic sections below — covering protocol contracts (including Chainlink CRE), client integrations (encryption, subgraph, Semaphore / Noir / relayer / faucet), operations, and security.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 mb-8">
                     {[
                         { id: "S1", title: "Core Concepts", desc: "Architecture overviews, Zama integration deep-dive, and guide to FHE.sol encrypted types.", color: "teal", links: [{ label: "Architecture", href: "/docs/architecture" }, { label: "FHE Primitives", href: "/docs/fhe-primitives" }] },
-                        { id: "S2", title: "Smart Contracts", desc: `Reference for ${DOCS_CONTRACT_COUNT} production contracts, EligibilityEngine scoring mechanics, Chainlink Automation, and consent-gated decryption.`, color: "purple", links: [{ label: "Engine", href: "/docs/engine" }, { label: "Contracts", href: "/docs/contracts" }, { label: "Sponsors", href: "/docs/sponsor-system" }, { label: "Chainlink Automation", href: "/docs/automation" }] },
+                        { id: "S2", title: "Smart Contracts", desc: `Reference for ${DOCS_CONTRACT_COUNT} production contracts, EligibilityEngine scoring mechanics, Chainlink CRE, and consent-gated decryption.`, color: "purple", links: [{ label: "Engine", href: "/docs/engine" }, { label: "Contracts", href: "/docs/contracts" }, { label: "Sponsors", href: "/docs/sponsor-system" }, { label: "Chainlink CRE", href: "/docs/automation" }] },
                         { id: "S3", title: "Integration & Frontend", desc: "Client-side encryption with @zama-fhe/sdk, subgraph indexing, React architecture, Semaphore / relayer / faucet tooling.", color: "blue", links: [{ label: "Encryption", href: "/docs/client-encryption" }, { label: "Subgraph", href: "/docs/subgraph" }, { label: "Frontend", href: "/docs/frontend" }, { label: "Identity & tooling", href: "/docs/identity-privacy" }] },
                         { id: "S4", title: "Operations", desc: "User workflows, private yield staking, deployment, timelock wiring, and release notes.", color: "amber", links: [{ label: "Workflows", href: "/docs/guides" }, { label: "Staking", href: "/docs/staking" }, { label: "Deploy", href: "/docs/deployment" }, { label: "Timelock", href: "/docs/timelock-wiring" }, { label: "Changelog", href: "/docs/changelog" }] },
                         { id: "S7", title: "MCP & SDK", desc: "TypeScript SDK for integrators plus local MCP for Cursor, Codex, and sponsor automation — not hosted in production.", color: "cyan", links: [{ label: "SDK", href: "/docs/mcp/sdk" }, { label: "MCP", href: "/docs/mcp" }, { label: "Setup", href: "/docs/mcp/setup" }, { label: "Tools", href: "/docs/mcp/tools" }] },

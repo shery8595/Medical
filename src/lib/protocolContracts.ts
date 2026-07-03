@@ -285,9 +285,9 @@ export const PROTOCOL_CONTRACTS: ProtocolContractEntry[] = [
         id: "13",
         name: "MedVaultAutomation.sol",
         accent: "rose",
-        role: "Chainlink Automation",
+        role: "CRE trial finalization",
         summary:
-            "Implements `AutomationCompatibleInterface`. `checkUpkeep` scans pending milestone payouts; `performUpkeep` triggers vault distribution. Constructor requires non-zero forwarder placeholder; real forwarder set via `scheduleChainlinkForwarder`.",
+            "Implements `AutomationCompatibleInterface`. `checkUpkeep` scans expired trials; `performUpkeep` triggers vault distribution. Triggered by Chainlink CRE via `AutomationReceiver` — set `chainlinkForwarder` to the receiver address.",
         keyFunctions: [
             "checkUpkeep(bytes)",
             "performUpkeep(bytes)",
@@ -300,6 +300,26 @@ export const PROTOCOL_CONTRACTS: ProtocolContractEntry[] = [
             "Type 0 upkeep (legacy eligibility check) removed — called deprecated `EligibilityEngine.checkEligibility`.",
             "Instant `setVault` / `setChainlinkForwarder` hard-revert.",
             "`performUpkeep` accepts trials in `expiredTrialIds` queue after prune (not only `activeTrialIds`).",
+            "**CRE:** `chainlinkForwarder` must be `AutomationReceiver`, not Keystone forwarder directly.",
+        ],
+    },
+    {
+        id: "13b",
+        name: "AutomationReceiver.sol",
+        accent: "rose",
+        role: "CRE bridge",
+        summary:
+            "Chainlink CRE consumer — receives Keystone reports, allowlisted forward to `MedVaultAutomation.performUpkeep(bytes)`. Deploy once per chain; configure `setCallAllowed` and workflow identity.",
+        keyFunctions: [
+            "setCallAllowed(address,bytes4,bool)",
+            "setConsumerGasLimit(address,bytes4,uint256)",
+            "setExpectedAuthor / setExpectedWorkflowName",
+            "onReport(bytes,bytes)",
+        ],
+        related: ["MedVaultAutomation"],
+        quirks: [
+            "Closed-by-default outbound allowlist — must allow `performUpkeep(bytes)` for MedVaultAutomation.",
+            "Workflow identity required before accepting reports (author+name or workflowId).",
         ],
     },
     {

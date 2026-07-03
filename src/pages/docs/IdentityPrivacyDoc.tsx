@@ -32,7 +32,7 @@ export function IdentityPrivacyDoc() {
                 <p className="lead not-prose text-base text-slate-600 max-w-3xl">
                     This hub covers <strong>Privy</strong>, the <strong>HTTP relayer</strong>, the optional{" "}
                     <strong>private faucet</strong>, and <strong>Reclaim</strong>. For encryption and ZK identity, use the
-                    dedicated pages above. <strong>Chainlink Automation</strong> is on its{" "}
+                    dedicated pages above. <strong>Chainlink CRE</strong> is on its{" "}
                     <Link to="/docs/automation" className="text-[#00685f] font-semibold hover:underline">
                         automation page
                     </Link>
@@ -199,7 +199,7 @@ useEligibilityProof.ts + noir.ts → sealResult() attestation after Zama FHE dec
                     </Link>{" "}
                     for FHE,{" "}
                     <Link to="/docs/automation" className="text-blue-700 font-semibold">
-                        Chainlink Automation
+                        Chainlink CRE
                     </Link>{" "}
                     for keeper finalization, and{" "}
                     <Link to="/docs/deployment" className="text-blue-700 font-semibold">

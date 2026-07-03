@@ -178,10 +178,11 @@ const faqs: { q: string; a: ReactNode }[] = [
         q: "Does MedVault use Chainlink?",
         a: (
             <>
-                Yes — <strong>MedVaultAutomation</strong> implements Chainlink Automation for trial expiry finalization, and{" "}
-                <strong>TrialManager</strong> can use Chainlink price feeds for compensation math. Details:{" "}
+                Yes — <strong>MedVaultAutomation</strong> finalizes expired trials via <strong>Chainlink CRE</strong> (Runtime Environment) and an{" "}
+                <code>AutomationReceiver</code> bridge. Legacy Chainlink Automation upkeeps are sunset as of 2026.{" "}
+                <strong>TrialManager</strong> can still use Chainlink price feeds for compensation math. Details:{" "}
                 <Link to="/docs/automation" className="text-blue-600 font-semibold">
-                    Chainlink Automation
+                    Chainlink CRE
                 </Link>{" "}
                 and the{" "}
                 <Link to="/docs/contracts" className="text-blue-600 font-semibold">
