@@ -41,3 +41,39 @@ export function getStoredProfileSalt(): bigint | null {
         return null;
     }
 }
+
+/** Raw JSON string of the stored plaintext profile (for identity backup/restore). */
+export function getStoredPatientProfilePlainRaw(): string | null {
+    try {
+        return localStorage.getItem(PROFILE_STORAGE_KEY);
+    } catch {
+        return null;
+    }
+}
+
+/** Raw decimal profile-salt string (for identity backup/restore). */
+export function getStoredProfileSaltRaw(): string | null {
+    try {
+        return localStorage.getItem(PROFILE_SALT_STORAGE_KEY);
+    } catch {
+        return null;
+    }
+}
+
+/** Write a raw profile JSON captured by a backup (validated on read by getStoredPatientProfilePlain). */
+export function restorePatientProfilePlainRaw(raw: string): void {
+    try {
+        localStorage.setItem(PROFILE_STORAGE_KEY, raw);
+    } catch {
+        /* ignore quota */
+    }
+}
+
+/** Write a raw profile-salt string captured by a backup. */
+export function restoreProfileSaltRaw(raw: string): void {
+    try {
+        localStorage.setItem(PROFILE_SALT_STORAGE_KEY, raw);
+    } catch {
+        /* ignore quota */
+    }
+}

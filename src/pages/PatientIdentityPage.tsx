@@ -25,6 +25,7 @@ import {
   parseIdentityBackupPayload,
   restoreIdentityFromBackup,
 } from "../lib/semaphore";
+import { getStoredPatientProfilePlainRaw, getStoredProfileSaltRaw } from "../lib/profileStorage";
 import { WalletSendCard } from "../components/identity/WalletSendCard";
 import { PrivacyTimeline, buildDefaultPrivacyTimeline } from "../components/privacy/PrivacyTimeline";
 import { usePatientProfile } from "../hooks/usePatientProfile";
@@ -96,12 +97,16 @@ export function PatientIdentityPage() {
       }
 
       const payload = {
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         identity: identity.export(),
         ...(nullifiers && Object.keys(nullifiers).length > 0 ? { anonymousNullifiers: nullifiers } : {}),
+        ...(getStoredPatientProfilePlainRaw()
+          ? { profilePlain: getStoredPatientProfilePlainRaw() as string }
+          : {}),
+        ...(getStoredProfileSaltRaw() ? { profileSalt: getStoredProfileSaltRaw() as string } : {}),
         note:
-          "MedVault Semaphore identity backup. Store offline — anyone with this file can impersonate your anonymous trial presence.",
+          "MedVault identity backup. Store offline — anyone with this file can impersonate your anonymous trial presence and read your plaintext health profile. Includes the Semaphore identity, plaintext health profile, and profile salt required to apply to trials.",
       };
 
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -143,11 +148,19 @@ export function PatientIdentityPage() {
         const nullifierCount = backup.anonymousNullifiers
           ? Object.keys(backup.anonymousNullifiers).length
           : 0;
-        setRestoreMessage(
-          nullifierCount > 0
-            ? `Identity restored (${nullifierCount} trial nullifier${nullifierCount === 1 ? "" : "s"}).`
-            : "Identity restored."
-        );
+        const parts: string[] = ["Identity restored"];
+        if (nullifierCount > 0) {
+          parts.push(`${nullifierCount} trial nullifier${nullifierCount === 1 ? "" : "s"}`);
+        }
+        if (backup.profilePlain && backup.profileSalt) {
+          parts.push("health vault profile");
+        }
+        let msg = parts.join(", ") + ".";
+        if (!backup.profilePlain || !backup.profileSalt) {
+          msg +=
+            " This backup does not include your health vault profile/salt — applying to trials will fail until you re-register or import a complete backup.";
+        }
+        setRestoreMessage(msg);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Could not read backup file.";
         setRestoreError(msg);

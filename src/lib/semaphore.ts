@@ -13,7 +13,7 @@ import {
     randomProfileSalt,
     type PatientProfilePlain,
 } from './profileCommitment';
-import { storeProfileSalt } from './profileStorage';
+import { storeProfileSalt, restorePatientProfilePlainRaw, restoreProfileSaltRaw } from './profileStorage';
 import { assertRegistrationFheBundle } from './registrationValidation';
 
 export { assertRegistrationFheBundle } from './registrationValidation';
@@ -338,6 +338,10 @@ export type IdentityBackupFile = {
     exportedAt?: string;
     identity: string;
     anonymousNullifiers?: Record<string, string>;
+    /** Raw JSON of medvault_profile_plain — required to apply to trials. */
+    profilePlain?: string;
+    /** Decimal string of medvault_profile_salt — required to apply to trials. */
+    profileSalt?: string;
     note?: string;
 };
 
@@ -369,11 +373,19 @@ export function parseIdentityBackupPayload(raw: unknown): IdentityBackupFile {
     if (o.anonymousNullifiers !== undefined && !isStringRecord(o.anonymousNullifiers)) {
         throw new Error('"anonymousNullifiers" must be a map of trial id → nullifier string.');
     }
+    if (o.profilePlain !== undefined && typeof o.profilePlain !== "string") {
+        throw new Error('"profilePlain" must be a JSON string.');
+    }
+    if (o.profileSalt !== undefined && typeof o.profileSalt !== "string") {
+        throw new Error('"profileSalt" must be a decimal string.');
+    }
     return {
         version: typeof o.version === "number" ? o.version : undefined,
         exportedAt: typeof o.exportedAt === "string" ? o.exportedAt : undefined,
         identity: o.identity.trim(),
         anonymousNullifiers: o.anonymousNullifiers as Record<string, string> | undefined,
+        profilePlain: typeof o.profilePlain === "string" ? o.profilePlain : undefined,
+        profileSalt: typeof o.profileSalt === "string" ? o.profileSalt : undefined,
         note: typeof o.note === "string" ? o.note : undefined,
     };
 }
@@ -398,6 +410,16 @@ export function restoreIdentityFromBackup(
             ? { ...readNullifierMap(), ...backup.anonymousNullifiers }
             : backup.anonymousNullifiers;
         localStorage.setItem(ANON_NULLIFIERS_STORAGE_KEY, JSON.stringify(next));
+    }
+
+    // The plaintext profile and profile salt are required to generate eligibility
+    // proofs when applying to trials. They are tied to this identity's on-chain
+    // profileCommitment, so always overwrite with the backup's values when present.
+    if (typeof backup.profilePlain === "string" && backup.profilePlain.trim()) {
+        restorePatientProfilePlainRaw(backup.profilePlain);
+    }
+    if (typeof backup.profileSalt === "string" && backup.profileSalt.trim()) {
+        restoreProfileSaltRaw(backup.profileSalt);
     }
 
     return identity;
