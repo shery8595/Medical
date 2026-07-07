@@ -27,6 +27,16 @@ const config = {
   version: 3,
   routes: [
     { handle: 'filesystem' },
+    {
+      src: '/assets/(.*)',
+      headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+      continue: true,
+    },
+    {
+      src: '/(.*)',
+      headers: { 'cache-control': 'no-cache, no-store, must-revalidate' },
+      continue: true,
+    },
     { src: '^/api/relayer/11155111/v2$', dest: ZAMA_RELAYER_SEPOLIA },
     { src: '^/api/relayer/11155111/v2/(.*)$', dest: `${ZAMA_RELAYER_SEPOLIA}/$1` },
     { src: '/.*', dest: '/index.html' },

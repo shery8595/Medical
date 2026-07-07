@@ -2,7 +2,10 @@
 if (window._cp) window._cp('main.tsx: module evaluation start');
 
 import './polyfills';
+import { clearStaleChunkReloadGuard, registerStaleChunkRecovery } from './lib/chunkRecovery';
 import { preloadAppImages } from './lib/preloadImages';
+
+registerStaleChunkRecovery();
 
 preloadAppImages();
 
@@ -30,6 +33,7 @@ try {
       <App />
     </StrictMode>,
   );
+  clearStaleChunkReloadGuard();
   // @ts-ignore
   if (window._cp) window._cp('main.tsx: render() called successfully');
 } catch (e: any) {
