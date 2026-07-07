@@ -16,6 +16,8 @@ type DecryptedValues = Record<string, unknown>;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const UNAUTHORIZED_AGGREGATE_MESSAGE =
     "Connected wallet is not authorized on EncryptedScoreLeaderboard for this trial. Aggregate decrypt is unavailable until leaderboard sponsor auth is wired.";
+const ENCRYPTED_AGGREGATE_UNAVAILABLE_MESSAGE =
+    "Applicant count is indexed, but encrypted aggregate decrypt is unavailable for this trial.";
 
 function handleToHex(value: unknown): `0x${string}` {
     const n = normalizeFheHandle(value);
@@ -55,7 +57,9 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
             const rows: EncryptedTrialAggregate[] = [];
             for (const rawId of trialIds.slice(0, 12)) {
                 const trialId = BigInt(String(rawId).replace(/^#/, ""));
+                let publicApplicantCount: number | null = null;
                 try {
+                    publicApplicantCount = Number(await board.getApplicantCount(trialId));
                     const [owner, trialSponsor, globalAuthorized, trialAuthorized] = await Promise.all([
                         board.owner(),
                         board.trialSponsor(trialId),
@@ -71,7 +75,7 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
                     if (!authorized) {
                         rows.push({
                             trialId: rawId,
-                            applicantCount: null,
+                            applicantCount: publicApplicantCount,
                             avgScore: null,
                             error: UNAUTHORIZED_AGGREGATE_MESSAGE,
                         });
@@ -93,8 +97,11 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
                     if (countHandle === `0x${"0".repeat(64)}`) {
                         rows.push({
                             trialId: rawId,
-                            applicantCount: 0,
+                            applicantCount: publicApplicantCount ?? 0,
                             avgScore: null,
+                            error: publicApplicantCount && publicApplicantCount > 0
+                                ? ENCRYPTED_AGGREGATE_UNAVAILABLE_MESSAGE
+                                : undefined,
                         });
                         continue;
                     }
@@ -114,11 +121,11 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
                 } catch (e) {
                     rows.push({
                         trialId: rawId,
-                        applicantCount: null,
+                        applicantCount: publicApplicantCount,
                         avgScore: null,
                         error: isUnauthorizedAggregateError(e)
                             ? UNAUTHORIZED_AGGREGATE_MESSAGE
-                            : e instanceof Error ? e.message : "Decrypt failed",
+                            : ENCRYPTED_AGGREGATE_UNAVAILABLE_MESSAGE,
                     });
                 }
             }
