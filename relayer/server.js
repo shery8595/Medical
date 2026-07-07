@@ -1032,6 +1032,10 @@ async function relayGetPendingRegisterAuth(req, res) {
     }
 }
 
+function pendingMilestoneAuthPatientKey(trialId, patient, milestoneIndex) {
+    return `patient:${BigInt(trialId).toString()}:${ethers.getAddress(patient)}:${BigInt(milestoneIndex).toString()}`;
+}
+
 async function relayStoreMilestoneAuth(req, res) {
     try {
         const {
@@ -1055,18 +1059,24 @@ async function relayStoreMilestoneAuth(req, res) {
         ) {
             return res.status(400).json({ error: "Missing store-milestone-auth fields" });
         }
-        const key = pendingMilestoneAuthKey(trialId, nullifier, milestoneIndex);
-        pendingMilestoneAuthStore.set(key, {
+        const patientAddress = ethers.getAddress(patient);
+        const entry = {
             trialId: BigInt(trialId).toString(),
             nullifier: BigInt(nullifier).toString(),
-            patient: ethers.getAddress(patient),
+            patient: patientAddress,
             milestoneIndex: BigInt(milestoneIndex).toString(),
             nonce: BigInt(nonce).toString(),
             deadline: BigInt(deadline).toString(),
             signature,
             milestoneManagerAddress: milestoneManagerAddress ?? "",
             storedAt: Date.now(),
-        });
+        };
+        const key = pendingMilestoneAuthKey(trialId, nullifier, milestoneIndex);
+        pendingMilestoneAuthStore.set(key, entry);
+        pendingMilestoneAuthStore.set(
+            pendingMilestoneAuthPatientKey(trialId, patientAddress, milestoneIndex),
+            entry
+        );
         res.json({ success: true });
     } catch (err) {
         console.error("relay/store-milestone-auth failed:", safeError(err));
@@ -1076,13 +1086,21 @@ async function relayStoreMilestoneAuth(req, res) {
 
 async function relayGetPendingMilestoneAuth(req, res) {
     try {
-        const { trialId, nullifier, milestoneIndex } = req.query ?? {};
-        if (trialId === undefined || nullifier === undefined || milestoneIndex === undefined) {
-            return res.status(400).json({ error: "Missing trialId, nullifier, or milestoneIndex" });
+        const { trialId, nullifier, patient, milestoneIndex } = req.query ?? {};
+        if (milestoneIndex === undefined) {
+            return res.status(400).json({ error: "Missing milestoneIndex" });
         }
-        const entry = pendingMilestoneAuthStore.get(
-            pendingMilestoneAuthKey(trialId, nullifier, milestoneIndex)
-        );
+        let entry = null;
+        if (trialId !== undefined && nullifier !== undefined) {
+            entry = pendingMilestoneAuthStore.get(
+                pendingMilestoneAuthKey(trialId, nullifier, milestoneIndex)
+            );
+        }
+        if (!entry && trialId !== undefined && patient) {
+            entry = pendingMilestoneAuthStore.get(
+                pendingMilestoneAuthPatientKey(trialId, patient, milestoneIndex)
+            );
+        }
         if (!entry) {
             return res.status(404).json({ error: "Pending milestone auth not found" });
         }

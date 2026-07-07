@@ -1,7 +1,6 @@
 import { ethers, type Provider } from "ethers";
 import type { Identity } from "@semaphore-protocol/identity";
 import { getTrialMilestoneManager, resolveChainIdFrom } from "./contracts";
-import { getMedVaultRelayerUrl } from "./mobile";
 import { getRelayersInFailoverOrder } from "./relayerRegistry";
 import {
   getPendingMilestoneAuthLocal,
@@ -127,35 +126,93 @@ export async function publishPendingMilestoneAuth(
   await postRelayer("/relay/store-milestone-auth", auth, relayerBaseUrl);
 }
 
-export async function fetchPendingMilestoneAuthFromRelayer(
-  trialId: bigint,
-  nullifier: bigint,
-  milestoneIndex: number,
-  relayerBaseUrl?: string
+function relayerUrlsToTry(relayerBaseUrl?: string): string[] {
+  if (relayerBaseUrl) return [relayerBaseUrl.replace(/\/$/, "")];
+  return getRelayersInFailoverOrder().map((url) => url.replace(/\/$/, ""));
+}
+
+async function fetchPendingMilestoneAuthFromRelayerUrl(
+  relayerUrl: string,
+  qs: URLSearchParams
 ): Promise<PendingMilestoneAuth | null> {
-  const relayerUrl = (relayerBaseUrl ?? getMedVaultRelayerUrl()).replace(/\/$/, "");
-  const qs = new URLSearchParams({
-    trialId: trialId.toString(),
-    nullifier: nullifier.toString(),
-    milestoneIndex: milestoneIndex.toString(),
-  });
-  const response = await fetch(`${relayerUrl}/relay/pending-milestone-auth?${qs}`);
+  const base = relayerUrl.replace(/\/$/, "");
+  const path = base ? `${base}/relay/pending-milestone-auth` : "/relay/pending-milestone-auth";
+  const response = await fetch(`${path}?${qs}`);
   if (response.status === 404) return null;
   const data = await response.json().catch(() => ({} as Record<string, unknown>));
   if (!response.ok || !data.success || !data.auth) return null;
   return data.auth as PendingMilestoneAuth;
 }
 
-export async function resolvePendingMilestoneAuth(
+export async function fetchPendingMilestoneAuthFromRelayer(
   trialId: bigint,
   nullifier: bigint,
   milestoneIndex: number,
   relayerBaseUrl?: string
 ): Promise<PendingMilestoneAuth | null> {
+  const qs = new URLSearchParams({
+    trialId: trialId.toString(),
+    nullifier: nullifier.toString(),
+    milestoneIndex: milestoneIndex.toString(),
+  });
+  for (const relayerUrl of relayerUrlsToTry(relayerBaseUrl)) {
+    try {
+      const auth = await fetchPendingMilestoneAuthFromRelayerUrl(relayerUrl, qs);
+      if (auth) return auth;
+    } catch {
+      // try next relayer
+    }
+  }
+  return null;
+}
+
+export async function fetchPendingMilestoneAuthByPatientFromRelayer(
+  trialId: bigint,
+  patientAddress: string,
+  milestoneIndex: number,
+  relayerBaseUrl?: string
+): Promise<PendingMilestoneAuth | null> {
+  const qs = new URLSearchParams({
+    trialId: trialId.toString(),
+    patient: ethers.getAddress(patientAddress),
+    milestoneIndex: milestoneIndex.toString(),
+  });
+  for (const relayerUrl of relayerUrlsToTry(relayerBaseUrl)) {
+    try {
+      const auth = await fetchPendingMilestoneAuthFromRelayerUrl(relayerUrl, qs);
+      if (auth) return auth;
+    } catch {
+      // try next relayer
+    }
+  }
+  return null;
+}
+
+export async function resolvePendingMilestoneAuth(
+  trialId: bigint,
+  nullifier: bigint,
+  milestoneIndex: number,
+  options?: { relayerBaseUrl?: string; patientAddress?: string }
+): Promise<PendingMilestoneAuth | null> {
   const local = getPendingMilestoneAuthLocal(trialId, nullifier, milestoneIndex);
   if (local) return local;
   try {
-    return await fetchPendingMilestoneAuthFromRelayer(trialId, nullifier, milestoneIndex, relayerBaseUrl);
+    const byNullifier = await fetchPendingMilestoneAuthFromRelayer(
+      trialId,
+      nullifier,
+      milestoneIndex,
+      options?.relayerBaseUrl
+    );
+    if (byNullifier) return byNullifier;
+    if (options?.patientAddress) {
+      return await fetchPendingMilestoneAuthByPatientFromRelayer(
+        trialId,
+        options.patientAddress,
+        milestoneIndex,
+        options?.relayerBaseUrl
+      );
+    }
+    return null;
   } catch {
     return null;
   }
@@ -179,6 +236,7 @@ export async function createAndPublishPendingMilestoneAuths(params: {
   const milestoneManagerAddress = await mm.getAddress();
   let nonce = await mm.milestoneCompletionNonce(params.permitHolder);
   const auths: PendingMilestoneAuth[] = [];
+  let relayerPublishedCount = 0;
   for (let i = progress; i < milestones.length; i++) {
     const deadline = milestoneAuthDeadline(Number(milestones[i]!.deadline));
     const signature = await signMilestoneCompletionWithIdentity(
@@ -208,9 +266,16 @@ export async function createAndPublishPendingMilestoneAuths(params: {
     auths.push(auth);
     try {
       await publishPendingMilestoneAuth(auth, params.relayerBaseUrl);
+      relayerPublishedCount += 1;
     } catch (err) {
       console.warn(`[pendingMilestoneAuth] relayer upload failed for milestone ${i}:`, err);
     }
+  }
+  if (auths.length > 0 && relayerPublishedCount === 0) {
+    throw new Error(
+      "Milestone signatures were created locally but could not reach the relayer. " +
+        "Check VITE_RELAYER_URLS and redeploy the relayer with milestone-auth support, then retry."
+    );
   }
   return auths;
 }

@@ -240,7 +240,12 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
             if (!nullifier) {
                 throw new Error("Missing anonymous application nullifier for this trial.");
             }
-            const permitHolder = await generateEphemeralAddress(identity);
+            const eligibilityEngine = getEligibilityEngine(signer);
+            const engineForPermit = eligibilityEngine.connect(getEphemeralSigner(identity, signer.provider));
+            const permitHolder = await engineForPermit.getDecryptPermitHolder(nullifier, BigInt(trial.id));
+            if (!permitHolder || permitHolder === ethers.ZeroAddress) {
+                throw new Error("No reward permit holder found for this anonymous application.");
+            }
             const auths = await createAndPublishPendingMilestoneAuths({
                 identity,
                 provider: signer.provider,

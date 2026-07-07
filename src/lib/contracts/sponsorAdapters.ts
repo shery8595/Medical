@@ -754,7 +754,10 @@ async function resolveMilestonePatientSignature(
       BigInt(trialId),
       BigInt(options.nullifier),
       milestoneIndex,
-      options.relayerBaseUrl
+      {
+        relayerBaseUrl: options.relayerBaseUrl,
+        patientAddress,
+      }
     );
     if (auth) {
       return {
