@@ -16,7 +16,6 @@ import {
     Coins,
     ArrowUpRight,
     MessageSquare,
-    ChevronRight,
     Eye,
     AlertTriangle,
     Gift,
@@ -359,9 +358,6 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
         if (status !== "Accepted") return;
         if (!poolFunded || isRegistered || isRegistering) return;
         if (hasEnded || trial.isExpired) {
-            setIncentiveStatus(
-                "Enrollment closed: this trial has ended. Pool registration must complete before the trial end date.",
-            );
             return;
         }
         if (!hasIdentity) return;
@@ -507,6 +503,23 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
         }
     }, [milestones.length, refreshRewardReadiness]);
 
+    const milestoneAuthSynced = Boolean(
+        milestoneAuthStatus && /synced/i.test(milestoneAuthStatus),
+    );
+
+    const showPromotionAuthPanel =
+        poolFunded &&
+        status === "Accepted" &&
+        hasIdentity &&
+        milestones.length > 0 &&
+        !hasEnded;
+
+    const enrollmentAlert =
+        incentiveStatus &&
+        (incentiveStatus.includes("Failed") ||
+            (incentiveStatus.includes("Registration blocked") && !hasEnded) ||
+            (incentiveStatus.includes("Enrollment closed") && !hasEnded && !isRegistered));
+
     // Decode sponsor message (hex → text)
     const decodedMessage = (() => {
         if (!trial.applicationMessage) return null;
@@ -531,7 +544,17 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
         >
-            <div className="group relative rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)] hover:shadow-[0_12px_40px_rgba(15,23,42,0.07)] transition-all duration-300 overflow-hidden">
+            <div className={cn(
+                "group relative rounded-2xl border bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)] hover:shadow-[0_12px_40px_rgba(15,23,42,0.07)] transition-all duration-300 overflow-hidden",
+                status === "Accepted" ? "border-slate-200/90" : "border-slate-200/80",
+            )}>
+                <div
+                    className={cn(
+                        "absolute left-0 top-0 bottom-0 w-1",
+                        status === "Accepted" ? "bg-teal-500" : status === "Pending" ? "bg-amber-400" : "bg-rose-400",
+                    )}
+                    aria-hidden
+                />
 
                 {/* ── Main Row ── */}
                 <div className="flex flex-col lg:flex-row">
@@ -540,11 +563,11 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                     <div className="flex-1 p-6 space-y-4">
                         {/* Top badges row */}
                         <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className={cn("font-mono text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 border", config.color)}>
-                                <StatusIcon className="h-3 w-3 mr-1.5" />
+                            <Badge variant="outline" className={cn("text-xs font-medium px-2.5 py-1 border", config.color)}>
+                                <StatusIcon className="h-3.5 w-3.5 mr-1.5" />
                                 {config.label}
                             </Badge>
-                            <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600">
+                            <Badge variant="outline" className="text-xs font-medium px-2 py-0.5 bg-slate-50 border-slate-200 text-slate-600">
                                 {trial.phase.toUpperCase().startsWith("PHASE") ? trial.phase : `Phase ${trial.phase}`}
                             </Badge>
                             {hasEnded && (
@@ -659,23 +682,35 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                         )}
                     </div>
 
-                    {/* ── Right: Actions ── */}
-                    <div className="lg:w-56 p-6 flex flex-col gap-3 justify-center border-t lg:border-t-0 lg:border-l border-slate-100 bg-white">
-                        {/* Incentive action */}
+                    {/* ── Right: Rewards & actions ── */}
+                    <div className="lg:w-72 p-6 flex flex-col gap-3 border-t lg:border-t-0 lg:border-l border-slate-100 bg-gradient-to-b from-slate-50/70 via-white to-white">
                         {rewardReadinessLoading && poolFunded && status === "Accepted" && hasIdentity && !rewardReadiness ? (
-                            <p className="text-[10px] text-center text-slate-500 flex items-center justify-center gap-1">
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                            <div className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 text-xs text-slate-600">
+                                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
                                 Checking reward status…
-                            </p>
+                            </div>
                         ) : null}
 
-                        {rewardReadinessLoading && rewardReadiness && canClaimRewards ? (
-                            <p className="text-[9px] text-center text-slate-400">Updating…</p>
-                        ) : null}
+                        {hasEnded && status === "Accepted" && (
+                            <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+                                <Clock className="h-4 w-4 shrink-0 text-slate-500 mt-0.5" />
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-800">Trial ended</p>
+                                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                                        This study is closed. Rewards already received are recorded; any further
+                                        payouts depend on sponsor release schedules.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {poolFunded && status === "Accepted" && !hasIdentity && (
-                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-900">
-                                Rewards use your anonymous apply session. Open this page in the <strong>same browser</strong> you used to apply (Semaphore identity required).
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs leading-relaxed text-amber-950">
+                                <p className="font-semibold">Same browser required</p>
+                                <p className="mt-1 text-amber-900/90">
+                                    Open this page in the browser profile you used to apply so we can verify your
+                                    anonymous identity for rewards.
+                                </p>
                             </div>
                         )}
 
@@ -684,15 +719,13 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="w-full rounded-xl text-[10px] uppercase tracking-wider h-9"
+                                    className="w-full rounded-lg text-xs h-9 border-slate-200"
                                     onClick={() => void refreshRewardReadiness()}
                                 >
                                     Refresh reward status
                                 </Button>
                                 {rewardReadinessError ? (
-                                    <p className="text-[9px] text-center text-amber-700 leading-snug px-1">
-                                        {rewardReadinessError}
-                                    </p>
+                                    <p className="text-xs text-amber-800 leading-relaxed px-0.5">{rewardReadinessError}</p>
                                 ) : null}
                             </div>
                         ) : null}
@@ -700,120 +733,139 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                         {canClaimRewards && (
                             <Button
                                 size="sm"
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 shadow-lg shadow-emerald-500/20"
+                                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-sm h-10 gap-2 shadow-md shadow-teal-600/15"
                                 onClick={() => setIsClaimModalOpen(true)}
                                 disabled={rewardReadinessLoading && !rewardReadiness}
                             >
                                 {rewardReadinessLoading ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                    <Gift className="h-3 w-3" />
+                                    <Gift className="h-4 w-4" />
                                 )}
                                 {rewardReadiness?.hasPendingWithdraw &&
                                 !rewardReadiness.pendingConfirmMilestones.length
-                                    ? "Resume Payout"
+                                    ? "Resume payout"
                                     : rewardReadiness?.pendingConfirmMilestones.length
-                                      ? "Confirm & Claim Rewards"
-                                      : "Claim Rewards"}
+                                      ? "Confirm & claim"
+                                      : "Claim rewards"}
                             </Button>
                         )}
 
                         {awaitingNextPayout && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled
-                                className="w-full border-emerald-200 bg-emerald-50/80 text-emerald-800 font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 cursor-default opacity-100"
-                            >
+                            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200/90 bg-emerald-50/60 px-3.5 py-3">
                                 {rewardReadinessLoading ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-600 mt-0.5" />
                                 ) : (
-                                    <CheckCircle className="h-3 w-3" />
+                                    <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
                                 )}
-                                {rewardReadinessLoading
-                                    ? "Checking for new payouts…"
-                                    : "Claimed · awaiting next payout"}
-                            </Button>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-emerald-900">Payout received</p>
+                                    <p className="text-xs text-emerald-800/90 mt-0.5 leading-relaxed">
+                                        {rewardReadinessLoading
+                                            ? "Checking for the next sponsor release…"
+                                            : "You&apos;re caught up for now. We&apos;ll notify you here when the next phase is ready to claim."}
+                                    </p>
+                                </div>
+                            </div>
                         )}
 
-                        {rewardsClaimedSuccessfully && (
-                            <Button
-                                size="sm"
-                                disabled
-                                className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 cursor-default opacity-100"
-                            >
-                                <CheckCircle className="h-3 w-3" />
-                                Claimed Successfully
-                            </Button>
+                        {rewardsClaimedSuccessfully && !awaitingNextPayout && (
+                            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200/90 bg-emerald-50/60 px-3.5 py-3">
+                                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-semibold text-emerald-900">Rewards claimed</p>
+                                    <p className="text-xs text-emerald-800/90 mt-0.5">All available entitlements are confirmed.</p>
+                                </div>
+                            </div>
                         )}
 
-                        {/* Sponsor message toggle */}
+                        {showPromotionAuthPanel && (
+                            <div className="rounded-xl border border-slate-200/90 bg-white px-3.5 py-3.5 space-y-2.5 shadow-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-semibold text-slate-800">Promotion authorization</p>
+                                    {milestoneAuthSynced && !isSyncingMilestoneAuth && (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 border border-teal-100">
+                                            <CheckCircle className="h-3 w-3" />
+                                            Ready
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-relaxed">
+                                    One-time setup so your sponsor can advance you between study phases before the
+                                    trial ends.
+                                </p>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isSyncingMilestoneAuth}
+                                    className="w-full h-9 rounded-lg text-xs font-medium border-slate-200 hover:bg-slate-50"
+                                    onClick={() => void handleSyncMilestoneAuth()}
+                                >
+                                    {isSyncingMilestoneAuth ? (
+                                        <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                            Syncing…
+                                        </>
+                                    ) : milestoneAuthSynced ? (
+                                        <>
+                                            <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-teal-600" />
+                                            Re-sync authorization
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-teal-600" />
+                                            Authorize promotions
+                                        </>
+                                    )}
+                                </Button>
+                                {milestoneAuthStatus && !milestoneAuthStatus.toLowerCase().includes("failed") && (
+                                    <p className="text-[11px] text-slate-500 leading-snug">{milestoneAuthStatus}</p>
+                                )}
+                                {milestoneAuthStatus?.toLowerCase().includes("failed") && (
+                                    <p className="text-[11px] text-rose-600 leading-snug">{milestoneAuthStatus}</p>
+                                )}
+                            </div>
+                        )}
+
                         {decodedMessage && (
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="w-full font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5"
+                                className="w-full rounded-lg text-xs font-medium h-9 border-slate-200"
                                 onClick={() => setShowMessage(!showMessage)}
                             >
-                                <MessageSquare className="h-3 w-3" /> {showMessage ? "Hide Message" : "Sponsor Message"}
+                                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                                {showMessage ? "Hide sponsor message" : "Sponsor message"}
                             </Button>
                         )}
 
-                        {poolFunded && status === "Accepted" && hasIdentity && milestones.length > 0 && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={isSyncingMilestoneAuth}
-                                className="w-full font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5"
-                                onClick={() => void handleSyncMilestoneAuth()}
-                            >
-                                {isSyncingMilestoneAuth ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                    <ShieldCheck className="h-3 w-3" />
-                                )}
-                                {isSyncingMilestoneAuth ? "Syncing promotion auth..." : "Sync promotion authorization"}
-                            </Button>
+                        {enrollmentAlert && (
+                            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-950">
+                                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                                <p className="leading-relaxed">{incentiveStatus}</p>
+                            </div>
                         )}
 
-                        {milestoneAuthStatus && (
-                            <p className="text-[9px] font-bold text-center leading-snug px-1 text-slate-500">
-                                {milestoneAuthStatus}
-                            </p>
-                        )}
-
-                        {/* View trial details link */}
-                        <Link to="/patient/find-trials">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="w-full font-medium rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50"
-                            >
-                                View Trial <ChevronRight className="h-3 w-3" />
-                            </Button>
+                        <Link
+                            to="/patient/find-trials"
+                            className="mt-auto pt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900 transition-colors"
+                        >
+                            Browse trials
+                            <ArrowUpRight className="h-3.5 w-3.5" />
                         </Link>
-
-                        {incentiveStatus && (incentiveStatus.includes("Failed") || incentiveStatus.includes("Enrollment closed") || incentiveStatus.includes("Registration blocked")) && (
-                            <p className={cn(
-                                "text-[9px] font-bold text-center leading-snug px-1",
-                                incentiveStatus.includes("Failed") ? "text-rose-500" : "text-amber-700",
-                            )}>
-                                {incentiveStatus}
-                            </p>
-                        )}
                     </div>
                 </div>
 
                 {/* ── Trial Progress (Phase 1.1) ── */}
                 {status === "Accepted" && milestones.length > 0 && (
-                    <div className="px-6 pb-6 pt-2 border-t border-slate-100 bg-slate-50/60">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="px-6 pb-6 pt-4 border-t border-slate-100 bg-slate-50/40">
+                        <div className="flex items-center justify-between mb-5">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="h-4 w-4 text-teal-600" />
-                                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Trial Journey & Milestones</h4>
+                                <h4 className="text-xs font-semibold text-slate-700">Study milestones</h4>
                             </div>
-                            <span className="text-[10px] font-bold text-slate-400">
-                                {currentProgress + 1} / {milestones.length} Completed
+                            <span className="text-xs font-medium text-slate-500 tabular-nums">
+                                {Math.max(0, currentProgress + 1)} of {milestones.length} complete
                             </span>
                         </div>
 

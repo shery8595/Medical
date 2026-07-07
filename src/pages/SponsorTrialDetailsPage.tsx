@@ -531,6 +531,7 @@ export function SponsorTrialDetailsPage() {
             setMilestoneStatus(msg);
             return;
         }
+        if (!assertPromotionWindowOpen(milestoneIndex, milestoneName)) return;
 
         const key = promoteTargetKey("anon", nullifier, milestoneIndex);
         setPromotingKey(key);
@@ -564,6 +565,10 @@ export function SponsorTrialDetailsPage() {
                 setDecisionStatus(
                     "Error: Patient must sync milestone authorization from My Applications (same browser profile used to apply), then retry promotion."
                 );
+            } else if (raw.includes("milestone deadline passed") || (raw.includes("missing revert data") && trialEnded)) {
+                setDecisionStatus(
+                    "Error: Promotion deadline has passed. Participants must be promoted before the trial ends and before each phase's on-chain deadline."
+                );
             } else if (raw.includes("already paid")) {
                 setDecisionStatus(`Success! ${milestoneName} was already released.`);
             } else {
@@ -585,6 +590,8 @@ export function SponsorTrialDetailsPage() {
             setMilestoneStatus(msg);
             return;
         }
+
+        if (!assertPromotionWindowOpen(milestoneIndex, milestoneName)) return;
 
         const key = promoteTargetKey("wallet", patientAddress, milestoneIndex);
         setPromotingKey(key);
@@ -613,6 +620,10 @@ export function SponsorTrialDetailsPage() {
                 setDecisionStatus("Error: Participant not in reward pool. Fund trial and retry.");
             } else if (reason.toLowerCase().includes("must complete milestones in order")) {
                 setDecisionStatus("Error: Promote earlier phases first. Milestones must be completed in order.");
+            } else if (reason.toLowerCase().includes("milestone deadline passed") || (reason.toLowerCase().includes("missing revert data") && trialEnded)) {
+                setDecisionStatus(
+                    "Error: Promotion deadline has passed. Participants must be promoted before the trial ends and before each phase's on-chain deadline."
+                );
             } else {
                 setDecisionStatus(`Error: ${reason || "Promotion failed"}`);
             }
@@ -677,6 +688,50 @@ export function SponsorTrialDetailsPage() {
             if (paid && effective < i + 1) effective = i + 1;
         }
         return effective;
+    };
+
+    const nowSec = () => Math.floor(Date.now() / 1000);
+
+    const trialEnded = useMemo(
+        () =>
+            poolInfo.reclaim.trialEnded ||
+            Boolean(trial?.endTime && parseInt(trial.endTime, 10) <= nowSec()),
+        [poolInfo.reclaim.trialEnded, trial?.endTime],
+    );
+
+    const getMilestonePromotionWindow = (milestoneIndex: number): { open: boolean; reason: string | null } => {
+        const milestone = milestones[milestoneIndex];
+        if (!milestone) return { open: true, reason: null };
+        const deadlineSec = Number(milestone.deadline ?? 0);
+        if (!deadlineSec) return { open: true, reason: null };
+        if (nowSec() > deadlineSec) {
+            const label = milestone.name || `Phase ${milestoneIndex + 1}`;
+            return {
+                open: false,
+                reason:
+                    `Promotion for "${label}" is closed — the on-chain deadline passed ` +
+                    `(${new Date(deadlineSec * 1000).toLocaleString()}). ` +
+                    `Participants must be promoted before the trial ends.`,
+            };
+        }
+        return { open: true, reason: null };
+    };
+
+    const promotionReminderActive = !trialEnded && milestones.length > 0;
+
+    const promotionExpiredForTrial = useMemo(() => {
+        if (milestones.length === 0) return false;
+        return milestones.some((_, mIdx) => !getMilestonePromotionWindow(mIdx).open);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [milestones, trialEnded]);
+
+    const assertPromotionWindowOpen = (milestoneIndex: number, milestoneName: string): boolean => {
+        const window = getMilestonePromotionWindow(milestoneIndex);
+        if (window.open) return true;
+        const msg = window.reason || `Promotion for ${milestoneName} is no longer available.`;
+        setDecisionStatus(`Error: ${msg}`);
+        setMilestoneStatus(`Error: ${msg}`);
+        return false;
     };
 
     const getAnonymousPhaseAggregateState = (milestoneIndex: number) => {
@@ -818,10 +873,6 @@ export function SponsorTrialDetailsPage() {
             };
         }
 
-        const trialEnded =
-            poolInfo.reclaim.trialEnded ||
-            Boolean(trial?.endTime && parseInt(trial.endTime, 10) <= Math.floor(Date.now() / 1000));
-
         if (idx === 0 && !trialEnded) {
             return {
                 statusLabel: "Awaiting trial end",
@@ -845,13 +896,16 @@ export function SponsorTrialDetailsPage() {
         }
 
         if (idx > 0 && phase.promotedCount === 0) {
+            const promoWindow = getMilestonePromotionWindow(idx);
             return {
-                statusLabel: "Awaiting promotion",
-                buttonLabel: "Promote first",
+                statusLabel: promoWindow.open ? "Awaiting promotion" : "Promotion closed",
+                buttonLabel: promoWindow.open ? "Promote first" : "Deadline passed",
                 buttonDisabled: true,
                 action: "none",
                 tone: "blocked",
-                hint: `Promote participants to ${milestone.name} before staging entitlements.`,
+                hint: promoWindow.open
+                    ? `Promote participants to ${milestone.name} before staging entitlements (must be done before trial ends).`
+                    : promoWindow.reason,
             };
         }
 
@@ -908,6 +962,10 @@ export function SponsorTrialDetailsPage() {
         if (!prevSatisfied) {
             return { label: `P${mIdx + 1} locked`, sublabel: "Complete prior phase", disabled: true, tone: "locked" };
         }
+        const promotionWindow = getMilestonePromotionWindow(mIdx);
+        if (!promotionWindow.open && !phase.promoted) {
+            return { label: `P${mIdx + 1} closed`, sublabel: "Deadline passed", disabled: true, tone: "locked" };
+        }
         if (phase.needsOnChainSync) {
             return {
                 label: `Sync P${mIdx + 1}`,
@@ -925,7 +983,7 @@ export function SponsorTrialDetailsPage() {
         if (phase.promoted) {
             return { label: `P${mIdx + 1} promoted`, sublabel: "Ready for release", disabled: true, tone: "promoted" };
         }
-        return { label: `Promote P${mIdx + 1}`, sublabel: "Not started", disabled: false, tone: "action" };
+        return { label: `Promote P${mIdx + 1}`, sublabel: "Before trial ends", disabled: false, tone: "action" };
     };
 
     const getWalletParticipantPhaseUi = (
@@ -949,7 +1007,11 @@ export function SponsorTrialDetailsPage() {
                 tone: "promoted",
             };
         }
-        return { label: `Promote P${mIdx + 1}`, sublabel: "Not started", disabled: false, tone: "action" };
+        const promotionWindow = getMilestonePromotionWindow(mIdx);
+        if (!promotionWindow.open) {
+            return { label: `P${mIdx + 1} closed`, sublabel: "Deadline passed", disabled: true, tone: "locked" };
+        }
+        return { label: `Promote P${mIdx + 1}`, sublabel: "Before trial ends", disabled: false, tone: "action" };
     };
 
     const phaseToneClasses: Record<PhaseRowTone, { badge: string; icon: string; button: string }> = {
@@ -1259,6 +1321,27 @@ export function SponsorTrialDetailsPage() {
                                                 <span>
                                                     Initial screening entitlements have already been distributed on-chain.
                                                     Later phases still require promotion and staging.
+                                                </span>
+                                            </div>
+                                        )}
+                                        {promotionReminderActive && (
+                                            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-[10px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+                                                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                <span>
+                                                    <strong className="font-bold">Promote before trial ends.</strong>{" "}
+                                                    Each participant must be promoted on-chain for every phase before that
+                                                    phase&apos;s deadline (typically the trial end date). Ask patients to
+                                                    sync promotion authorization from My Applications first.
+                                                </span>
+                                            </div>
+                                        )}
+                                        {trialEnded && promotionExpiredForTrial && (
+                                            <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50/90 px-3 py-2 text-[10px] text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
+                                                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                <span>
+                                                    This trial has ended and at least one promotion deadline has passed.
+                                                    On-chain promotion is no longer available for those phases on the
+                                                    current contracts.
                                                 </span>
                                             </div>
                                         )}
