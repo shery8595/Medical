@@ -213,6 +213,33 @@ export const getMedVaultAutomation = (signer: ethers.Signer | ethers.Provider, c
     getContract("MedVaultAutomation", signer, chainId);
 export const getStakingManager = (signer: ethers.Signer | ethers.Provider, chainId?: bigint | number) =>
     getContract("StakingManager", signer, chainId);
+
+/**
+ * Verify the deployed StakingManager is wired to Aave contracts that actually
+ * exist on this chain. A misconfigured deployment (e.g. Arbitrum-Sepolia Aave
+ * addresses on Ethereum Sepolia) makes stake() silently revert with an
+ * unhelpful "missing revert data" error from estimateGas. Throw a friendly
+ * message instead so the UI can surface a clear error rather than burning gas.
+ */
+export async function assertStakingAaveConfigured(
+    provider: ethers.Provider,
+    chainId?: bigint | number,
+): Promise<void> {
+    const sm = getStakingManager(provider, chainId) as unknown as {
+        wethGateway: () => Promise<string>;
+        aWeth: () => Promise<string>;
+    };
+    const [wethGateway, aWeth] = await Promise.all([sm.wethGateway(), sm.aWeth()]);
+    const [gwCode, aCode] = await Promise.all([
+        provider.getCode(wethGateway),
+        provider.getCode(aWeth),
+    ]);
+    if (gwCode === "0x" || aCode === "0x") {
+        throw new Error(
+            "Staking is unavailable on this deployment: StakingManager is wired to Aave addresses that have no code on this network. The operator must redeploy StakingManager with the correct Aave V3 Sepolia addresses before staking can be used."
+        );
+    }
+}
 export const getMedVaultRegistry = (signer: ethers.Signer | ethers.Provider, chainId?: bigint | number) =>
     getContract("MedVaultRegistry", signer, chainId);
 export const getEncryptedScoreLeaderboard = (

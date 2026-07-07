@@ -20,7 +20,7 @@ import { motion } from "framer-motion";
 import { useAaveYield } from "../hooks/useAaveYield";
 import { useStaking } from "../hooks/useStaking";
 import { useWeb3 } from "../lib/Web3Context";
-import { getStakingManager, getSponsorIncentiveVault, getConfidentialETH } from "../lib/contracts";
+import { getStakingManager, getSponsorIncentiveVault, getConfidentialETH, assertStakingAaveConfigured } from "../lib/contracts";
 import { resolveParticipantRewardAddress } from "../lib/contracts/sponsorAdapters";
 import { cn } from "../lib/utils";
 import { reencryptUint64WithEphemeral } from "../lib/fhe";
@@ -302,6 +302,13 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
             setWizardStep("claiming");
             setStatus(`Staking ${formatReceivedEth(stakeWei)} ETH into Aave V3…`);
             const stakingManager = getStakingManager(signer);
+            const provider = signer.provider;
+            if (provider) {
+                await assertStakingAaveConfigured(
+                    provider as ethers.Provider,
+                    await provider.getNetwork().then((n) => n.chainId),
+                );
+            }
             const tx = await stakingManager.stake({ value: stakeWei });
             await tx.wait();
 

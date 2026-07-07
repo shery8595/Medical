@@ -78,9 +78,10 @@ async function main() {
     console.log(`✓ MedVaultAutomation      → ${automationAddress} (forwarder: ${chainlinkForwarder})`);
 
     const StakingManager = await ethers.getContractFactory("StakingManager");
-    const AAVE_POOL = process.env.AAVE_POOL || "0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff";
-    const WETH_GATEWAY = process.env.WETH_GATEWAY || "0x20040a64612555042335926d72B4E5F667a67fA1";
-    const AWETH = process.env.AWETH || "0xf5f17EbE81E516Dc7cB38D61908EC252F150CE60";
+    // Aave V3 on ETHEREUM Sepolia (see scripts/deploy.ts for rationale).
+    const AAVE_POOL = process.env.AAVE_POOL || "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951";
+    const WETH_GATEWAY = process.env.WETH_GATEWAY || "0x387d311e47e80b498169e6fb51d3193167d89F7D";
+    const AWETH = process.env.AWETH || "0x5b071b590a59395fE4025A0Ccc1FcC931AAc1830";
     const stakingManager = await StakingManager.deploy(cETHAddress, AAVE_POOL, WETH_GATEWAY, AWETH);
     await stakingManager.waitForDeployment();
     const stakingManagerAddress = await stakingManager.getAddress();

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useWeb3 } from "../lib/Web3Context";
-import { getStakingManager } from "../lib/contracts";
+import { getStakingManager, assertStakingAaveConfigured } from "../lib/contracts";
 import { ethers } from "ethers";
 import {
     ensureZamaConnected,
@@ -124,6 +124,13 @@ export function useStaking() {
             setLoading(true);
             const contract = getStakingManager(signer);
             const amountWei = ethers.parseEther(amountEth);
+            const provider = signer.provider;
+            if (provider) {
+                await assertStakingAaveConfigured(
+                    provider as ethers.Provider,
+                    await provider.getNetwork().then((n) => n.chainId),
+                );
+            }
             const tx = await contract.stake({ value: amountWei });
             await tx.wait();
             setIsRevealed(false);
