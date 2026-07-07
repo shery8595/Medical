@@ -94,15 +94,23 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }, [privyReady, authenticated, walletsReady, wallets.length, login, createWallet]);
 
     const logout = useCallback(async () => {
+        // Clear local web3 state synchronously so the UI reacts immediately, even if
+        // Privy's network logout is slow or hangs. Callers should navigate("/") before
+        // awaiting this so the user is not left on a guarded route seeing a "sign in" gate.
         setAccount(null);
         setSigner(null);
         setProvider(null);
         setEthereum(null);
         setChainId(null);
         setIsFHEReady(false);
+        setIsConnecting(false);
         setError(null);
         resetZamaSDK();
-        await privyLogout();
+        try {
+            await privyLogout();
+        } catch (err: unknown) {
+            console.warn("Privy logout failed (local state already cleared):", err);
+        }
     }, [privyLogout]);
 
     useEffect(() => {

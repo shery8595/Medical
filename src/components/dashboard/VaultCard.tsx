@@ -3,6 +3,7 @@ import { MedicalReport } from "../../types";
 import { ethers } from "ethers";
 import { getStoredIdentity } from "../../lib/semaphore";
 import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   ShieldCheck,
   Lock,
@@ -21,6 +22,7 @@ import {
   Ruler,
   Cigarette,
   Droplet,
+  KeyRound,
 } from "lucide-react";
 import { useWeb3 } from "../../lib/Web3Context";
 import { decryptPatientProfileWithEphemeral, type DecryptedPatientData } from "../../lib/fhe";
@@ -89,6 +91,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [decryptedData, setDecryptedData] = useState<DecryptedPatientData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [missingIdentity, setMissingIdentity] = useState(false);
 
   const shortTx = report.txHash
     ? `${report.txHash.slice(0, 6)}…${report.txHash.slice(-4)}`
@@ -106,11 +109,15 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
 
     setIsDecrypting(true);
     setError(null);
-    
+    setMissingIdentity(false);
+
     try {
-      // Load Semaphore identity from localStorage
+      // Load Semaphore identity from localStorage. This is per-browser/per-origin,
+      // so a patient who registered on localhost will have no identity on med-vault.xyz
+      // until they import their backup via /patient/identity.
       const identity = getStoredIdentity();
       if (!identity) {
+        setMissingIdentity(true);
         throw new Error("No local anonymous identity found for decrypting this vault.");
       }
       const commitment = identity.commitment;
@@ -264,7 +271,28 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
           )}
         </AnimatePresence>
 
-        {error ? (
+        {missingIdentity ? (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+            <div className="flex items-start gap-2">
+              <KeyRound className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+              <div className="space-y-1.5">
+                <p className="font-semibold">No anonymous identity in this browser</p>
+                <p className="leading-relaxed text-amber-800/90">
+                  Your Semaphore identity is stored locally per browser and never leaves your device.
+                  If you registered on a different device or origin (e.g. localhost), import the
+                  identity backup you downloaded then to decrypt this vault here.
+                </p>
+                <Link
+                  to="/patient/identity"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700 transition-colors"
+                >
+                  <KeyRound className="h-3 w-3" />
+                  Import identity backup
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : error ? (
           <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
             {error}
           </div>

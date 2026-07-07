@@ -63,7 +63,6 @@ export function Sidebar({ role, collapsed = false }: SidebarProps) {
   const { logout, account, readOnlyProvider } = useWeb3();
   const [isProtocolOwner, setIsProtocolOwner] = useState(false);
   const navItems = role === "patient" ? patientNavItems : sponsorNavItems;
-  const homeLink = role === "patient" ? "/patient/dashboard" : "/sponsor/dashboard";
   const portalName = role === "patient" ? "Patient" : "Sponsor";
   const isPatient = role === "patient";
 
@@ -141,7 +140,7 @@ export function Sidebar({ role, collapsed = false }: SidebarProps) {
         )}
       >
         <Link
-          to={homeLink}
+          to="/"
           title="MedVault home"
           className={cn("flex min-w-0 items-center", collapsed ? "justify-center" : "gap-3")}
         >
@@ -238,8 +237,8 @@ export function Sidebar({ role, collapsed = false }: SidebarProps) {
           title={collapsed ? "Log out" : undefined}
           onClick={() => {
             void (async () => {
-              await logout();
               navigate("/");
+              await logout();
             })();
           }}
           className={cn(

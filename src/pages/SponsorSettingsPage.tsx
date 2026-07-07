@@ -276,8 +276,8 @@ export function SponsorSettingsPage() {
             type="button"
             onClick={() => {
               void (async () => {
-                await logout();
                 navigate("/");
+                await logout();
               })();
             }}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"

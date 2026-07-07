@@ -76,7 +76,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
           </button>
 
           <Link
-            to={role === "patient" ? "/patient/dashboard" : "/sponsor/dashboard"}
+            to="/"
             className="inline-flex min-w-0 items-center gap-2.5 md:hidden"
           >
             <img

@@ -26,6 +26,7 @@ import {
   requestSponsorTestAutoApprove,
 } from "../lib/sponsorApplicationRelay";
 import { waitForSponsorVerifiedOnChain } from "../lib/sponsorVerificationStatus";
+import { validateSponsorApplicationFile } from "../lib/sponsorApplicationDocument";
 import { Phase0ScopeBadge } from "../components/ui/Phase0ScopeBadge";
 import { DocumentIpfsConfirmCallout } from "../components/ui/DocumentIpfsConfirmCallout";
 
