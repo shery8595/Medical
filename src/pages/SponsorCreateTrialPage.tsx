@@ -63,9 +63,9 @@ export function SponsorCreateTrialPage() {
     location: "",
     compensation: "",
     description: "",
-    duration: 30,
-    durationUnit: "days" as "days" | "minutes",
-    fundingAmount: "",
+    duration: 7,
+    durationUnit: "minutes" as "days" | "minutes",
+    fundingAmount: "0.002",
   });
 
   const [criteria, setCriteria] = useState({
@@ -81,8 +81,8 @@ export function SponsorCreateTrialPage() {
   });
 
   const [milestones, setMilestones] = useState<{ name: string; weight: number; deadline: number }[]>([
-    { name: "Initial Screening", weight: 2500, deadline: 7 },
-    { name: "Phase 1 Completion", weight: 7500, deadline: 30 },
+    { name: "Initial Screening", weight: 2500, deadline: 2 },
+    { name: "Phase 1 Completion", weight: 7500, deadline: 4 },
   ]);
   const [usePhasedPayouts, setUsePhasedPayouts] = useState(true);
   const [redactionReport, setRedactionReport] = useState<RedactionReport | null>(null);
@@ -539,7 +539,7 @@ export function SponsorCreateTrialPage() {
                     <div className="flex flex-wrap items-center gap-3">
                       <Input
                         type="number"
-                        placeholder="30"
+                        placeholder="7"
                         min={1}
                         className={cn(inputLg, "h-12 w-28 font-semibold tabular-nums")}
                         value={formData.duration}
@@ -568,8 +568,8 @@ export function SponsorCreateTrialPage() {
                     <div className="flex flex-wrap items-center gap-3">
                       <Input
                         type="number"
-                        placeholder="0.05"
-                        step="0.01"
+                        placeholder="0.002"
+                        step="0.001"
                         min="0"
                         className={cn(inputLg, "h-12 w-36 font-semibold tabular-nums")}
                         value={formData.fundingAmount}
@@ -711,7 +711,7 @@ export function SponsorCreateTrialPage() {
                         onClick={() =>
                           setMilestones([
                             ...milestones,
-                            { name: "", weight: 0, deadline: formData.durationUnit === "days" ? 30 : 10 },
+                            { name: "", weight: 0, deadline: formData.durationUnit === "days" ? 30 : 7 },
                           ])
                         }
                       >

@@ -12,6 +12,7 @@ import path from "path";
 import { execSync } from "child_process";
 import { loadAddresses, networkKeyFromHardhatName } from "./lib/networkAddresses";
 import { ensureFhevmInitialized, wireAllContracts, wireAutomationForwarder, resolveRelayerAddresses } from "./lib/timelockWiring";
+import { syncLeaderboardTrialSponsors } from "./lib/leaderboardTrialSponsors";
 
 async function fetchCreationBlock(address: string): Promise<number> {
     const url = `https://api-sepolia.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${address}`;
@@ -79,6 +80,9 @@ async function main() {
         stakingManagerAddress: a.StakingManager,
         relayerAddresses,
     });
+
+    console.log("\nWiring EncryptedScoreLeaderboard trial sponsors from TrialManager...");
+    await syncLeaderboardTrialSponsors(trialManager, leaderboard);
 
     const realForwarder = process.env.CHAINLINK_FORWARDER?.trim();
     if (realForwarder && ethers.isAddress(realForwarder)) {

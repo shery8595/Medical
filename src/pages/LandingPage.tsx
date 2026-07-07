@@ -12,6 +12,7 @@ import {
   Cpu,
   Database,
   Dna,
+  Download,
   ExternalLink,
   Eye,
   MessageCircle,
@@ -25,10 +26,10 @@ import {
   ImageIcon,
   KeyRound,
   Lock,
-  Minus,
   Pill,
   Server,
   Shield,
+  Smartphone,
   UserCheck,
   UserRound,
   Zap,
@@ -36,6 +37,8 @@ import {
 import { cn } from "../lib/utils";
 import { McpLandingSection } from "../components/landing/McpLandingSection";
 import { LandingClosingSection } from "../components/landing/LandingClosingSection";
+import { CoinbaseWalletIcon, MetaMaskIcon, WalletConnectIcon } from "../components/landing/WalletBrandIcons";
+import brandLogoUrl from "../../logo/logo.png";
 
 /* ─── shared animation config ─────────────────────────────────────────────── */
 
@@ -68,10 +71,38 @@ const pillars = [
   },
 ];
 
-const steps = [
-  { step: "01", title: "Connect & vault", body: "Link your wallet and register your health profile on-chain." },
-  { step: "02", title: "Match privately", body: "Run encrypted checks against trials that fit your criteria." },
-  { step: "03", title: "Apply with ZK", body: "Submit anonymous applications when you choose — sponsors see proofs, not raw IDs." },
+type HowItWorksIllustrationKind = "wallet" | "encrypt" | "consent" | "revoke";
+
+const howItWorksSteps: Array<{
+  step: string;
+  title: string;
+  body: string;
+  illustration: HowItWorksIllustrationKind;
+}> = [
+  {
+    step: "01",
+    title: "Connect Your Wallet",
+    body: "Connect any EIP-1193 wallet in seconds. No sign-ups or passwords.",
+    illustration: "wallet",
+  },
+  {
+    step: "02",
+    title: "Encrypt & Own Your Data",
+    body: "Your health records are encrypted client-side; only you hold the keys.",
+    illustration: "encrypt",
+  },
+  {
+    step: "03",
+    title: "Grant Consent",
+    body: "Approve exactly which doctors, sponsors, or trials can access specific data.",
+    illustration: "consent",
+  },
+  {
+    step: "04",
+    title: "Revoke Anytime",
+    body: "Full audit trail and one-click revocation of any access grant.",
+    illustration: "revoke",
+  },
 ];
 
 const trustSignals = [
@@ -675,90 +706,189 @@ function TrustMarquee() {
   );
 }
 
-/* ─── Step mini-illustrations ────────────────────────────────────────────────── */
+function HowItWorksIllustration({ type }: { type: HowItWorksIllustrationKind }) {
+  if (type === "wallet") return <WalletStepIllustration />;
+  if (type === "encrypt") return <EncryptStepIllustration />;
+  if (type === "consent") return <ConsentStepIllustration />;
+  return <RevokeStepIllustration />;
+}
 
-function VaultIllus({ reduce }: { reduce: boolean }) {
-  /** Fixed px widths so bars stay centered (not left-aligned % in a flex row). */
-  const bars = [72, 48, 64] as const;
-
+function IllustrationShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex w-full items-center justify-center px-5 py-4">
-      <div className="flex items-center justify-center gap-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e8f4fd]">
-          <UserRound className="h-5 w-5 text-[#0a2540]" strokeWidth={1.7} />
-        </div>
-        <div className="flex w-[80px] flex-col items-center justify-center gap-[6px]" aria-hidden>
-          {bars.map((w, i) => (
-            <motion.div
-              key={i}
-              className="h-[3px] rounded-full bg-gradient-to-r from-[#6bd8cb] to-[#89f5e7]"
-              style={{ width: w, transformOrigin: "center" }}
-              animate={reduce ? undefined : { scaleX: [0.55, 1, 0.55], opacity: [0.45, 1, 0.45] }}
-              transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.28, ease: "easeInOut" }}
-            />
-          ))}
-        </div>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00685f]/10">
-          <Database className="h-5 w-5 text-[#00685f]" strokeWidth={1.7} />
-        </div>
-      </div>
+    <div className="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-[1.35rem] border border-white/80 bg-gradient-to-br from-white via-[#f7fffd] to-[#eef8ff] p-5 shadow-inner">
+      <div aria-hidden className="absolute inset-0 bg-[linear-gradient(rgba(0,104,95,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,104,95,0.045)_1px,transparent_1px)] bg-[size:24px_24px]" />
+      <div aria-hidden className="absolute -left-10 top-4 h-28 w-28 rounded-full bg-[#89f5e7]/35 blur-2xl" />
+      <div aria-hidden className="absolute -right-10 bottom-3 h-32 w-32 rounded-full bg-[#8792fe]/18 blur-2xl" />
+      <div className="relative w-full">{children}</div>
     </div>
   );
 }
 
-function MatchIllus({ reduce: _reduce }: { reduce: boolean }) {
-  const rows: { label: string; match: boolean }[] = [
-    { label: "CBC · recent", match: true },
-    { label: "Age 31–55", match: true },
-    { label: "Cardiac Rx", match: false },
+function WalletStepIllustration() {
+  const rows = [
+    { label: "MetaMask", active: true, Icon: MetaMaskIcon },
+    { label: "WalletConnect", active: false, Icon: WalletConnectIcon },
+    { label: "Coinbase Wallet", active: false, Icon: CoinbaseWalletIcon },
   ];
+
   return (
-    <div className="flex w-full max-w-[220px] flex-col justify-center gap-1.5 px-4 py-4 mx-auto">
-      {rows.map((row, i) => (
-        <motion.div
-          key={i}
-          className="flex items-center justify-between rounded-lg border border-[#bcc9c6]/50 bg-white px-3 py-2"
-          initial={{ opacity: 0, x: -8 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.3, delay: i * 0.1 + 0.15 }}
-        >
-          <span className="font-mono text-[10px] text-[#5a6a80]">{row.label}</span>
-          <span
-            className={cn(
-              "flex h-4 w-4 items-center justify-center rounded-full",
-              row.match ? "bg-[#06d6a0]/20" : "bg-[#bcc9c6]/30",
-            )}
-          >
-            {row.match
-              ? <Check className="h-2.5 w-2.5 text-[#00685f]" strokeWidth={3} />
-              : <Minus className="h-2.5 w-2.5 text-[#5a6a80]" strokeWidth={3} />}
-          </span>
-        </motion.div>
-      ))}
-    </div>
+    <IllustrationShell>
+      <div className="relative mx-auto max-w-[190px]">
+        <div className="rounded-2xl border border-[#d8e1df] bg-white/95 p-3.5 shadow-[0_22px_45px_-24px_rgba(15,23,42,0.42)] backdrop-blur">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-left text-[10px] font-bold text-[#191c1e]">Connect Wallet</p>
+            <span className="rounded-full bg-[#e3fbf7] px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-[#00685f]">Secure</span>
+          </div>
+          <div className="space-y-2">
+            {rows.map((row) => (
+              <div
+                key={row.label}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-colors",
+                  row.active
+                    ? "border-[#16a085]/25 bg-gradient-to-r from-white to-[#f0faf7] shadow-[0_8px_20px_-16px_rgba(22,160,133,0.55)]"
+                    : "border-[#e5ecea] bg-gradient-to-r from-white to-[#f8fbfb]",
+                )}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-black/5">
+                  <row.Icon className="h-full w-full object-contain" />
+                </span>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-left text-[10px] font-semibold",
+                    row.active ? "text-[#191c1e]" : "text-[#7a8a88]",
+                  )}
+                >
+                  {row.label}
+                </span>
+                {row.active ? (
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#16a085]">
+                    <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                  </span>
+                ) : (
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-[#d8e1df] bg-white" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="absolute -bottom-5 -right-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#d8e1df] bg-white shadow-[0_18px_35px_-18px_rgba(15,23,42,0.5)]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#00685f] text-white">
+            <Shield className="h-4 w-4" strokeWidth={2.3} />
+          </div>
+        </div>
+      </div>
+    </IllustrationShell>
   );
 }
 
-function ProofIllus({ reduce }: { reduce: boolean }) {
+function EncryptStepIllustration() {
   return (
-    <div className="flex w-full flex-col items-center justify-center gap-3 py-4">
-      <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#06d6a0]/15">
-        <BadgeCheck className="h-6 w-6 text-[#00685f]" strokeWidth={1.8} />
-        {!reduce && (
-          <motion.span
-            aria-hidden
-            className="absolute inset-0 rounded-full ring-2 ring-[#06d6a0]/40"
-            animate={{ scale: [1, 1.7], opacity: [0.7, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-          />
-        )}
+    <IllustrationShell>
+      <div className="relative mx-auto h-[118px] w-[212px]">
+        <div className="absolute left-[64px] top-1/2 z-0 w-[148px] -translate-y-1/2 rounded-2xl border border-[#d8e1df] bg-white/95 p-2.5 text-left shadow-[0_22px_45px_-24px_rgba(15,23,42,0.42)] backdrop-blur">
+          <p className="text-[10px] font-bold text-[#191c1e]">Medical Record</p>
+          <div className="mt-2 flex items-center gap-2">
+            <UserRound className="h-3.5 w-3.5 shrink-0 text-[#00685f]" strokeWidth={1.8} />
+            <span className="h-1.5 flex-1 rounded-full bg-[#dce7e5]" />
+          </div>
+          <div className="mt-1.5 space-y-1">
+            <span className="block h-1.5 rounded-full bg-[#e8eeed]" />
+            <span className="block h-1.5 w-3/4 rounded-full bg-[#e8eeed]" />
+          </div>
+          <div className="mt-2 inline-flex rounded-md bg-[#00685f] px-2 py-0.5 text-[7px] font-bold uppercase tracking-wide text-white">
+            Encrypted
+          </div>
+          <p className="mt-1 font-mono text-[7px] text-[#5a6a80]">A3F2...9B7C</p>
+        </div>
+
+        <div className="absolute -left-3 top-1/2 z-20 flex h-[74px] w-[74px] -translate-y-1/2 items-center justify-center rounded-[1.2rem] border border-white bg-gradient-to-br from-[#e3fbf7] to-[#00685f]/15 shadow-[0_16px_32px_-16px_rgba(15,23,42,0.4)]">
+          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-xl bg-white p-1.5 shadow-sm ring-1 ring-[#d8e1df]/80">
+            <img
+              src={brandLogoUrl}
+              alt=""
+              aria-hidden
+              className="h-full w-full object-contain object-center"
+              draggable={false}
+            />
+          </span>
+          <div className="absolute -bottom-1 -right-1 z-30 flex h-6 w-6 items-center justify-center rounded-lg border border-[#d8e1df] bg-white shadow-sm">
+            <Lock className="h-3 w-3 text-[#00685f]" strokeWidth={2.2} />
+          </div>
+        </div>
       </div>
-      <div className="text-center">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#00685f]">ZK Proof Valid</p>
-        <p className="mt-0.5 font-mono text-[9px] text-[#5a6a80]">identity: anonymous · proof 0xa3…f2</p>
+    </IllustrationShell>
+  );
+}
+
+function ConsentStepIllustration() {
+  const rows = ["Dr. Sarah Chen", "Research Study", "Health Sponsor"];
+
+  return (
+    <IllustrationShell>
+      <div className="relative mx-auto max-w-[185px]">
+        <div className="rounded-2xl border border-[#d8e1df] bg-white/95 p-3.5 text-left shadow-[0_22px_45px_-24px_rgba(15,23,42,0.42)] backdrop-blur">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-[10px] font-bold text-[#191c1e]">Grant Access</p>
+            <span className="h-2 w-2 rounded-full bg-[#16a085] shadow-[0_0_0_4px_rgba(22,160,133,0.12)]" />
+          </div>
+          <div className="space-y-2.5">
+            {rows.map((row, idx) => (
+              <div key={row} className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#e8f4fd] text-[#00685f]">
+                  {idx === 0 ? <UserRound className="h-3.5 w-3.5" /> : idx === 1 ? <ClipboardList className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[9px] font-bold text-[#191c1e]">{row}</span>
+                  <span className="mt-0.5 block h-1 w-14 rounded-full bg-[#e8eeed]" />
+                </span>
+                <span className="flex h-4 w-4 items-center justify-center rounded-md bg-[#16a085] shadow-sm">
+                  <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="absolute -bottom-5 -right-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#d8e1df] bg-white shadow-[0_18px_35px_-18px_rgba(15,23,42,0.5)]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#e3fbf7] text-[#00685f]">
+            <UserCheck className="h-4 w-4" strokeWidth={2.2} />
+          </div>
+        </div>
       </div>
-    </div>
+    </IllustrationShell>
+  );
+}
+
+function RevokeStepIllustration() {
+  return (
+    <IllustrationShell>
+      <div className="relative mx-auto max-w-[185px]">
+        <div className="rounded-2xl border border-[#d8e1df] bg-white/95 p-3.5 text-left shadow-[0_22px_45px_-24px_rgba(15,23,42,0.42)] backdrop-blur">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold text-[#191c1e]">Access Revoked</p>
+            <span className="rounded-full bg-[#e3fbf7] px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-[#00685f]">Done</span>
+          </div>
+          <div className="mx-auto mt-3 flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-[#00685f]/45 bg-[#e3fbf7]/55">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#00685f] text-white">
+              <CheckCircle2 className="h-6 w-6" strokeWidth={2.1} />
+            </div>
+          </div>
+          <div className="mt-3 border-t border-[#eef3f2] pt-2">
+            <p className="text-[9px] font-bold text-[#191c1e]">Audit Trail</p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#bcc9c6]" />
+              <span className="h-px flex-1 bg-[#bcc9c6]" />
+              <span className="h-2 w-2 rounded-full bg-[#00685f]" />
+            </div>
+          </div>
+        </div>
+        <div className="absolute -bottom-5 -right-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#d8e1df] bg-white shadow-[0_18px_35px_-18px_rgba(15,23,42,0.5)]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#e3fbf7] text-[#00685f]">
+            <Activity className="h-4 w-4" strokeWidth={2.2} />
+          </div>
+        </div>
+      </div>
+    </IllustrationShell>
   );
 }
 
@@ -1054,6 +1184,7 @@ function StatCard({ value, label, suffix, decimals = 0 }: { value: number; label
 
 export function LandingPage() {
   const reduce = useReducedMotion();
+  const apkDownloadUrl = (import.meta.env.VITE_ANDROID_APK_URL as string | undefined)?.trim() || "/downloads/medvault.apk";
 
   const fadeUp = reduce
     ? { hidden: { opacity: 0 }, visible: { opacity: 1 } }
@@ -1325,101 +1456,143 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── How it works — horizontal timeline ───────────────────────────── */}
-      <section className="relative bg-white px-4 py-20 sm:px-8" id="how-it-works">
-        {/* Subtle ambient */}
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden>
-          <div className="absolute left-1/4 top-0 h-56 w-56 rounded-full bg-[#89f5e7]/12 blur-3xl" />
-          <div className="absolute right-1/4 bottom-0 h-56 w-56 rounded-full bg-[#8792fe]/10 blur-3xl" />
-        </div>
-
-        <div className="mx-auto max-w-screen-lg">
+      {/* ── How it works — four-step flow ──────────────────────────────────── */}
+      <section className="bg-[#fefefe] px-4 py-20 sm:px-8" id="how-it-works">
+        <div className="mx-auto max-w-screen-xl">
           <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={viewportBase}
             variants={fadeUp}
             transition={transition}
-            className="max-w-xl"
+            className="mx-auto max-w-3xl text-center"
           >
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">How it works</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
-              From vault to trial — with proofs, not exposure
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#bcc9c6]/70 bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#00685f]">
+              <span aria-hidden className="text-[9px] leading-none">
+                ●
+              </span>
+              Simple • Secure • Private
+            </div>
+            <h2 className="mt-5 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl lg:text-[2.75rem]">
+              How <span className="text-[#00685f]">MedVault</span> Works
             </h2>
-            <Link
-              to="/how-it-works"
-              className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#00685f]/30 bg-[#00685f]/5 px-5 py-2.5 text-sm font-semibold text-[#00685f] transition hover:bg-[#00685f]/10"
-            >
-              Explore the full walkthrough
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-[#5a6a80] sm:text-lg">
+              Decentralized by design. You own your data. You decide who can access it.
+            </p>
           </motion.div>
 
-          {/* Timeline grid */}
-          <div className="relative mt-14">
-            {/* Horizontal connecting line (desktop only) */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute hidden h-px md:block"
-              style={{
-                top: "28px",
-                left: "calc(100% / 6)",
-                right: "calc(100% / 6)",
-                background: "linear-gradient(90deg, transparent, #6bd8cb 20%, #6bd8cb 80%, transparent)",
-              }}
-            />
-
-            <motion.div
-              className="grid gap-6 md:grid-cols-3"
-              variants={staggerParent}
-              initial="hidden"
-              whileInView="visible"
-              viewport={viewportBase}
-            >
-              {steps.map((s, idx) => (
-                <motion.div key={s.step} variants={staggerItem} className="flex flex-col items-center gap-4">
-                  {/* Step node */}
-                  <div className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#0a2540] ring-4 ring-white shadow-[0_8px_24px_-8px_rgba(10,37,64,0.4)]">
-                    <span className="font-mono text-sm font-black text-white">{s.step}</span>
-                    {/* Pulse ring */}
-                    {!reduce && (
-                      <motion.span
-                        aria-hidden
-                        className="absolute inset-0 rounded-full ring-2 ring-[#6bd8cb]/40"
-                        animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
-                        transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut", delay: idx * 0.6 }}
-                      />
-                    )}
+          <motion.div
+            className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+          >
+            {howItWorksSteps.map((s) => (
+              <motion.div
+                key={s.step}
+                variants={staggerItem}
+                whileHover={reduce ? undefined : { y: -6 }}
+                transition={{ type: "spring", stiffness: 300, damping: 24 }}
+                className="group relative h-full overflow-hidden rounded-[1.75rem] border border-[#d8e1df]/80 bg-white p-3 shadow-[0_18px_50px_-34px_rgba(10,37,64,0.48)] ring-1 ring-white/70 transition-shadow hover:shadow-[0_24px_60px_-32px_rgba(0,104,95,0.32)]"
+              >
+                <div aria-hidden className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#89f5e7]/80 to-transparent" />
+                <div className="relative">
+                  <div className="mb-3 flex items-center justify-between px-1">
+                    <span className="rounded-full border border-[#00685f]/15 bg-[#00685f]/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#00685f]">
+                      Step {s.step}
+                    </span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0a2540] text-[11px] font-bold text-white shadow-[0_12px_24px_-16px_rgba(10,37,64,0.7)]">
+                      {s.step}
+                    </span>
                   </div>
 
-                  {/* Card */}
-                  <motion.div
-                    whileHover={reduce ? undefined : { y: -3, scale: 1.01 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 22 }}
-                    className="w-full overflow-hidden rounded-2xl border border-[#bcc9c6]/60 bg-white shadow-sm"
+                  <HowItWorksIllustration type={s.illustration} />
+
+                  <div className="px-2 pb-3 pt-5 text-left">
+                    <h3 className="text-lg font-bold tracking-tight text-[#191c1e]">{s.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-[#5a6a80]">{s.body}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── Mobile APK download ───────────────────────────────────────────── */}
+      <section className="bg-white px-4 py-20 sm:px-8" id="mobile-app">
+        <div className="mx-auto max-w-screen-xl">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportBase}
+            variants={fadeUp}
+            transition={transition}
+            className="overflow-hidden rounded-[2rem] border border-[#bcc9c6]/50 bg-gradient-to-br from-[#f7fffd] via-white to-[#e8f4fd] shadow-[0_24px_70px_-35px_rgba(0,104,95,0.35)]"
+          >
+            <div className="grid items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1.1fr_0.9fr] lg:p-10">
+              <div>
+                <p className="inline-flex items-center gap-2 rounded-full border border-[#00685f]/20 bg-[#00685f]/5 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#00685f]">
+                  <Smartphone className="h-3.5 w-3.5" strokeWidth={2} />
+                  Android APK
+                </p>
+                <h2 className="mt-4 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
+                  Take MedVault with you.
+                </h2>
+                <p className="mt-4 max-w-2xl leading-relaxed text-[#3d4947]">
+                  Install the Android app to access your patient vault, consent controls, encrypted matching, and audit trail from your phone.
+                </p>
+
+                <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                  <a
+                    href={apkDownloadUrl}
+                    download
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-[#00685f] px-6 py-3 text-sm font-bold text-white shadow-[0_16px_32px_-18px_rgba(0,104,95,0.65)] transition hover:bg-[#00584f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00685f]/35"
                   >
-                    {/* Mini illustration — fixed height so step 01 bars stay centered vs siblings */}
-                    <div className="flex min-h-[88px] items-center justify-center border-b border-[#bcc9c6]/50 bg-[#f7f9fb]">
-                      {idx === 0 && <VaultIllus reduce={!!reduce} />}
-                      {idx === 1 && <MatchIllus reduce={!!reduce} />}
-                      {idx === 2 && <ProofIllus reduce={!!reduce} />}
+                    <Download className="h-4 w-4" strokeWidth={2.2} />
+                    Download APK
+                  </a>
+                  <Link
+                    to="/docs/local-development"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[#00685f]/25 bg-white px-6 py-3 text-sm font-bold text-[#00685f] transition hover:bg-[#00685f]/5"
+                  >
+                    Build notes
+                    <ArrowRight className="h-4 w-4" strokeWidth={2} />
+                  </Link>
+                </div>
+
+                <p className="mt-4 text-xs leading-relaxed text-[#5a6a80]">
+                  Android may ask you to allow installs from your browser before opening an APK downloaded outside the Play Store.
+                </p>
+              </div>
+
+              <div className="relative mx-auto flex w-full max-w-sm justify-center">
+                <div className="absolute inset-x-8 top-8 h-48 rounded-full bg-[#89f5e7]/35 blur-3xl" aria-hidden />
+                <div className="relative w-56 rounded-[2.2rem] border border-[#0a2540]/10 bg-[#0a2540] p-2 shadow-[0_30px_70px_-30px_rgba(10,37,64,0.55)]">
+                  <div className="rounded-[1.7rem] bg-[#fefefe] p-4">
+                    <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d8e1df]" />
+                    <div className="rounded-2xl bg-[#00685f] p-4 text-white">
+                      <div className="flex items-center justify-between">
+                        <Smartphone className="h-6 w-6" strokeWidth={1.8} />
+                        <span className="rounded-full bg-white/15 px-2 py-1 text-[10px] font-bold">APK</span>
+                      </div>
+                      <p className="mt-5 text-lg font-bold leading-tight">MedVault Mobile</p>
+                      <p className="mt-1 text-xs text-white/75">Private access on Android</p>
                     </div>
-                    <div className="relative p-5">
-                      {/* Big background numeral */}
-                      <p
-                        aria-hidden
-                        className="pointer-events-none absolute -right-1 -top-2 select-none font-black text-[80px] leading-none text-[#00685f]/5"
-                      >
-                        {s.step}
-                      </p>
-                      <h3 className="relative text-base font-bold text-[#191c1e]">{s.title}</h3>
-                      <p className="relative mt-1.5 text-sm leading-relaxed text-[#3d4947]">{s.body}</p>
+                    <div className="mt-4 space-y-2">
+                      {["Wallet login", "Consent controls", "Encrypted records"].map((item) => (
+                        <div key={item} className="flex items-center gap-2 rounded-xl border border-[#e5ecea] bg-white px-3 py-2">
+                          <Check className="h-3.5 w-3.5 text-[#00685f]" strokeWidth={2.4} />
+                          <span className="text-xs font-semibold text-[#3d4947]">{item}</span>
+                        </div>
+                      ))}
                     </div>
-                  </motion.div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -1699,6 +1872,18 @@ export function LandingPage() {
 
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      <section className="bg-white px-4 pb-10 sm:px-8" aria-label="Admin access">
+        <div className="mx-auto flex max-w-4xl justify-center">
+          <Link
+            to="/admin/sponsors"
+            className="inline-flex items-center gap-2 rounded-full border border-[#00685f]/25 bg-[#00685f]/5 px-5 py-2.5 text-sm font-bold text-[#00685f] transition hover:bg-[#00685f]/10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#00685f]/20"
+          >
+            <Shield className="h-4 w-4" strokeWidth={2} />
+            Admin
+          </Link>
         </div>
       </section>
 

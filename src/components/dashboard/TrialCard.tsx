@@ -154,6 +154,15 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
     reset
   } = useAnonymousApplication(signer || undefined, signer?.provider || undefined);
 
+  useEffect(() => {
+    reset();
+    setApplyError(null);
+    setApplyWizardNullifier(null);
+    setRegistrationStatus("idle");
+    setRegistrationError(null);
+    setApplyStatus(trial.applicationStatus ? "applied" : (trial.hasComputed ? "success" : "idle"));
+  }, [trial.id]);
+
   const applyWizardPhase: ApplyWizardPhase = (() => {
     if (trial.applicationStatus || hasApplied || applyStatus === "applied") return "applied";
     if (registrationError || semaphoreError) return "error";
