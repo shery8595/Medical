@@ -11,35 +11,82 @@ export type EncryptedTrialAggregate = {
     error?: string;
 };
 
+type DecryptedValues = Record<string, unknown>;
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const UNAUTHORIZED_AGGREGATE_MESSAGE =
+    "Connected wallet is not authorized on EncryptedScoreLeaderboard for this trial. Aggregate decrypt is unavailable until leaderboard sponsor auth is wired.";
+
 function handleToHex(value: unknown): `0x${string}` {
     const n = normalizeFheHandle(value);
     if (n === 0n) return `0x${"0".repeat(64)}` as `0x${string}`;
     return (`0x${n.toString(16).padStart(64, "0")}`) as `0x${string}`;
 }
 
+function readDecryptedNumber(values: DecryptedValues, handle: `0x${string}`): number {
+    const value = values[handle] ?? values[handle.toLowerCase()] ?? values[handle.toUpperCase()];
+    if (value == null) {
+        throw new Error(`KMS decrypt response missing handle ${handle.slice(0, 10)}...`);
+    }
+    return Number(value);
+}
+
+function isUnauthorizedAggregateError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /Not authorized for this trial/i.test(message);
+}
+
 export function useEncryptedTrialAggregates(trialIds: string[]) {
-    const { readOnlyProvider, signer } = useWeb3();
-    const readProvider = readOnlyProvider;
+    const { chainId, signer } = useWeb3();
     const [aggregates, setAggregates] = useState<EncryptedTrialAggregate[]>([]);
     const [loading, setLoading] = useState(false);
     const [decryptError, setDecryptError] = useState<string | null>(null);
 
     const decryptAggregates = useCallback(async () => {
-        if (!readProvider || !signer || trialIds.length === 0) return;
+        if (!signer || trialIds.length === 0) return;
         setLoading(true);
         setDecryptError(null);
         try {
-            const sdk = getZamaSDK();
-            const board = getEncryptedScoreLeaderboard(readProvider);
+            const board = getEncryptedScoreLeaderboard(signer, chainId ?? undefined);
             const boardAddr = await board.getAddress();
-            await sdk.permits.grantPermit([boardAddr as `0x${string}`]);
+            const connectedAccount = (await signer.getAddress()).toLowerCase();
+            let permitGranted = false;
 
             const rows: EncryptedTrialAggregate[] = [];
             for (const rawId of trialIds.slice(0, 12)) {
                 const trialId = BigInt(String(rawId).replace(/^#/, ""));
                 try {
-                    const countCt = await board.getAggregateApplicantCount(trialId);
-                    const sumCt = await board.getAggregateScoreSum(trialId);
+                    const [owner, trialSponsor, globalAuthorized, trialAuthorized] = await Promise.all([
+                        board.owner(),
+                        board.trialSponsor(trialId),
+                        board.globalAuthorizedSponsors(connectedAccount),
+                        board.authorizedSponsorsForTrial(trialId, connectedAccount),
+                    ]);
+                    const authorized =
+                        connectedAccount === String(owner).toLowerCase() ||
+                        (String(trialSponsor) !== ZERO_ADDRESS && connectedAccount === String(trialSponsor).toLowerCase()) ||
+                        Boolean(globalAuthorized) ||
+                        Boolean(trialAuthorized);
+
+                    if (!authorized) {
+                        rows.push({
+                            trialId: rawId,
+                            applicantCount: null,
+                            avgScore: null,
+                            error: UNAUTHORIZED_AGGREGATE_MESSAGE,
+                        });
+                        continue;
+                    }
+
+                    if (!permitGranted) {
+                        const sdk = getZamaSDK();
+                        await sdk.permits.grantPermit([boardAddr as `0x${string}`]);
+                        permitGranted = true;
+                    }
+
+                    const callOverrides = { from: connectedAccount };
+                    const countCt = await board.getAggregateApplicantCount.staticCall(trialId, callOverrides);
+                    const sumCt = await board.getAggregateScoreSum.staticCall(trialId, callOverrides);
                     const countHandle = handleToHex(countCt);
                     const sumHandle = handleToHex(sumCt);
 
@@ -52,12 +99,13 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
                         continue;
                     }
 
+                    const sdk = getZamaSDK();
                     const decrypted = await sdk.decryption.decryptValues([
                         { encryptedValue: countHandle, contractAddress: boardAddr as `0x${string}` },
                         { encryptedValue: sumHandle, contractAddress: boardAddr as `0x${string}` },
-                    ]);
-                    const count = Number(decrypted[countHandle] ?? 0);
-                    const sum = Number(decrypted[sumHandle] ?? 0);
+                    ]) as DecryptedValues;
+                    const count = readDecryptedNumber(decrypted, countHandle);
+                    const sum = readDecryptedNumber(decrypted, sumHandle);
                     rows.push({
                         trialId: rawId,
                         applicantCount: count,
@@ -68,7 +116,9 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
                         trialId: rawId,
                         applicantCount: null,
                         avgScore: null,
-                        error: e instanceof Error ? e.message : "Decrypt failed",
+                        error: isUnauthorizedAggregateError(e)
+                            ? UNAUTHORIZED_AGGREGATE_MESSAGE
+                            : e instanceof Error ? e.message : "Decrypt failed",
                     });
                 }
             }
@@ -79,7 +129,7 @@ export function useEncryptedTrialAggregates(trialIds: string[]) {
         } finally {
             setLoading(false);
         }
-    }, [readProvider, signer, trialIds]);
+    }, [chainId, signer, trialIds]);
 
     useEffect(() => {
         setAggregates([]);
