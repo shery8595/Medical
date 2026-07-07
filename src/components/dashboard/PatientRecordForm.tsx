@@ -20,6 +20,7 @@ import {
   isAttestationExpired,
 } from "../../lib/reclaim";
 import type { FhirMappedProfile } from "../../lib/fhirImport";
+import { cn } from "../../lib/utils";
 
 interface PatientRecordFormProps {
     onSuccess: () => void;
