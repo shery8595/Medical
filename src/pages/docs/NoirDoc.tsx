@@ -81,37 +81,57 @@ export function NoirDoc() {
                     </li>
                 </ol>
 
-                <h2>What the circuits attest</h2>
+                <h2>Two-mode attestation, by design</h2>
                 <p className="text-sm">
-                    <strong>Plaintext mode</strong> (<code>circuits/eligibility_plaintext</code>) — compliance mirror
-                    with in-circuit <code>eligible</code> bit. <strong>Encrypted mode</strong> (
-                    <code>circuits/eligibility_encrypted</code>) — identity + binding only; Zama FHE decides eligibility.
+                    This is a deliberate two-mode design: encrypted-criteria trials keep 100% of the
+                    eligibility computation on FHE ciphertext; Noir&apos;s job in that mode is strictly
+                    identity and policy-binding attestation. See{" "}
+                    <a href="/docs/trust-architecture" className="text-[#00685f] font-semibold hover:underline">
+                        Trust architecture
+                    </a>
+                    .
+                </p>
+
+                <h3>Plaintext mode (<code>eligibility_plaintext</code>)</h3>
+                <p className="text-sm">Compliance mirror with in-circuit <code>eligible</code> bit — Hardhat/dev paths.</p>
+                <ol className="text-sm space-y-2">
+                    <li>
+                        <strong>Nullifier binding:</strong>{" "}
+                        <code>nullifier = Poseidon([scope_internal, secret])</code>
+                    </li>
+                    <li>
+                        <strong>Profile commitment:</strong> private vitals hash to registered{" "}
+                        <code>profile_commitment</code>
+                    </li>
+                    <li>
+                        <strong>Result receipt:</strong>{" "}
+                        <code>result_hash = Poseidon([eligible, scope, secret])</code>
+                    </li>
+                    <li>
+                        <strong>Compliance mirror:</strong> eight trial predicates mirror FHE rule logic
+                    </li>
+                </ol>
+
+                <h3>Encrypted mode (<code>eligibility_encrypted</code>) — production Sepolia</h3>
+                <p className="text-sm">
+                    <strong>FHE is the sole eligibility authority by design.</strong> Noir carries no
+                    eligibility bit in this mode.
                 </p>
                 <ol className="text-sm space-y-2">
                     <li>
                         <strong>Nullifier binding:</strong>{" "}
-                        <code>nullifier = Poseidon([scope_internal, secret])</code> matches the Semaphore application
-                        for this trial.
+                        <code>nullifier = Poseidon([scope_internal, secret])</code>
                     </li>
                     <li>
-                        <strong>Profile commitment:</strong> private vitals hash to the registered{" "}
-                        <code>profile_commitment</code> on-chain.
+                        <strong>FHE stage binding:</strong> public <code>fhe_stage_handle_hash</code> must match
+                        staged <code>finalCt</code> (mod BN254 field)
                     </li>
                     <li>
-                        <strong>Result receipt:</strong>{" "}
-                        <code>result_hash = Poseidon([eligible, scope, secret])</code>.
+                        <strong>Criteria binding:</strong> public <code>criteria_binding_hash</code> echoes
+                        on-chain encrypted criteria handles (verified in Solidity)
                     </li>
                     <li>
-                        <strong>FHE stage binding:</strong> public <code>fhe_stage_handle_hash</code> must match the
-                        staged Zama <code>finalCt</code> being finalized (mod BN254 field).
-                    </li>
-                    <li>
-                        <strong>Criteria schema:</strong> public <code>criteria_schema_hash</code> pins the trial rule
-                        version (<code>medvault.eligibility.criteria.v1</code>).
-                    </li>
-                    <li>
-                        <strong>Compliance mirror:</strong> eight trial predicates are checked in-circuit to mirror FHE
-                        rule logic — differential tests keep both paths aligned.
+                        <strong>Criteria schema:</strong> <code>criteria_schema_hash</code> pins rule version
                     </li>
                 </ol>
 

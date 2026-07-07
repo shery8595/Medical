@@ -1,9 +1,15 @@
 import { useMemo } from "react";
-import { StepProgress, type StepProgressItem } from "../ui/StepProgress";
 import { ExternalLink } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { ClaimWizardStep } from "../../lib/claimFlow";
 import { txExplorerUrl } from "../../lib/network";
+
+type StepProgressItem = {
+  id: string;
+  label: string;
+  description?: string;
+  status: "pending" | "active" | "complete" | "error";
+};
 
 type Props = {
   step: ClaimWizardStep;
@@ -15,6 +21,8 @@ type Props = {
   completeTxHash?: string | null;
   statusMessage?: string | null;
   className?: string;
+  /** When false, only a single-line progress hint is shown (preview / destination). */
+  expanded?: boolean;
 };
 
 function mapStepStatus(
@@ -49,6 +57,7 @@ export function ClaimWizard({
   completeTxHash,
   statusMessage,
   className,
+  expanded = true,
 }: Props) {
   const steps = useMemo<StepProgressItem[]>(
     () => [
@@ -96,9 +105,60 @@ export function ClaimWizard({
     [step, destination, previewEth, previewLoading, statusMessage]
   );
 
+  const activeIndex = ORDER.indexOf(step);
+  const activeStep = steps[Math.max(0, activeIndex)];
+
+  if (!expanded) {
+    return (
+      <div className={cn("rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2", className)}>
+        <p className="text-[10px] font-medium text-slate-500">
+          {previewLoading
+            ? "Checking reward balance…"
+            : previewEth
+              ? `${previewEth} ETH ready`
+              : "Connect your anonymous session to preview"}
+          {destination ? (
+            <span className="text-slate-400">
+              {" "}
+              · to {destination.slice(0, 6)}…{destination.slice(-4)}
+            </span>
+          ) : null}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("space-y-3", className)}>
-      <StepProgress steps={steps} compact />
+    <div className={cn("space-y-2", className)}>
+      <div className="flex items-center gap-1 overflow-x-hidden pb-0.5">
+        {steps.map((s, i) => (
+          <div key={s.id} className="flex items-center gap-1.5 shrink-0">
+            <span
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold",
+                s.status === "complete" && "bg-emerald-100 text-emerald-700",
+                s.status === "active" && "bg-teal-100 text-teal-800 ring-2 ring-teal-300/60",
+                s.status === "error" && "bg-rose-100 text-rose-700",
+                s.status === "pending" && "bg-slate-100 text-slate-400",
+              )}
+              title={s.label}
+            >
+              {s.status === "complete" ? "✓" : i + 1}
+            </span>
+            {i < steps.length - 1 && (
+              <span className={cn("h-px w-3", s.status === "complete" ? "bg-emerald-200" : "bg-slate-200")} />
+            )}
+          </div>
+        ))}
+      </div>
+      {activeStep && (
+        <div className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+          <p className="text-[11px] font-semibold text-slate-800">{activeStep.label}</p>
+          {activeStep.description && (
+            <p className="mt-0.5 text-[10px] text-slate-500 leading-snug">{activeStep.description}</p>
+          )}
+        </div>
+      )}
       {(confirmTxHash || claimTxHash || completeTxHash) && (
         <div className="flex flex-wrap gap-3 text-[10px] font-semibold">
           {confirmTxHash && (

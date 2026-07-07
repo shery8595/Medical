@@ -174,7 +174,7 @@ export async function revokeAndRotateDocumentKey(
 
 
 
-  const fheChunks = await wrapKeyForFhe(key, docStoreAddress, userAddress);
+  const fheChunks = await wrapKeyForFhe(key, docStoreAddress, userAddress, signer.provider ?? undefined);
 
   const tx = await store.revokeAccess(
 

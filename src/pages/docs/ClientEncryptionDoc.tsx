@@ -74,7 +74,7 @@ export function ClientEncryptionDoc() {
                 {/* Key Guarantees */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-10 not-prose">
                     {[
-                        { icon: <Shield className="w-5 h-5" />, title: "Zero-Knowledge Proofs", desc: "Every encryption call generates a ZK validity proof submitted alongside the ciphertext.", color: "teal" },
+                        { icon: <Shield className="w-5 h-5" />, title: "FHE Input Validity Proofs", desc: "Every encryption call generates an FHE input validity proof (inputProof) submitted alongside the ciphertext.", color: "teal" },
                         { icon: <Key className="w-5 h-5" />, title: "EIP-712 Consent", desc: "Decryption requires a MetaMask signature—sponsor cannot read results without patient approval.", color: "purple" },
                         { icon: <Cpu className="w-5 h-5" />, title: "Coprocessor-Backed", desc: "The Zama network's FHE coprocessor performs all actual computation — the EVM never sees plaintext.", color: "amber" },
                     ].map(g => {
@@ -282,7 +282,7 @@ const plaintext = await fetchAndDecryptDocument(cid, aesKey);`}
                     same wire format. See <code>CryptoFallbackBanner</code> in the mobile shell.
                 </p>
 
-                <h3>Revocation &amp; key rotation (forward-only, H-2 / P4)</h3>
+                <h3>Revocation &amp; key rotation (epoch-based, H-2 / P4)</h3>
                 <p>
                     fhEVM <code>FHE.allow</code> grants are <strong>irreversible</strong>. A sponsor who already decrypted
                     the AES key may retain plaintext off-chain even after revocation. Old IPFS CIDs must be unpinned

@@ -37,13 +37,13 @@ export function BudgetUtilizationCard({
   return (
     <div
       className={cn(trialsCardShell, "flex h-full flex-col p-4 md:p-4")}
-      title="Live subgraph data: total ETH deposited to trial incentive pools vs estimated ETH paid to participants (milestone weights or legacy distribute events)."
+      title="Sponsor wallet: on-chain pool deposits via getTotalDeposited. Paid-out estimate uses indexed milestone distribution flags."
     >
       <Text className="text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500">
         Incentive payouts (ETH)
       </Text>
       <p className="mt-0.5 text-[9px] text-slate-400">
-        Allocated to trials vs paid to participants (indexed)
+        Pool size from your wallet (on-chain); payouts estimated from milestone index
       </p>
 
       {loading ? (

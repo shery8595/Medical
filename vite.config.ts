@@ -9,10 +9,22 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 /** Zama fhEVM relayer API (Sepolia). Proxied same-origin in dev + Vercel prebuilt routes. */
 const ZAMA_RELAYER_SEPOLIA = 'https://relayer.testnet.zama.org';
 
+/** Hybrid indexer on Railway — proxied as /indexer in dev (matches vercel.json). */
+const INDEXER_RAILWAY = 'https://indexermedvault-production.up.railway.app';
+
 const isCapacitorBuild = process.env.CAPACITOR_BUILD === 'true';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  const medVaultRelayerProxy =
+    env.VITE_RELAYER_URLS?.split(',')[0]?.trim().replace(/\/$/, '') ||
+    env.VITE_RELAYER_URL?.trim().replace(/\/$/, '') ||
+    'https://relayer-medvault-1-production.up.railway.app';
+  const sepoliaRpc =
+    env.VITE_SEPOLIA_RPC_URL?.trim() ||
+    env.VITE_RPC_URL?.trim() ||
+    env.SEPOLIA_RPC_URL?.trim() ||
+    'https://ethereum-sepolia-rpc.publicnode.com';
   return {
     base: isCapacitorBuild ? './' : '/',
     plugins: [
@@ -31,6 +43,7 @@ export default defineConfig(({ mode }) => {
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'import.meta.env.VITE_SEPOLIA_RPC_URL': JSON.stringify(sepoliaRpc),
     },
     resolve: {
       dedupe: [
@@ -105,20 +118,31 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
+      host: true,
+      port: 3000,
+      strictPort: true,
+      // `npm run dev` binds 0.0.0.0 for LAN/Docker; pin HMR WS to localhost for browser tabs.
+      hmr:
+        process.env.DISABLE_HMR === 'true'
+          ? false
+          : {
+              host: env.VITE_HMR_HOST?.trim() || 'localhost',
+              port: Number(env.VITE_HMR_PORT ?? 3000),
+              clientPort: Number(env.VITE_HMR_CLIENT_PORT ?? env.VITE_HMR_PORT ?? 3000),
+            },
       // Do NOT set COOP/COEP to crossOriginIsolate here. That breaks Privy embedded wallets,
       // Coinbase Smart Wallet, and Base Account SDKs (popups / cross-window messaging).
       proxy: {
-        // Zama fhEVM relayer — same-origin path required by @zama-fhe/sdk (RelayerWeb)
-        '/api/relayer/11155111': {
+        // Zama fhEVM relayer v2 API — same-origin path required by @zama-fhe/sdk (RelayerWeb)
+        '/api/relayer/11155111/v2': {
           target: ZAMA_RELAYER_SEPOLIA,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/relayer\/11155111/, ''),
           secure: true,
         },
-        // MedVault anonymous-apply relayer (Semaphore proofs)
+        // MedVault anonymous-apply relayer (Semaphore proofs, completion-proof, etc.)
         '/relay': {
-          target: 'https://medvault-relayer-production.up.railway.app',
+          target: medVaultRelayerProxy,
           changeOrigin: true,
           secure: true,
         },
@@ -126,6 +150,16 @@ export default defineConfig(({ mode }) => {
           target: 'http://127.0.0.1:3200',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ai-service/, ''),
+        },
+        '/indexer': {
+          target:
+            env.VITE_INDEXER_URL?.trim().startsWith('http://127.0.0.1') ||
+            env.VITE_INDEXER_URL?.trim().startsWith('http://localhost')
+              ? env.VITE_INDEXER_URL.trim().replace(/\/$/, '')
+              : INDEXER_RAILWAY,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/indexer/, ''),
+          secure: true,
         },
       },
     },

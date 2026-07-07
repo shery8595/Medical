@@ -2,7 +2,7 @@ import type { Signer } from "ethers";
 import { fetchAndDecryptDocument } from "./EncryptionService";
 import { getPatientDocumentStore } from "./contracts";
 import { reassembleAesKeyFromUint64Chunks } from "./crypto-utils";
-import { decryptForView, FheTypes } from "./fhe";
+import { decryptManyForView } from "./fhe";
 
 export type SponsorDocumentRecord = {
   cid: string;
@@ -14,6 +14,12 @@ export type SponsorDocumentRecord = {
   authorizedSponsor: string;
   revoked: boolean;
 };
+
+export type SponsorDocumentDecryptProgress =
+  | "pulling-access"
+  | "loading-record"
+  | "decrypting-key"
+  | "fetching-document";
 
 function ctHandle(h: bigint | string): bigint {
   if (typeof h === "bigint") return h;
@@ -71,6 +77,15 @@ async function loadDocumentRecord(
   };
 }
 
+function encryptedKeyChunks(rec: SponsorDocumentRecord): [bigint, bigint, bigint, bigint] {
+  return [
+    ctHandle(rec.keyChunk0),
+    ctHandle(rec.keyChunk1),
+    ctHandle(rec.keyChunk2),
+    ctHandle(rec.keyChunk3),
+  ];
+}
+
 /**
  * Sponsor unwraps FHE-wrapped AES key via EIP-712 decryptForView (not legacy reencrypt).
  */
@@ -83,17 +98,22 @@ export async function decryptSponsorDocumentAesKey(
   void docStoreAddress;
   const sponsor = await signer.getAddress();
   const rec = await loadDocumentRecord(signer, nullifier, trialId);
-  if (rec.authorizedSponsor.toLowerCase() !== sponsor.toLowerCase()) {
+  return decryptSponsorDocumentAesKeyFromRecord(signer, docStoreAddress, rec, sponsor);
+}
+
+async function decryptSponsorDocumentAesKeyFromRecord(
+  signer: Signer,
+  docStoreAddress: string,
+  rec: SponsorDocumentRecord,
+  sponsorAddress?: string
+): Promise<Uint8Array> {
+  const sponsor = (sponsorAddress ?? (await signer.getAddress())).toLowerCase();
+  if (rec.authorizedSponsor.toLowerCase() !== sponsor) {
     throw new Error("Sponsor is not authorized to decrypt this document key.");
   }
 
-  const storeAddr = await getPatientDocumentStore(signer).getAddress();
-  const chunks = await Promise.all([
-    decryptForView(ctHandle(rec.keyChunk0), FheTypes.Uint64, storeAddr),
-    decryptForView(ctHandle(rec.keyChunk1), FheTypes.Uint64, storeAddr),
-    decryptForView(ctHandle(rec.keyChunk2), FheTypes.Uint64, storeAddr),
-    decryptForView(ctHandle(rec.keyChunk3), FheTypes.Uint64, storeAddr),
-  ]);
+  const storeAddr = docStoreAddress || (await getPatientDocumentStore(signer).getAddress());
+  const chunks = await decryptManyForView(encryptedKeyChunks(rec), storeAddr);
 
   return reassembleAesKeyFromUint64Chunks(chunks.map((c) => BigInt(c as bigint | number | string)));
 }
@@ -103,10 +123,13 @@ export async function fetchAndDecryptSponsorDocument(
   signer: Signer,
   docStoreAddress: string,
   nullifier: bigint,
-  trialId: bigint
+  trialId: bigint,
+  onProgress?: (step: SponsorDocumentDecryptProgress) => void
 ): Promise<Uint8Array> {
-  void docStoreAddress;
+  onProgress?.("pulling-access");
   const rec = await loadDocumentRecord(signer, nullifier, trialId);
-  const aesKey = await decryptSponsorDocumentAesKey(signer, docStoreAddress, nullifier, trialId);
+  onProgress?.("decrypting-key");
+  const aesKey = await decryptSponsorDocumentAesKeyFromRecord(signer, docStoreAddress, rec);
+  onProgress?.("fetching-document");
   return fetchAndDecryptDocument(rec.cid, aesKey);
 }

@@ -16,11 +16,13 @@ import {
     type WithdrawExitMode,
 } from "../lib/withdrawFlow";
 import { generateStealthRecipient } from "../lib/stealthAddress";
-import { getStoredIdentity } from "../lib/semaphore";
+import { getStoredIdentity, getEphemeralSigner, generateEphemeralAddress } from "../lib/semaphore";
+import { fetchConfidentialBalanceHandle } from "../lib/confidentialBalance";
+import { isTransientRpcReadError } from "../lib/rpcRetry";
 import { getMedVaultRelayerUrl } from "../lib/mobile";
 
 export function useConfidentialBalance() {
-    const { signer, account } = useWeb3();
+    const { signer, account, readOnlyProvider } = useWeb3();
     const [balanceMwei, setBalanceMwei] = useState<number | null>(null);
     const [balanceEth, setBalanceEth] = useState<string | null>(null);
     const [walletBalanceEth, setWalletBalanceEth] = useState<string | null>(null);
@@ -29,17 +31,16 @@ export function useConfidentialBalance() {
     const [error, setError] = useState<string | null>(null);
     const [isRevealed, setIsRevealed] = useState(false);
 
-    const fetchEncryptedBalance = useCallback(async (address?: string | null) => {
-        if (!signer || !address) return null;
+    const fetchEncryptedBalance = useCallback(async (holder: string) => {
+        const rpc = readOnlyProvider ?? signer?.provider;
+        if (!rpc) return null;
         try {
-            const contract = getConfidentialETH(signer);
-            const handle = await contract.getBalance(address);
-            return handle.toString();
+            return await fetchConfidentialBalanceHandle(holder, rpc);
         } catch (err: unknown) {
             console.error("Failed to fetch encrypted balance:", err);
             return null;
         }
-    }, [signer]);
+    }, [readOnlyProvider, signer]);
 
     const formatUnitsAsEth = (units: number) => (units / 1_000_000).toFixed(6);
 
@@ -56,12 +57,12 @@ export function useConfidentialBalance() {
             const contract = getConfidentialETH(signer);
             const contractAddress = await contract.getAddress();
 
-            const provider = signer.provider;
+            const provider = readOnlyProvider ?? signer.provider;
             if (!provider) {
                 throw new Error("Wallet provider not available");
             }
 
-            await ensureZamaConnected(provider, signer);
+            await ensureZamaConnected(signer.provider ?? provider, signer);
 
             const walletHandle = await fetchEncryptedBalance(account);
             let walletUnits = 0;
@@ -72,12 +73,11 @@ export function useConfidentialBalance() {
 
             let rewardUnits = 0;
             const identity = getStoredIdentity();
-            if (identity && provider) {
-                const { generateEphemeralAddress, getEphemeralSigner } = await import("../lib/semaphore");
+            if (identity) {
+                const ephemeralSigner = getEphemeralSigner(identity, provider);
                 const ephemeralAddress = await generateEphemeralAddress(identity);
                 const rewardHandle = await fetchEncryptedBalance(ephemeralAddress);
                 if (rewardHandle && BigInt(rewardHandle) !== 0n) {
-                    const ephemeralSigner = getEphemeralSigner(identity, provider);
                     const decryptedRewardValue = await reencryptUint64WithEphemeral(
                         ephemeralSigner,
                         contractAddress,
@@ -97,13 +97,15 @@ export function useConfidentialBalance() {
             console.error("Decryption failed:", err);
             if (isZamaUserRejection(err)) {
                 setError("You cancelled the signature request.");
+            } else if (isTransientRpcReadError(err)) {
+                setError("Network is busy — wait a moment and try revealing again.");
             } else {
                 setError((err as Error).message || "Failed to reveal balance");
             }
         } finally {
             setLoading(false);
         }
-    }, [signer, account, fetchEncryptedBalance]);
+    }, [signer, account, readOnlyProvider, fetchEncryptedBalance]);
 
     const hideBalance = () => {
         setIsRevealed(false);
@@ -140,16 +142,33 @@ export function useConfidentialBalance() {
         if (!signer || !account) return;
         try {
             setLoading(true);
+            setError(null);
+            if (!isRevealed) {
+                throw new Error("Reveal your balance before withdrawing.");
+            }
+
             const contract = getConfidentialETH(signer);
             const contractAddress = await contract.getAddress();
             const unitsString = (parseFloat(amountEth) * 1_000_000).toFixed(0);
             const units = parseInt(unitsString, 10);
             if (units <= 0) throw new Error("Amount too low. Minimum is 0.000001 ETH");
 
-            const { transferableHandle } = await requestEncryptedWithdraw(signer, units);
+            const walletUnits = Math.round(parseFloat(walletBalanceEth || "0") * 1_000_000);
+            const rewardUnits = Math.round(parseFloat(rewardBalanceEth || "0") * 1_000_000);
+
+            if (walletUnits <= 0 && rewardUnits > 0) {
+                throw new Error(
+                    "Your wallet cETH balance is 0, but you have trial rewards on your anonymous identity. Claim rewards from My Applications first — they cannot be unshielded from this screen."
+                );
+            }
+
+            const { transferableHandle, resumed } = await requestEncryptedWithdraw(signer, units, walletUnits);
 
             if (exitMode === "wallet") {
                 await completeEncryptedWithdraw(signer, transferableHandle);
+                if (resumed) {
+                    setError(null);
+                }
             } else {
                 const provider = signer.provider;
                 if (!provider) throw new Error("Wallet provider not available");
@@ -182,7 +201,8 @@ export function useConfidentialBalance() {
             hideBalance();
         } catch (err: unknown) {
             console.error("Withdrawal failed:", err);
-            setError((err as Error).message || "Failed to complete withdrawal");
+            const message = (err as Error).message || "Failed to complete withdrawal";
+            setError(message);
             throw err;
         } finally {
             setLoading(false);

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@medvault/core": "*",
+    "cors": "^2.8.5",
     "dotenv": "^17.3.1",
     "ethers": "6.16.0",
     "express": "^4.21.0",
@@ -22,6 +23,7 @@
     "redis": "^4.7.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3"

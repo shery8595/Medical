@@ -6,6 +6,9 @@ import { txExplorerUrl } from "../../lib/network";
 import { cn } from "../../lib/utils";
 import {
   getActiveRelayerUrl,
+  getConfiguredRelayerUrls,
+  clearStoredRelayerUrl,
+  getStoredRelayerUrl,
   probeAllRelayerHealth,
   setStoredRelayerUrl,
   type RelayerHealth,
@@ -26,7 +29,6 @@ type Props = {
   selectedRelayerUrl?: string;
   onRelayerChange?: (url: string) => void;
 };
-
 const STATUS_LABELS: Record<number, string> = {
   0: "None",
   1: "Pending",
@@ -55,10 +57,9 @@ export function RelayerStatusPanel({
 }: Props) {
   const [relayers, setRelayers] = useState<RelayerHealth[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [onChainStatus, setOnChainStatus] = useState<number | null>(null);
-  const [polling, setPolling] = useState(false);
+  const [onChainStatus, setOnChainStatus] = useState<number | null>(null);  const [polling, setPolling] = useState(false);
 
-  const activeUrl = selectedRelayerUrl ?? getActiveRelayerUrl();
+  const activeUrl = selectedRelayerUrl ?? getStoredRelayerUrl() ?? getActiveRelayerUrl();
   const activeHealth = relayers.find((r) => r.url === activeUrl);
   const relayerOk = activeHealth?.ok ?? null;
 
@@ -79,8 +80,7 @@ export function RelayerStatusPanel({
   }, [refreshRelayers]);
 
   useEffect(() => {
-    if (!provider || !nullifier) {
-      setOnChainStatus(null);
+    if (!provider || !nullifier) {      setOnChainStatus(null);
       return;
     }
     let cancelled = false;
@@ -105,7 +105,12 @@ export function RelayerStatusPanel({
   }, [provider, nullifier, trialId, jobState, finalizeTxHash]);
 
   const handleSelect = (url: string) => {
-    setStoredRelayerUrl(url);
+    const primary = getConfiguredRelayerUrls()[0];
+    if (url === primary) {
+      clearStoredRelayerUrl();
+    } else {
+      setStoredRelayerUrl(url);
+    }
     onRelayerChange?.(url);
   };
 
@@ -174,12 +179,20 @@ export function RelayerStatusPanel({
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-              relayerOk === true && "bg-emerald-50 text-emerald-700",
+              activeHealth?.relayerAuthorized === false && "bg-rose-50 text-rose-800",
+              activeHealth?.relayerAuthorized === true && relayerOk === true && "bg-emerald-50 text-emerald-700",
+              activeHealth?.relayerAuthorized !== false && activeHealth?.relayerAuthorized !== true && relayerOk === true && "bg-emerald-50 text-emerald-700",
               relayerOk === false && "bg-amber-50 text-amber-800",
               relayerOk === null && "bg-slate-100 text-slate-500"
             )}
           >
-            {relayerOk === true ? "Relayer online" : relayerOk === false ? "Relayer unreachable" : "Checking…"}
+            {activeHealth?.relayerAuthorized === false
+              ? "Not authorized on-chain"
+              : relayerOk === true
+                ? "Relayer online"
+                : relayerOk === false
+                  ? "Relayer unreachable"
+                  : "Checking…"}
           </span>
         </div>
       </div>
@@ -220,11 +233,15 @@ export function RelayerStatusPanel({
               );
             })}
           </ul>
+          {relayers.filter((r) => r.ok).length === 1 && relayers.length > 1 && (
+            <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+              Single healthy relayer — switch relayer or retry if submissions are delayed.
+            </p>
+          )}
         </div>
       )}
 
-      <ul className="space-y-2">
-        {jobRows.map((row) => (
+      <ul className="space-y-2">        {jobRows.map((row) => (
           <li key={row.key} className="flex items-center gap-2 text-[11px] text-slate-600">
             {row.state === "done" ? (
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />

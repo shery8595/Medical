@@ -2,7 +2,7 @@
 
 > **Scope statement:** MedVault is a **reference architecture for encrypted clinical-trial matching** — **not a certified clinical system**, not a HIPAA-covered entity, and not approved for regulated trial enrollment without additional operational controls.
 
-This document is an honest assessment of where MedVault stands today versus what production deployment would require under common US and EU frameworks. It complements the technical trust model in [SECURITY.md](../SECURITY.md) and [README.md](../README.md#limitations--trust-model).
+This document is an honest assessment of where MedVault stands today versus what production deployment would require under common US and EU frameworks. See [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) for the layered trust model and Phase 0/1/2 roadmap. It complements [SECURITY.md](../SECURITY.md) and [README.md](../README.md#limitations--trust-model).
 
 ## What MedVault is (and is not)
 
@@ -10,7 +10,7 @@ This document is an honest assessment of where MedVault stands today versus what
 |-------|--------|
 | Encrypted on-chain eligibility matching (Zama fhEVM) | **Implemented** (Sepolia demo) |
 | Identity and policy attestation (Noir + Semaphore) | **Implemented** — attestation, not fhEVM execution proof |
-| Gasless patient flows (trusted relayer) | **Implemented** — interim re-decrypt (P0.2 defense-in-depth); ciphertext payout gating via `FHE.select` (P2 shipped) |
+| Gasless patient flows (trusted relayer) | **Implemented** — default patient-decrypt (browser); optional P0.2 relayer-assisted defense-in-depth (relayer sees eligibility bit); ciphertext payout gating via `FHE.select` (P2 shipped) |
 | Production clinical trial management system | **Not in scope today** |
 | HIPAA-compliant PHI platform | **Not today** — see off-chain gaps below |
 | FDA-validated medical device / SaMD | **Not in scope** |
@@ -114,7 +114,7 @@ MedVault demo flows use encrypted consent gates (`ConsentManager`, `EncryptedCon
 1. **Now (demo):** Honest disclosure; off-chain ops controls (P4.2); regulatory posture doc (this file).
 2. **Done (P2):** Ciphertext-gated payouts — reduces forgery risk for incentives. Phase 5 differential evidence recorded in [formal-verification/certora-halmos-results.md](./formal-verification/certora-halmos-results.md).
 3. **Before pilot:** External security audit ([EXTERNAL_AUDIT_SUMMARY.md](./EXTERNAL_AUDIT_SUMMARY.md)); IRB package; BAAs; KYC integration.
-4. **Institutional pilot:** Multi-relayer / threshold decrypt (P3.3); Part 11 validation plan; GDPR DPA bundle.
+4. **Institutional pilot:** Multi-relayer / threshold agreement (P3.3 — each co-signing relayer still sees eligibility bit); Part 11 validation plan; GDPR DPA bundle.
 
 ## Related documents
 

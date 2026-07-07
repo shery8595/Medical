@@ -87,6 +87,7 @@ In-app catalog: **Docs → Tests & verification → Test matrix**.
 | [test/integration/batch-eligibility.test.ts](../test/integration/batch-eligibility.test.ts) | EligibilityEngine | 1 | FHE | BAT-01 |
 | [test/integration/relayer-registration.test.ts](../test/integration/relayer-registration.test.ts) | MedVaultRegistry | 1 | Privacy | REL-REG-01 |
 | [test/integration/relayer-decrypt-verify.test.ts](../test/integration/relayer-decrypt-verify.test.ts) | MVR, relayer | 5 | Privacy | RDV-01–05 |
+| [test/integration/relayer-decrypt-visibility.test.ts](../test/integration/relayer-decrypt-visibility.test.ts) | MVR, relayer ACL | 3 | Privacy | PDV-01–03 |
 | [test/unit/p3-relayer-trust-reduction.test.ts](../test/unit/p3-relayer-trust-reduction.test.ts) | MVR, Vault | 5 | Privacy | P3-01–P3-05 |
 | [test/unit/relayer-adversarial.test.ts](../test/unit/relayer-adversarial.test.ts) | MVR, relayer | 8 | Privacy | REL-EQV-01–02, REL-REP-01–02, REL-FF-01–02, REL-STALE-01–02 |
 | [test/integration/ai-criteria-roundtrip.test.ts](../test/integration/ai-criteria-roundtrip.test.ts) | @medvault/ai | 7 | AI | AI-01–07 |
@@ -137,7 +138,8 @@ In-app catalog: **Docs → Tests & verification → Test matrix**.
 | Indexer sync | IDX-* |
 | High-concurrency registration | HCR-* |
 | Trust-gap P2 `FHE.select` payout gating | P2-01..04, P5-SELECT-01/02 |
-| Relayer re-decrypt defense-in-depth (P0.2) | RDV-01–05 |
+| Patient-decrypt default — relayer ACL isolation | PDV-01–03 |
+| Relayer re-decrypt defense-in-depth (P0.2, optional) | RDV-01–05 |
 | Phase 5 differential (plaintext vs encrypted oracle) | P1–P3 PROP, DIFF-03 |
 | Noir attestation ↔ FHE stage binding | DIFF-*, BIND-* |
 

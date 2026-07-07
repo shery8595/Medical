@@ -1,12 +1,33 @@
 const INDEXER_URL = import.meta.env.VITE_INDEXER_URL as string | undefined;
+/** `off` | `fallback` (default) — subgraph is canonical; indexer only when subgraph fails. */
+const INDEXER_MODE = (import.meta.env.VITE_INDEXER_MODE as string | undefined)?.trim() || "fallback";
+
+function resolveIndexerBaseUrl(): string | undefined {
+  const url = INDEXER_URL?.trim();
+  if (!url) return undefined;
+  const normalized = url.replace(/\/$/, "");
+
+  if (normalized.startsWith("/")) return normalized;
+
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    if (/^https?:\/\/([^/]+\.)?med-vault\.xyz\/indexer$/i.test(normalized)) {
+      return "/indexer";
+    }
+    if (/^https?:\/\/indexermedvault-production\.up\.railway\.app/i.test(normalized)) {
+      return "/indexer";
+    }
+  }
+
+  return normalized;
+}
 
 export function isIndexerConfigured(): boolean {
-  return Boolean(INDEXER_URL?.trim());
+  return INDEXER_MODE !== "off" && Boolean(INDEXER_URL?.trim());
 }
 
 export function getIndexerBaseUrl(): string | undefined {
-  const url = INDEXER_URL?.trim();
-  return url || undefined;
+  if (INDEXER_MODE === "off") return undefined;
+  return resolveIndexerBaseUrl();
 }
 
 type IndexerRoute =
@@ -14,21 +35,22 @@ type IndexerRoute =
   | { kind: "sponsorStats"; sponsor: string }
   | { kind: "trialApplications"; trialId: string };
 
-/** Map known GraphQL query names to indexer REST endpoints. */
-export function mapQueryToIndexerRoute(query: string, variables?: Record<string, unknown>): IndexerRoute | null {
+/**
+ * Only map queries where indexer REST payloads match GraphQL shape.
+ * Sponsor dashboard queries stay subgraph-only (indexer cache is incomplete).
+ */
+export function mapQueryToIndexerRoute(
+  query: string,
+  variables?: Record<string, unknown>
+): IndexerRoute | null {
+  if (INDEXER_MODE === "off") return null;
+
   const name = query.match(/query\s+([A-Za-z0-9_]+)/)?.[1];
   if (!name) return null;
 
   switch (name) {
     case "GetActiveTrials":
       return { kind: "trials", active: true };
-    case "GetTrialsBySponsor":
-    case "GetSponsorStats":
-    case "GetSponsorData":
-      if (variables?.sponsor) {
-        return { kind: "sponsorStats", sponsor: String(variables.sponsor) };
-      }
-      return null;
     default:
       return null;
   }
@@ -46,12 +68,21 @@ function indexerPath(route: IndexerRoute): string {
 }
 
 /** Transform indexer JSON into GraphQL-shaped payload expected by hooks. */
-export function shapeIndexerResponse(route: IndexerRoute, body: Record<string, unknown>): unknown {
+export function shapeIndexerResponse(
+  route: IndexerRoute,
+  body: Record<string, unknown>,
+  queryName?: string
+): unknown {
   switch (route.kind) {
     case "trials":
       return { trials: body.trials ?? [] };
-    case "sponsorStats":
-      return { sponsor: (body as { sponsor?: unknown }).sponsor ?? body };
+    case "sponsorStats": {
+      const sponsor = (body as { sponsor?: { trials?: unknown[] } }).sponsor ?? body;
+      if (queryName === "GetTrialsBySponsor" || queryName === "GetSponsorData") {
+        return { trials: (sponsor as { trials?: unknown[] }).trials ?? [] };
+      }
+      return { sponsor };
+    }
     case "trialApplications":
       return body;
     default:
@@ -59,31 +90,39 @@ export function shapeIndexerResponse(route: IndexerRoute, body: Record<string, u
   }
 }
 
+const indexerInFlight = new Map<string, Promise<unknown>>();
+
 export async function fetchFromIndexer<T>(
   route: IndexerRoute,
-  timeoutMs = 2500
+  timeoutMs = 1500,
+  queryName?: string
 ): Promise<T | null> {
   const base = getIndexerBaseUrl();
   if (!base) return null;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const path = indexerPath(route);
+  const key = `${base}${path}:${queryName ?? ""}`;
+  const pending = indexerInFlight.get(key);
+  if (pending) return pending as Promise<T | null>;
 
-  try {
-    const health = await fetch(`${base.replace(/\/$/, "")}/health`, {
-      signal: controller.signal,
-    });
-    if (!health.ok) return null;
+  const promise = (async (): Promise<T | null> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${base.replace(/\/$/, "")}${path}`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as Record<string, unknown>;
+      return shapeIndexerResponse(route, body, queryName) as T;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+      indexerInFlight.delete(key);
+    }
+  })();
 
-    const res = await fetch(`${base.replace(/\/$/, "")}${indexerPath(route)}`, {
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as Record<string, unknown>;
-    return shapeIndexerResponse(route, body) as T;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+  indexerInFlight.set(key, promise);
+  return promise;
 }

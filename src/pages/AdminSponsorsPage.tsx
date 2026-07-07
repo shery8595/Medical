@@ -22,7 +22,8 @@ import {
     Coins,
     RefreshCw,
 } from "lucide-react";
-import { useWeb3 } from "../lib/Web3Context";
+import { useInjectedWallet } from "../hooks/useInjectedWallet";
+import { AdminWalletConnect } from "../components/admin/AdminWalletConnect";
 import { getSponsorRegistry, getTrialManager } from "../lib/contracts";
 import {
     claimReclaimedPool,
@@ -33,6 +34,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useSubgraph } from "../hooks/useSubgraph";
 import { ethers } from "ethers";
+import { AdminSponsorApplicationReview } from "../components/admin/AdminSponsorApplicationReview";
 
 const GET_PENDING_APPLICATIONS = `
   query GetPendingRequests {
@@ -45,7 +47,16 @@ const GET_PENDING_APPLICATIONS = `
 `;
 
 export default function AdminSponsorsPage() {
-    const { signer, account } = useWeb3();
+    const {
+        signer,
+        account,
+        readOnlyProvider,
+        connect,
+        disconnect,
+        isConnecting,
+        error: walletError,
+        hasInjectedWallet,
+    } = useInjectedWallet();
     const [sponsorAddress, setSponsorAddress] = useState("");
     const [sponsorName, setSponsorName] = useState("");
     const [status, setStatus] = useState<string | null>(null);
@@ -57,6 +68,7 @@ export default function AdminSponsorsPage() {
     const [abandonedStatus, setAbandonedStatus] = useState<TrialPoolReclaimStatus | null>(null);
     const [abandonedLoading, setAbandonedLoading] = useState(false);
     const [abandonedMessage, setAbandonedMessage] = useState<string | null>(null);
+    const [reviewRefreshNonce, setReviewRefreshNonce] = useState(0);
     
     // Application States
     const [applicantData, setApplicantData] = useState({
@@ -181,20 +193,45 @@ export default function AdminSponsorsPage() {
         parseFloat(abandonedStatus.pendingReclaimEth) > 0 &&
         abandonedStatus.pendingReclaimRecipient?.toLowerCase() === account.toLowerCase();
 
-    const handleAddSponsor = async () => {
-        if (!signer || !sponsorAddress || !sponsorName) return;
+    const handleAddSponsor = async (addressOverride?: string, nameOverride?: string) => {
+        const addr = (addressOverride ?? sponsorAddress).trim();
+        const name = (nameOverride ?? sponsorName).trim();
+        if (!signer || !addr || !name) return;
         setLoading(true);
         setStatus("Approving sponsor on network...");
         try {
             const registry = getSponsorRegistry(signer);
-            const tx = await registry.addSponsor(sponsorAddress, sponsorName);
+            const tx = await registry.addSponsor(addr, name);
             setStatus("Waiting for confirmation...");
             await tx.wait();
             refetchRequests();
+            setReviewRefreshNonce((n) => n + 1);
             
             setStatus("Success! Sponsor verified.");
-            setSponsorAddress("");
-            setSponsorName("");
+            if (!addressOverride) {
+                setSponsorAddress("");
+                setSponsorName("");
+            }
+        } catch (err: any) {
+            console.error(err);
+            setStatus(`Error: ${err.reason || err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRejectSponsor = async (applicant: string) => {
+        if (!signer || !applicant) return;
+        setLoading(true);
+        setStatus("Rejecting sponsorship request...");
+        try {
+            const registry = getSponsorRegistry(signer);
+            const tx = await registry.rejectSponsorship(applicant);
+            setStatus("Waiting for confirmation...");
+            await tx.wait();
+            refetchRequests();
+            setReviewRefreshNonce((n) => n + 1);
+            setStatus("Request rejected.");
         } catch (err: any) {
             console.error(err);
             setStatus(`Error: ${err.reason || err.message}`);
@@ -239,6 +276,15 @@ export default function AdminSponsorsPage() {
                 </div>
             </div>
 
+            <AdminWalletConnect
+                account={account}
+                isConnecting={isConnecting}
+                error={walletError}
+                hasInjectedWallet={hasInjectedWallet}
+                onConnect={() => void connect()}
+                onDisconnect={disconnect}
+            />
+
             {/* Two-step ownership transfer UI */}
             <OwnershipTransfer
                 contractName="SponsorRegistry"
@@ -263,6 +309,16 @@ export default function AdminSponsorsPage() {
                 pendingOwner={pendingOwner}
                 currentOwner={account || undefined}
                 isCurrentOwner={isOwner}
+            />
+
+            <AdminSponsorApplicationReview
+                adminAccount={account}
+                readOnlyProvider={readOnlyProvider}
+                isOwner={isOwner}
+                actionLoading={loading}
+                onApprove={(applicant, orgName) => void handleAddSponsor(applicant, orgName)}
+                onReject={(applicant) => void handleRejectSponsor(applicant)}
+                refreshNonce={reviewRefreshNonce}
             />
 
             <Card className="border-slate-200 bg-white shadow-sm">
@@ -296,7 +352,7 @@ export default function AdminSponsorsPage() {
 
                     <div className="flex flex-col gap-2 sm:flex-row">
                         <Button
-                            onClick={handleAddSponsor}
+                            onClick={() => void handleAddSponsor()}
                             disabled={!isOwner || loading || !sponsorAddress || !sponsorName}
                             className="gap-2"
                         >

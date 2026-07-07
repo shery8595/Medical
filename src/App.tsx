@@ -53,6 +53,9 @@ import { TestingMatrixDoc } from "./pages/docs/testing/TestingMatrixDoc";
 import { TestingInfrastructureDoc } from "./pages/docs/testing/TestingInfrastructureDoc";
 import { TestingCiDoc } from "./pages/docs/testing/TestingCiDoc";
 import { SecurityModelDoc } from "./pages/docs/SecurityModelDoc";
+import { TrustArchitectureDoc } from "./pages/docs/TrustArchitectureDoc";
+import { GlossaryDoc } from "./pages/docs/GlossaryDoc";
+import { JudgeBriefDoc } from "./pages/docs/JudgeBriefDoc";
 import { RelayerTrustBoundariesDoc } from "./pages/docs/RelayerTrustBoundariesDoc";
 import { P33ThresholdAttestationDoc } from "./pages/docs/P33ThresholdAttestationDoc";
 import { ComplianceDoc } from "./pages/docs/ComplianceDoc";
@@ -460,6 +463,30 @@ function MedVaultRoutes() {
               element={
                 <DocsLayout>
                   <SecurityModelDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/trust-architecture"
+              element={
+                <DocsLayout>
+                  <TrustArchitectureDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/glossary"
+              element={
+                <DocsLayout>
+                  <GlossaryDoc />
+                </DocsLayout>
+              }
+            />
+            <Route
+              path="/docs/judge-brief"
+              element={
+                <DocsLayout>
+                  <JudgeBriefDoc />
                 </DocsLayout>
               }
             />

@@ -105,10 +105,10 @@ contract SponsorRegistry is Ownable {
                 <h2>Sponsor UI workflows</h2>
                 <h3>Open-access flag</h3>
                 <p>
-                    By default <code>VITE_SPONSOR_OPEN_ACCESS</code> is enabled (any value except the string{" "}
-                    <code>false</code>). <code>useSponsorVerification</code> then treats every connected wallet as verified
-                    for trial creation — suitable for testnet demos. Set <code>VITE_SPONSOR_OPEN_ACCESS=false</code> to
-                    enforce <code>SponsorRegistry.isVerifiedSponsor</code> on-chain.
+                    By default sponsor verification is <strong>required</strong>. Unregistered wallets are redirected to{" "}
+                    <code>/sponsor/verification</code> to submit an on-chain <code>requestSponsorship</code> request.
+                    Set <code>VITE_SPONSOR_OPEN_ACCESS=true</code> only for local demos to skip{" "}
+                    <code>SponsorRegistry.isVerifiedSponsor</code> checks.
                 </p>
                 <h3>AI-assisted trial creation</h3>
                 <p>

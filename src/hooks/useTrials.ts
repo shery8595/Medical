@@ -4,6 +4,9 @@ import { Trial } from '../types';
 import { generateEphemeralAddress, getAnonymousNullifier, getStoredIdentity, listStoredAnonymousTrialIds } from '../lib/semaphore';
 import { filterSponsorVisibleSubmissions } from '../lib/anonymousApplicationStatus';
 import { countTrialMatches } from '../lib/sponsorChartData';
+import { useWeb3 } from '../lib/Web3Context';
+import { ethers } from 'ethers';
+import { fetchSponsorPoolDepositedWei } from '../lib/contracts/sponsorAdapters';
 
 const GET_TRIALS_WITH_USER_STATE = `
   query GetTrialsWithUserState($account: Bytes!, $accountId: ID!, $anonymousNullifiers: [BigInt!]!) {
@@ -165,7 +168,7 @@ function enrichSponsorTrialRow(t: any, now: number): Trial {
     acceptedCount: accepted,
     pendingApplicationCount,
     updatedAtSec,
-    poolFundedWei: poolFunded ? "1" : "0",
+    poolFundedWei: undefined,
     milestoneProgressPct,
     milestones,
     enrollmentPct,
@@ -178,6 +181,7 @@ function enrichSponsorTrialRow(t: any, now: number): Trial {
 }
 
 export function useTrials(account?: string, sponsorAddress?: string) {
+  const { readOnlyProvider } = useWeb3();
   const query = sponsorAddress ? GET_TRIALS_BY_SPONSOR : GET_TRIALS_WITH_USER_STATE;
   const al = account?.toLowerCase() || "0x0000000000000000000000000000000000000000";
   /** Local anonymous apply state only applies after wallet connect (avoids ghost UI when logged out). */
@@ -232,7 +236,27 @@ export function useTrials(account?: string, sponsorAddress?: string) {
         const accountAddress = account?.toLowerCase() ?? null;
 
         if (sponsorAddress) {
-          const sponsorRows = data.trials.map((t: any) => enrichSponsorTrialRow(t, now));
+          let sponsorRows = data.trials.map((t: any) => enrichSponsorTrialRow(t, now));
+          if (readOnlyProvider && ethers.isAddress(sponsorAddress)) {
+            const sponsorAddr = sponsorAddress.toLowerCase();
+            sponsorRows = await Promise.all(
+              sponsorRows.map(async (row) => {
+                const depositedWei = await fetchSponsorPoolDepositedWei(
+                  readOnlyProvider,
+                  row.id,
+                  sponsorAddr,
+                );
+                if (depositedWei != null) {
+                  return {
+                    ...row,
+                    poolFundedWei: depositedWei,
+                    rewardPoolFunded: BigInt(depositedWei) > 0n,
+                  };
+                }
+                return row;
+              }),
+            );
+          }
           if (mounted) {
             setEnrichedTrials(sponsorRows);
             setEnriching(false);
@@ -274,6 +298,11 @@ export function useTrials(account?: string, sponsorAddress?: string) {
             const anonymousSubmission = anonymousSubmissionByTrialId.get(String(t.id));
             if (localNullifier) {
               anonymousNullifier = localNullifier.toString();
+            } else if (anonymousSubmission?.nullifier != null) {
+              anonymousNullifier = String(anonymousSubmission.nullifier);
+            }
+
+            if (anonymousNullifier) {
               const indexedStatus = anonymousSubmission?.status;
               if (indexedStatus === "Accepted" || indexedStatus === "Rejected" || indexedStatus === "Pending") {
                 anonymousStatus = indexedStatus;
@@ -334,7 +363,7 @@ export function useTrials(account?: string, sponsorAddress?: string) {
     }
 
     return () => { mounted = false; };
-  }, [account, data, subgraphLoading, sponsorAddress, storedAnonymousTrialIds]);
+  }, [account, data, subgraphLoading, sponsorAddress, storedAnonymousTrialIds, readOnlyProvider]);
 
   return {
     trials: enrichedTrials,

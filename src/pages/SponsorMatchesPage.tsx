@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   ArrowRight,
   Download,
+  FileText,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { cn } from "../lib/utils";
@@ -40,7 +41,7 @@ import { Match } from "../types";
 import { formatRelativeTimeFromUnix } from "../lib/formatRelativeTime";
 import { AnimatePresence, motion } from "framer-motion";
 import { SponsorDocumentPanel } from "../components/sponsor/SponsorDocumentPanel";
-import { useMatchHasDocument } from "../hooks/useMatchHasDocument";
+import { useMatchHasDocument, invalidateMatchDocumentCache } from "../hooks/useMatchHasDocument";
 
 function fheMatchLabel(match: Match): { text: string; dotClass: string } {
   if (!match.isAnonymous) {
@@ -64,18 +65,22 @@ function fheMatchLabel(match: Match): { text: string; dotClass: string } {
 function MatchRow({
   match,
   trialId,
+  docRefreshKey,
   onSelect,
 }: {
   match: Match;
   trialId: string;
+  docRefreshKey: number;
   onSelect: (match: Match) => void;
 }) {
   const { provider, chainId } = useWeb3();
-  const { hasDocument } = useMatchHasDocument(
+  const { hasDocument, loading: checkingDoc } = useMatchHasDocument(
     provider ?? undefined,
     match.isAnonymous ? match.nullifier : undefined,
     trialId,
-    match.isAnonymous
+    match.isAnonymous,
+    docRefreshKey,
+    match.hasHybridDocument
   );
   const { certified, eligible, fheCommitted } = useAnonymousCertification(
     match.isAnonymous ? match.nullifier : undefined,
@@ -162,6 +167,14 @@ function MatchRow({
           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", fheLabel.dotClass)} />
           <span className="text-xs font-medium text-slate-600">{fheLabel.text}</span>
         </div>
+        {match.isAnonymous && checkingDoc ? (
+          <span className="pl-3.5 text-[10px] text-slate-400">Checking document…</span>
+        ) : match.isAnonymous && hasDocument ? (
+          <span className="inline-flex items-center gap-1 pl-3.5 text-[10px] font-semibold text-teal-700">
+            <FileText className="h-3 w-3" />
+            Medical document attached
+          </span>
+        ) : null}
         {showFheCommitted && !certified ? (
           <span className="text-[10px] text-teal-700/80 pl-3.5">FHE pipeline on ciphertext</span>
         ) : null}
@@ -191,7 +204,7 @@ function MatchRow({
             className="h-9 rounded-lg border border-violet-700 bg-violet-700 px-3 text-xs font-semibold text-white shadow-none hover:bg-violet-800"
             onClick={() => onSelect(match)}
           >
-            Review
+            {hasDocument ? "Review · Doc" : "Review"}
           </Button>
         ) : match.isAnonymous && (match.status === "Accepted" || match.status === "Rejected") ? (
           <div className="flex flex-col items-end gap-1">
@@ -205,6 +218,17 @@ function MatchRow({
             >
               {match.status}
             </Badge>
+            {match.status === "Accepted" && hasDocument ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 rounded-lg border-teal-300 bg-white px-2.5 text-[10px] font-semibold text-teal-800 hover:bg-teal-50"
+                onClick={() => onSelect(match)}
+              >
+                <FileText className="h-3 w-3" />
+                View document
+              </Button>
+            ) : null}
             {certified ? (
               <ZkCertifyBadge variant="certified" size="sm" eligible={eligible} />
             ) : null}
@@ -251,6 +275,15 @@ export function SponsorMatchesPage() {
   const [message, setMessage] = useState<string>("");
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [docRefreshKey, setDocRefreshKey] = useState(0);
+
+  const handleSelectMatch = (match: Match) => {
+    if (match.isAnonymous && match.nullifier) {
+      invalidateMatchDocumentCache(match.nullifier, match.trialId);
+      setDocRefreshKey((key) => key + 1);
+    }
+    setSelectedMatch(match);
+  };
 
   const handleUpdateStatus = async (trialId: string, patientAddress: string, status: number) => {
     try {
@@ -457,7 +490,8 @@ export function SponsorMatchesPage() {
                         key={match.id}
                         match={match}
                         trialId={trialId}
-                        onSelect={setSelectedMatch}
+                        docRefreshKey={docRefreshKey}
+                        onSelect={handleSelectMatch}
                       />
                     ))}
                   </div>
@@ -491,7 +525,13 @@ export function SponsorMatchesPage() {
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1D2634]/10 ring-1 ring-[#1D2634]/15">
                   <UserCheck className="h-6 w-6 text-[#1D2634]" />
                 </div>
-                <h3 className="font-display text-xl font-semibold text-slate-900">Protocol review</h3>
+                <h3 className="font-display text-xl font-semibold text-slate-900">
+                  {selectedMatch.status === "Pending"
+                    ? "Protocol review"
+                    : selectedMatch.isAnonymous && selectedMatch.status === "Accepted"
+                      ? "Patient document"
+                      : "Application details"}
+                </h3>
                 <p className="mt-1 font-mono text-xs text-slate-500">
                   ID {selectedMatch.patientId?.slice(0, 18)}…
                 </p>
@@ -516,9 +556,11 @@ export function SponsorMatchesPage() {
                     trialId={selectedMatch.trialId}
                     status={selectedMatch.status}
                     isAnonymous
+                    refreshKey={docRefreshKey}
                   />
                 ) : null}
 
+                {selectedMatch.status === "Pending" ? (
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     variant="outline"
@@ -548,6 +590,11 @@ export function SponsorMatchesPage() {
                     {updatingId ? <Loader2 className="h-5 w-5 animate-spin" /> : "Accept"}
                   </Button>
                 </div>
+                ) : selectedMatch.isAnonymous && selectedMatch.status === "Accepted" ? (
+                  <p className="text-xs text-slate-500">
+                    Application already accepted. Use the panel above to decrypt the attached medical document.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-6 py-3">

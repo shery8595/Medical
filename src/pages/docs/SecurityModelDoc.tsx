@@ -3,7 +3,6 @@ import { Prose } from "../../components/docs/Prose";
 import { CodeBlock } from "../../components/docs/CodeBlock";
 import { Callout } from "../../components/docs/Callout";
 import { DocsPageHeaderForRoute } from "../../components/docs/DocsPageHeader";
-import { motion } from "framer-motion";
 import { Shield, Lock, Key, AlertTriangle, ShieldCheck, Eye, Database, Users, Fingerprint, Ban } from "lucide-react";
 
 const threatModel = [
@@ -20,17 +19,17 @@ const threatModel = [
     { vector: "Unauthorized Withdraw-To Staging", severity: "High", mitigation: "requestWithdrawTo requires patient EIP-712 WithdrawTo signature binding destination, encrypted handle, nonce, and deadline. Vault cannot stage payouts to arbitrary addresses without user consent. Tests: TL-05, E2E-09.", status: "Mitigated" },
     { vector: "Relayer Mis-binding on Public Exit", severity: "Medium", mitigation: "EIP-712 v2 `WithdrawAuthorization` binds owner, stealthRecipient, transferableHandle, exitMode, nonce, and deadline. Contract rejects wrong recipient, expired auth, replayed nonces, and exit-mode tampering (SUF-05 / PEX-* tests). Relayer cannot redirect funds to an unsigned address.", status: "Mitigated" },
     { vector: "Event Log Metadata Analysis", severity: "Low", mitigation: "MedVault events emit public structural metadata (trial ID, patient address, status enum) but never emit ciphertexts or health values. Withdraw/stake events omit amounts. An observer can see that an application or withdraw occurred but cannot read staged encrypted amounts from logs.", status: "Accepted Risk" },
-    { vector: "FHE ACL Persists After Consent Revoke", severity: "High", mitigation: "Forward-only revocation (H-2 / P4): atomic `revokeAccess` (new CID + key required) bumps `documentEpoch`; sponsor reads require matching `sponsorGrantEpoch` after `pullSponsorKeyAccess`. Emits `DocumentLegacyHandleRevoked` for off-chain unpin. **Residual:** sponsors who already decrypted retain plaintext off-chain — fhEVM `FHE.allow` is irreversible. Tests: ACL-01..06. See HYBRID_STORAGE.md.", status: "Mitigated (forward-only)" },
-    { vector: "Trusted Relayer TCB (stage/cancel/register/finalize)", severity: "High", mitigation: "`finalizeAnonymousApplyWithProof`, `finalizeAnonymousApplyWithConsent`, `cancelAnonymousApplyStage`, and `registerPatientViaRelayer` require `msg.sender` in `authorizedRelayers` (HIGH-1). Payout integrity is `FHE.select`-gated (P2). Relayer re-decrypt on `/relay/apply-finalize` when relayer is `permitRecipient` ignores client `eligible` (P0.2). Multi-relayer choice (P3.1) limits censorship. Tests: HIGH-1, P3-04, relayer-decrypt-verify, relayer-adversarial.", status: "Mitigated (operational)" },
+    { vector: "FHE ACL Persists After Consent Revoke", severity: "High", mitigation: "Epoch-based key rotation (H-2 / P4): atomic `revokeAccess` (new CID + key required) bumps `documentEpoch`; sponsor reads require matching `sponsorGrantEpoch` after `pullSponsorKeyAccess`. Emits `DocumentLegacyHandleRevoked` for off-chain unpin. **Residual:** sponsors who already decrypted retain plaintext off-chain — fhEVM `FHE.allow` is irreversible. Tests: ACL-01..06. See HYBRID_STORAGE.md.", status: "Mitigated (epoch rotation)" },
+    { vector: "Trusted Relayer TCB (stage/cancel/register/finalize)", severity: "High", mitigation: "`finalizeAnonymousApplyWithProof`, `finalizeAnonymousApplyWithConsent`, `cancelAnonymousApplyStage`, and `registerPatientViaRelayer` require `msg.sender` in `authorizedRelayers` (HIGH-1). Payout integrity is `FHE.select`-gated (P2). Default: patient-decrypt (browser) — relayer never sees eligibility bit (PDV-01). Optional P0.2 relayer-assisted re-decrypt when relayer is `permitRecipient` (visibility tradeoff). Multi-relayer choice (P3.1) limits censorship. Tests: HIGH-1, P3-04, relayer-decrypt-verify, relayer-decrypt-visibility, relayer-adversarial.", status: "Mitigated (operational)" },
     { vector: "Unauthorized Pool Enrollment (MED-3)", severity: "Medium", mitigation: "`registerAnonymousParticipant` is permit-holder-only; sponsor accept does not auto-enroll. Patient uses Applied Trials UI, `registerAnonymousParticipantFor`, or relayer `POST /relay/register-anon`.", status: "Mitigated" },
     { vector: "SponsorRegistry Auditor Role", severity: "Medium", mitigation: "`scheduleAuditor` / `applyAuditor` (6h timelock) set `SponsorRegistry.auditor` for encrypted institution ID reads; zero-address schedule reverts. Tests: SRA-01–05.", status: "Resolved" },
     { vector: "Silent Eligibility Rejection", severity: "Informational", mitigation: "Ineligible anonymous finalize does not revert to avoid a plaintext eligibility bit on-chain (P1 privacy goal). `EligibilityEngine.silentApplyOutcome` records `SilentRejected`; vault payout gated on FHE `anonymousResults`. Closed by-design — see `docs/MEDIUM_FINDINGS_CLOSEOUT.md`.", status: "Closed (by-design)" },
-    { vector: "Registration Consistency Gap", severity: "Low", mitigation: "`profileCommitment` and FHE handles stored without cross-binding (P5-B = no SDK API). Accepted residual trust on honest-client UX. Closed SDK-blocked — see `docs/REGCONSISTENCY_B_FINDING.md`.", status: "Closed (SDK-blocked)" },
+    { vector: "Registration Consistency Gap", severity: "Low", mitigation: "`profileCommitment` is an identity anchor only (SDK-blocked cryptographic bind). Operational control: client + relayer `healthDataHash` validation before submit. See `docs/TRUST_ARCHITECTURE.md` and `docs/REGCONSISTENCY_B_FINDING.md`.", status: "Hardened (operational)" },
     { vector: "Indexer Placeholder Consent Records", severity: "Low", mitigation: "Indexer `ConsentChanged` RPC handler writes placeholder rows (`trialId: 0`, zero address). Use subgraph-synced consents for real trial/patient linkage.", status: "Accepted Risk" },
     { vector: "Indexer HTTP API Unauthenticated", severity: "Medium", mitigation: "Data routes require `INDEXER_API_SECRET` Bearer token when set; `/health` remains public for probes. Deploy behind firewall in production; no PHI in API payloads.", status: "Mitigated" },
     { vector: "Public Trial Bounds (Legacy createTrial)", severity: "Medium", mitigation: "Legacy `TrialManager.createTrial` is gated by `require(block.chainid == 31337)` and reverts on Sepolia/mainnet with \"Use createTrialWithEncryptedCriteria on mainnet/testnet\". Plaintext criteria persist only for Hardhat fixtures. Production sponsor UI, SDK `createTrialEncrypted`, and MCP all route to `createTrialWithEncryptedCriteria`. Tests: LEG-01..04.", status: "Mitigated" },
     { vector: "ConfidentialETH receive() Auto-Deposit", severity: "Low", mitigation: "Plain ETH sent to `ConfidentialETH7984.receive()` auto-mints cETH to `msg.sender`. Native ETH amount visible at L1 — not a ciphertext leak but a settlement privacy limit.", status: "Accepted Risk" },
-    { vector: "Noir–FHE Integrity Gap", severity: "High", mitigation: "Noir attestation binds Semaphore identity, profile commitment, staged FHE handle, and criteria echo — identity and policy attestation, not fhEVM execution proof. Relayer re-decrypts staged ciphertext before finalize (P0.2 defense-in-depth). P2 `FHE.select` payout gating shipped; Phase 5 differential evidence in certora-halmos-results.md. See SECURITY.md.", status: "Mitigated (P0.2 defense-in-depth) + P2 shipped" },
+    { vector: "Noir–FHE Integrity Gap", severity: "High", mitigation: "Noir attestation binds Semaphore identity, profile commitment, staged FHE handle, and criteria echo — identity and policy attestation, not fhEVM execution proof. Default patient-decrypt (browser); optional P0.2 relayer-assisted re-decrypt (visibility tradeoff). P2 `FHE.select` payout gating shipped; Phase 5 differential evidence in certora-halmos-results.md. See SECURITY.md.", status: "Mitigated (P0.2 defense-in-depth) + P2 shipped" },
 ];
 
 const colorStyles: Record<string, { iconBg: string; iconText: string; cardBorder: string; cardBg: string }> = {
@@ -65,6 +64,17 @@ export function SecurityModelDoc() {
         <motion.div>
             <Prose className="max-w-none">
                 <DocsPageHeaderForRoute />
+
+                <Callout type="info" title="Canonical trust model">
+                    Layered responsibilities and the Trust &amp; Assurance Register:{" "}
+                    <Link to="/docs/trust-architecture" className="font-semibold text-[#00685f] hover:underline">
+                        Trust architecture
+                    </Link>
+                    {" · "}
+                    <Link to="/docs/glossary" className="font-semibold text-[#00685f] hover:underline">
+                        Glossary
+                    </Link>
+                </Callout>
 
                 {/* Security Posture Summary */}
                 <div className="my-12 p-8 border border-slate-200 rounded-3xl bg-emerald-500/5 relative overflow-hidden">
@@ -119,8 +129,8 @@ export function SecurityModelDoc() {
                                     },
                                     {
                                         layer: "Authorized relayers (P3.1)",
-                                        guarantees: "Gasless relay; P0.2 re-decrypt when relayer is permitRecipient; multi-relayer patient choice",
-                                        limits: "Can censor or delay only — cannot steal funds or forge eligibility (see RELAYER_TRUST_BOUNDARIES.md)",
+                                        guarantees: "Gasless relay; default patient-decrypt (browser); optional P0.2 relayer-assisted (visibility tradeoff); multi-relayer patient choice",
+                                        limits: "Cannot steal vault funds, cannot forge eligibility, can only censor or delay (see RELAYER_TRUST_BOUNDARIES.md)",
                                     },
                                     {
                                         layer: "Compliance",
@@ -139,10 +149,17 @@ export function SecurityModelDoc() {
                     </div>
                 </div>
 
+                <Callout type="info" title="Recommended default: patient-decrypt (browser)">
+                    Production UI stages with the patient&apos;s ephemeral wallet as <code>permitRecipient</code>. The
+                    patient decrypts locally; the relayer only relays transactions and never sees the eligibility bit.
+                    Optional P0.2 relayer-assisted mode improves server-side verification but gives the relayer visibility
+                    into the eligibility bit.
+                </Callout>
+
                 <p className="text-sm text-slate-600">
                     Relayer formal bounds:{" "}
                     <Link to="/docs/relayer-trust-boundaries" className="text-teal-700 font-semibold hover:underline">
-                        cannot steal / cannot forge / can only censor
+                        cannot steal vault funds / cannot forge eligibility / can only censor or delay
                     </Link>
                     {" · "}
                     <Link to="/docs/p3-3-threshold-attestation" className="text-teal-700 font-semibold hover:underline">

@@ -166,13 +166,117 @@ const EXIT_MODE_PRIVATE_BATCH = 1;
 
 
 
+const ZERO_HANDLE = `0x${"0".repeat(64)}` as `0x${string}`;
+
+
+
+export async function getPendingWithdrawHandle(signer: Signer): Promise<string | null> {
+
+  const account = await signer.getAddress();
+
+  const contract = getConfidentialETH(signer);
+
+  const pending = await contract.pendingWithdrawHandle(account);
+
+  const handle = String(pending);
+
+  if (!handle || handle === ZERO_HANDLE || BigInt(handle) === 0n) return null;
+
+  return handle;
+
+}
+
+
+
+export async function getWithdrawBlockers(
+
+  signer: Signer
+
+): Promise<{ locked: boolean; pendingHandle: string | null; failedWithdrawWei: bigint }> {
+
+  const account = await signer.getAddress();
+
+  const contract = getConfidentialETH(signer);
+
+  const [locked, pendingHandle, failedWithdrawWei] = await Promise.all([
+
+    contract.isBalanceLocked(account),
+
+    getPendingWithdrawHandle(signer),
+
+    contract.pendingFailedWithdrawWei(account),
+
+  ]);
+
+  return { locked, pendingHandle, failedWithdrawWei: BigInt(failedWithdrawWei) };
+
+}
+
+
+
+function explainWithdrawSimulationFailure(
+
+  err: unknown,
+
+  context: { locked: boolean; pendingHandle: string | null; walletUnits: number }
+
+): string {
+
+  const raw = `${(err as { reason?: string; message?: string; shortMessage?: string })?.reason || ""} ${(err as Error)?.message || ""} ${(err as { shortMessage?: string })?.shortMessage || ""}`.toLowerCase();
+
+
+
+  if (context.pendingHandle) {
+
+    return "A withdrawal is already staged on-chain. Completing the pending withdrawal — please wait.";
+
+  }
+
+  if (context.locked || raw.includes("balance locked")) {
+
+    return "Your confidential balance is locked (e.g. active trial enrollment). Unlock or finish pending actions before unshielding.";
+
+  }
+
+  if (raw.includes("withdrawal already pending") || raw.includes("already pending")) {
+
+    return "A withdrawal is already in progress. Wait for it to complete or use cancel after the timeout.";
+
+  }
+
+  if (raw.includes("no balance") || context.walletUnits <= 0) {
+
+    return "Your wallet has no shielded cETH balance to withdraw. Trial rewards are held on your anonymous trial identity — claim them from My Applications first, then unshield here.";
+
+  }
+
+  if (raw.includes("missing revert data") || raw.includes("call_exception")) {
+
+    if (context.walletUnits <= 0) {
+
+      return "Withdrawal simulation failed: wallet cETH balance is 0. Shield ETH or claim trial rewards from My Applications before unshielding.";
+
+    }
+
+    return "Withdrawal simulation failed on-chain. Reveal your balance again, ensure Zama FHE is connected, and retry with an amount within your wallet balance (not trial rewards).";
+
+  }
+
+  return (err as Error)?.message || "Withdrawal request failed";
+
+}
+
+
+
 export async function requestEncryptedWithdraw(
 
   signer: Signer,
 
-  units: number
+  units: number,
 
-): Promise<{ stageTxHash: string; transferableHandle: string }> {
+  walletUnitsAvailable?: number
+
+): Promise<{ stageTxHash: string; transferableHandle: string; resumed: boolean }> {
 
   const account = await signer.getAddress();
 
@@ -186,9 +290,69 @@ export async function requestEncryptedWithdraw(
 
 
 
+  const blockers = await getWithdrawBlockers(signer);
+
+  if (blockers.locked) {
+
+    throw new Error("Your confidential balance is locked. Finish pending trial actions before unshielding.");
+
+  }
+
+  if (blockers.pendingHandle) {
+
+    return { stageTxHash: "", transferableHandle: blockers.pendingHandle, resumed: true };
+
+  }
+
+  if (walletUnitsAvailable != null && units > walletUnitsAvailable) {
+
+    throw new Error(
+
+      `Amount exceeds wallet cETH balance (${(walletUnitsAvailable / 1_000_000).toFixed(6)} ETH). Trial rewards must be claimed from My Applications — they cannot be unshielded directly from this wallet.`
+
+    );
+
+  }
+
+  if (walletUnitsAvailable != null && walletUnitsAvailable <= 0) {
+
+    throw new Error(
+
+      "Wallet cETH balance is 0. Shield ETH into the vault, or claim trial rewards from My Applications before unshielding."
+
+    );
+
+  }
+
+
+
   await ensureZamaConnected(provider, signer);
 
   const encrypted = await encryptUint64(contractAddress, account, units);
+
+
+
+  try {
+
+    await contract.requestWithdraw.staticCall(encrypted.handle, encrypted.inputProof);
+
+  } catch (simErr) {
+
+    throw new Error(
+
+      explainWithdrawSimulationFailure(simErr, {
+
+        locked: blockers.locked,
+
+        pendingHandle: blockers.pendingHandle,
+
+        walletUnits: walletUnitsAvailable ?? -1,
+
+      })
+
+    );
+
+  }
 
 
 
@@ -216,7 +380,7 @@ export async function requestEncryptedWithdraw(
 
 
 
-  return { stageTxHash: receipt.hash, transferableHandle };
+  return { stageTxHash: receipt.hash, transferableHandle, resumed: false };
 
 }
 

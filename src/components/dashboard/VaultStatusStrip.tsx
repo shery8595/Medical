@@ -30,7 +30,7 @@ export function VaultStatusStrip({ account, isRegistered, onUploadClick }: Props
       icon: Lock,
       title: "Privacy Level",
       value: "Private",
-      detail: "End-to-end encrypted",
+      detail: "FHE-encrypted balance",
       onClick: undefined,
     },
   ] as const;

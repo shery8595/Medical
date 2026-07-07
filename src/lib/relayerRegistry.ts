@@ -5,6 +5,31 @@
 import { getMedVaultRelayerUrl } from "./mobile";
 
 const STORAGE_KEY = "medvault.selectedRelayerUrl";
+const MANUAL_OVERRIDE_KEY = "medvault.relayerManualOverride";
+
+export type RelayerTransparency = {
+  relayerGovernance?: string;
+  finalizeGate?: string;
+  defaultDecryptPath?: string;
+  p02DecryptPath?: string;
+  ephemeralDecryptPath?: string;
+  committeeMode?: string;
+  thresholdTarget?: string;
+  publicMetadataReminder?: string;
+  loggingPolicy?: { logged?: string[]; notLogged?: string[] };
+};
+
+export async function fetchRelayerTransparency(url: string): Promise<RelayerTransparency | null> {
+  const base = url.replace(/\/$/, "");
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base}/transparency`);
+    if (!res.ok) return null;
+    return (await res.json()) as RelayerTransparency;
+  } catch {
+    return null;
+  }
+}
 
 export type RelayerHealth = {
   url: string;
@@ -27,20 +52,21 @@ function parseRelayerUrlsFromEnv(): string[] {
     const single = getMedVaultRelayerUrl();
     if (single) return [single.replace(/\/$/, "")];
   } catch {
-    // dev empty string proxy
     if (import.meta.env.DEV) return [""];
   }
   return [];
 }
 
-/** All configured MedVault relayer base URLs (may include empty string for dev proxy). */
+/** All configured MedVault relayer base URLs in env order (may include empty string for dev proxy). */
 export function getConfiguredRelayerUrls(): string[] {
   const urls = parseRelayerUrlsFromEnv();
   return urls.length > 0 ? urls : [""];
 }
 
+/** Non-primary relayer only when user explicitly picked one in the UI (ignores legacy stored URLs). */
 export function getStoredRelayerUrl(): string | null {
   if (typeof localStorage === "undefined") return null;
+  if (localStorage.getItem(MANUAL_OVERRIDE_KEY) !== "1") return null;
   const stored = localStorage.getItem(STORAGE_KEY)?.trim();
   if (!stored) return null;
   const configured = getConfiguredRelayerUrls();
@@ -53,6 +79,31 @@ export function getStoredRelayerUrl(): string | null {
 export function setStoredRelayerUrl(url: string): void {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STORAGE_KEY, url.replace(/\/$/, ""));
+  localStorage.setItem(MANUAL_OVERRIDE_KEY, "1");
+}
+
+export function clearStoredRelayerUrl(): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(MANUAL_OVERRIDE_KEY);
+}
+
+export function isRelayerUsable(h: RelayerHealth): boolean {
+  return h.ok && h.relayerAuthorized !== false;
+}
+
+/**
+ * Relayer URLs to try in order.
+ * Default: strict `VITE_RELAYER_URLS` order (first listed = primary).
+ * Pass `manualPreferred` only when the user explicitly picked a relayer in the UI.
+ */
+export function getRelayersInFailoverOrder(manualPreferred?: string | null): string[] {
+  const configured = getConfiguredRelayerUrls();
+  const preferred = manualPreferred?.replace(/\/$/, "") ?? null;
+  if (preferred && configured.includes(preferred)) {
+    return [preferred, ...configured.filter((u) => u !== preferred)];
+  }
+  return configured;
 }
 
 export async function probeRelayerHealth(url: string): Promise<RelayerHealth> {
@@ -83,27 +134,34 @@ export async function probeAllRelayerHealth(): Promise<RelayerHealth[]> {
   return Promise.all(urls.map((u) => probeRelayerHealth(u)));
 }
 
-/** Pick relayer: stored preference if healthy, else first healthy authorized, else first configured. */
-export async function selectRelayer(): Promise<string> {
-  const urls = getConfiguredRelayerUrls();
+/**
+ * Pick the first healthy relayer in configured order (relayer 1, then 2, …).
+ * Does not read localStorage — use `manualPreferred` when the user explicitly chose in the UI.
+ */
+export async function selectRelayer(manualPreferred?: string | null): Promise<string> {
+  const order = getRelayersInFailoverOrder(manualPreferred);
   const health = await probeAllRelayerHealth();
-  const stored = getStoredRelayerUrl();
+  const byUrl = new Map(health.map((h) => [h.url, h]));
 
-  if (stored) {
-    const match = health.find((h) => h.url === stored);
-    if (match?.ok && match.relayerAuthorized !== false) return stored;
+  for (const url of order) {
+    const h = byUrl.get(url);
+    if (h && isRelayerUsable(h)) return url;
   }
 
-  const authorized = health.find((h) => h.ok && h.relayerAuthorized === true);
-  if (authorized) return authorized.url;
+  for (const url of order) {
+    const h = byUrl.get(url);
+    if (h?.ok && h.relayerAuthorized === false) {
+      throw new Error(
+        `Relayer ${h.relayerWallet ?? h.url} is online but not authorized on MedVaultRegistry. ` +
+          "Ask the protocol owner to run schedule-relayer-auth (6-hour timelock on Sepolia)."
+      );
+    }
+  }
 
-  const anyOk = health.find((h) => h.ok);
-  if (anyOk) return anyOk.url;
-
-  return urls[0] ?? "";
+  return order[0] ?? "";
 }
 
-/** Resolve active relayer URL synchronously (stored or first configured; use selectRelayer for failover). */
+/** Default relayer for UI display — always the first entry in `VITE_RELAYER_URLS`. */
 export function getActiveRelayerUrl(): string {
-  return getStoredRelayerUrl() ?? getConfiguredRelayerUrls()[0] ?? "";
+  return getConfiguredRelayerUrls()[0] ?? "";
 }

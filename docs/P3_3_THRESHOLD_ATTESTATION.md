@@ -4,6 +4,10 @@
 
 MedVault P3.1 ships **dual independent relayers** (separate hot wallets, shared on-chain allowlist). P3.3 describes how to evolve to **threshold finalize** without changing the FHE eligibility authority.
 
+**Recommended default (today):** patient-decrypt (browser) — the patient's ephemeral wallet is `permitRecipient`; the relayer never sees the eligibility bit. P0.2 relayer-assisted decrypt is optional defense-in-depth only.
+
+**P3.3 visibility caveat:** P3.3 threshold committee requires **agreement** among M relayers before finalize — it does **not** hide the eligibility bit from any of them. Each relayer that co-signs still independently decrypts and sees the same plaintext result. It raises the bar from "one relayer can unilaterally act" to "M relayers must agree," and makes disagreement auditable — it does not add confidentiality against relayers.
+
 ## Goal
 
 Require **M-of-N** distinct `authorizedRelayers` to sign matching eligibility attestations before any relayer may submit `finalizeAnonymousApplyWithProof`. This:
@@ -76,11 +80,21 @@ Today (P3.1 only): only the relayer that submits finalize on-chain matters; conf
 | Attestation TTL | Same as stage `deadline` |
 | On-chain verifier | New `RelayerAttestationLib` + modifier on finalize (future PR) |
 
+## Future implementation plan (not shipped)
+
+When an institutional pilot requires P3.3:
+
+1. **Contracts:** `RelayerAttestationLib.sol` verifying M-of-N EIP-712 `RelayerEligibilityAttestation` signatures; new `finalizeAnonymousApplyWithAttestations` on `MedVaultRegistry`.
+2. **Relayer:** `POST /relay/attest-eligibility` — each relayer runs `getRelayerEligible()` and signs; client collects M signatures before finalize.
+3. **Subgraph:** `RelayerAttestation` entity for equivocation monitoring.
+4. **Visibility:** each co-signing relayer still sees the eligibility bit — agreement, not confidentiality against relayers.
+
 ## Explicit non-goals
 
 - Replacing Zama KMS threshold decryption (separate trust domain)
 - Patient-open finalize (contradicts HIGH-1 remediation)
 - Relayer custody of patient viewing keys beyond staged `permitRecipient` scope
+- Hiding the eligibility bit from relayers — each co-signing relayer still user-decrypts via `getRelayerEligible()` and sees the plaintext result. True confidentiality-from-relayers would require a separate mechanism (e.g. ZK-only binding without relayer user-decrypt), which is out of scope for P3.3.
 
 ## References
 

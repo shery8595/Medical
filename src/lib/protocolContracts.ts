@@ -60,7 +60,7 @@ export const PROTOCOL_CONTRACTS: ProtocolContractEntry[] = [
         quirks: [
             "`applyToTrial` reverts with \"Deprecated: use stageAnonymousApply + finalizeAnonymousApplyWithProof\".",
             "**P3.1 multi-relayer:** `authorizedRelayers` mapping with **6-hour** timelock (`scheduleRelayerAuth` / `applyRelayerAuth`). Finalize/cancel/consent-finalize/register require `onlyAuthorizedRelayer`.",
-            "**HIGH-1 relayer-gated finalize:** `finalizeAnonymousApplyWithProof` requires authorized relayer. Payout integrity is ciphertext-gated via `FHE.select` (P2). Gasless path: `POST /relay/apply-finalize` with P0.2 decrypt when relayer is `permitRecipient`.",
+            "**HIGH-1 relayer-gated finalize:** `finalizeAnonymousApplyWithProof` requires authorized relayer. Payout integrity is ciphertext-gated via `FHE.select` (P2). Default: patient-decrypt (browser). Optional P0.2 relayer-assisted when relayer is `permitRecipient` (visibility tradeoff).",
             "Gasless cancel/register: `POST /relay/cancel-stage`, `POST /relay/register` via authorized relayer.",
         ],
     },

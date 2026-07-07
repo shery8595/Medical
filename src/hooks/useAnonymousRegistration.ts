@@ -12,7 +12,7 @@ import {
     type SemaphoreProof
 } from '../lib/semaphore';
 import { submitViaRelayer } from '../lib/relayer';
-import { selectRelayer } from '../lib/relayerRegistry';
+import { getStoredRelayerUrl } from '../lib/relayerRegistry';
 
 interface RegistrationState {
     isRegistered: boolean;
@@ -166,7 +166,8 @@ export function useAnonymousApplication(signer?: ethers.Signer, provider?: ether
             // This ensures the Merkle root is current even if user waited after generating preview
             const proof = await generateAnonymousProof(identity, provider, trialId, permitRecipient);
 
-            const relayerUrl = await selectRelayer();
+            // Only reorder when user explicitly picked a non-primary relayer in the UI.
+            const manualPreferred = getStoredRelayerUrl();
 
             const txHash = await submitViaRelayer(
                 trialId,
@@ -174,7 +175,7 @@ export function useAnonymousApplication(signer?: ethers.Signer, provider?: ether
                 commitment.toString(),
                 permitRecipient,
                 { provider, identity, consentSigner: signer },
-                relayerUrl
+                manualPreferred
             );
 
             // Persist per-trial nullifier so patient-side views can resolve

@@ -20,15 +20,15 @@ rmSync(output, { recursive: true, force: true });
 mkdirSync(staticDir, { recursive: true });
 cpSync(dist, staticDir, { recursive: true });
 
-const ZAMA_RELAYER_SEPOLIA = 'https://relayer.testnet.zama.org';
+const ZAMA_RELAYER_SEPOLIA = 'https://relayer.testnet.zama.org/v2';
 
-/** Same as vite.config.ts `/api/relayer/11155111` proxy — required for production (prebuilt deploy reads this, not vercel.json). */
+/** Same as vite.config.ts `/api/relayer/11155111/v2` proxy — required for production (prebuilt deploy reads this, not vercel.json). */
 const config = {
   version: 3,
   routes: [
     { handle: 'filesystem' },
-    { src: '^/api/relayer/11155111$', dest: ZAMA_RELAYER_SEPOLIA },
-    { src: '^/api/relayer/11155111/(.*)$', dest: `${ZAMA_RELAYER_SEPOLIA}/$1` },
+    { src: '^/api/relayer/11155111/v2$', dest: ZAMA_RELAYER_SEPOLIA },
+    { src: '^/api/relayer/11155111/v2/(.*)$', dest: `${ZAMA_RELAYER_SEPOLIA}/$1` },
     { src: '/.*', dest: '/index.html' },
   ],
 };

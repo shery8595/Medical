@@ -14,6 +14,9 @@ import {
     type PatientProfilePlain,
 } from './profileCommitment';
 import { storeProfileSalt } from './profileStorage';
+import { assertRegistrationFheBundle } from './registrationValidation';
+
+export { assertRegistrationFheBundle } from './registrationValidation';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -26,6 +29,14 @@ const ANON_NULLIFIERS_STORAGE_KEY = "medvault_anon_nullifiers";
  */
 export function semaphoreScopeField(scope: bigint): bigint {
     return BigInt(keccak256(toBeHex(scope, 32))) >> 8n;
+}
+
+/** Semaphore signal bound to commitment + ephemeral decrypt recipient (matches MedVaultRegistry._verifyAnonymousApplyProof). */
+export function anonymousApplySignal(commitment: bigint, permitRecipient: string): bigint {
+    const signal = keccak256(
+        ethers.solidityPacked(['uint256', 'address'], [commitment, ethers.getAddress(permitRecipient)])
+    );
+    return BigInt(signal);
 }
 
 // ── Ephemeral Address Generation (H-2) ─────────────────────────────────────
@@ -505,12 +516,6 @@ export async function resolveAnonymousNullifier(
  * Registers the patient's identity commitment and encrypted health data on-chain.
  * Phase 1: This IS linkable to the wallet - that is by design.
  * The wallet signs this transaction.
- */
-
-/**
- * Registers the patient's identity commitment with encrypted health data on-chain.
- * Phase 1: This IS linkable to the wallet - that is by design.
- * The wallet signs this transaction.
  * @param signer The signer for the transaction
  * @param identity The Semaphore identity
  * @param encryptedData Object containing all encrypted health data fields
@@ -532,6 +537,8 @@ export async function registerPatientWithHealthData(
     profilePlain: PatientProfilePlain
 ): Promise<string> {
     const registry = getMedVaultRegistry(signer);
+    await assertRegistrationFheBundle(registry, encryptedData);
+
     const commitment = identity.commitment;
     const ephemeralAddress = await generateEphemeralAddress(identity);
     const profileSalt = randomProfileSalt();
@@ -620,7 +627,7 @@ export async function fetchGroup(
  * Generates a Semaphore ZK proof for anonymous trial application.
  * Phase 2: This is completely unlinkable to the wallet.
  *
- * FINDING 4: Semaphore signal MUST equal identity commitment on-chain.
+ * FINDING 4: Semaphore signal MUST encode commitment + permit recipient (on-chain consent binding).
  * Permit recipient binding is enforced at EligibilityEngine staging.
  *
  * IMPORTANT: This function fetches the latest group state immediately before proof generation
@@ -652,13 +659,12 @@ export async function generateAnonymousProof(
 
     const scope = BigInt(trialId); // externalNullifier = trialId
 
-    // Bind Semaphore signal to identity commitment (prevents cross-identity message injection).
-    const signal = identity.commitment;
+    const signal = anonymousApplySignal(BigInt(identity.commitment), permitRecipient);
 
     const proof = await generateProof(
         identity,
         group,
-        BigInt(signal),  // Signal = consent-encoded hash
+        signal,
         scope    // Scope = trialId (allows multi-trial application)
     );
 
@@ -693,6 +699,37 @@ export function parseAnonymousApplyStagedFinalCt(
         }
     }
     throw new Error('AnonymousApplyStaged event not found in receipt');
+}
+
+/** Locate the latest on-chain stage event for a nullifier + trial (resume finalize after interrupted apply). */
+export async function findStagedAnonymousApplyFinalCt(
+    provider: ethers.Provider,
+    registryAddress: string,
+    trialId: bigint,
+    nullifier: bigint,
+    lookbackBlocks = 600_000,
+): Promise<{ finalCt: bigint; stageTxHash: string } | null> {
+    const registry = new ethers.Contract(
+        registryAddress,
+        ['event AnonymousApplyStaged(uint256 indexed trialId, uint256 indexed nullifierHash, bytes32 indexed blindedRef, bytes32 finalCt)'],
+        provider,
+    );
+    const latest = await provider.getBlockNumber();
+    const fromBlock = Math.max(0, latest - lookbackBlocks);
+    const logs = await registry.queryFilter(
+        registry.filters.AnonymousApplyStaged(trialId, nullifier),
+        fromBlock,
+        latest,
+    );
+    if (logs.length === 0) return null;
+    const log = logs[logs.length - 1]!;
+    const parsed = ANONYMOUS_APPLY_STAGED_IFACE.parseLog({
+        topics: log.topics as string[],
+        data: log.data,
+    });
+    if (!parsed || parsed.name !== 'AnonymousApplyStaged') return null;
+    const finalCt = BigInt(parsed.args.finalCt);
+    return { finalCt, stageTxHash: log.transactionHash };
 }
 
 export function toContractSemaphoreProof(proof: SemaphoreProof) {

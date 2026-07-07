@@ -203,7 +203,7 @@ export function PatientIdentityPage() {
           }
         />
         <p className="-mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
-          Manage your zero-knowledge proofs and secure data enclaves.
+          Manage your Semaphore identity and FHE-encrypted data enclaves.
         </p>
         <PatientConnectPrompt
           title="Connect to manage identity & privacy"
@@ -229,7 +229,7 @@ export function PatientIdentityPage() {
       />
 
       <motion.p {...fadeUp(0)} className="-mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
-        Manage your zero-knowledge proofs and secure data enclaves.
+        Manage your Semaphore identity and FHE-encrypted data enclaves.
       </motion.p>
 
       <motion.div {...fadeUp(0.04)}>

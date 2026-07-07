@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { publicDecryptProof } from "./zama-client.mjs";
 import { createBatchExitQueue } from "./batch-exit-queue.mjs";
+import { createWithdrawCompleter } from "./withdraw-completion.mjs";
 
 const CONFIDENTIAL_ETH_ABI = [
     "event WithdrawRequested(address indexed user, bytes32 transferableHandle)",
@@ -43,6 +44,7 @@ export function startV09Watcher({
         ? new ethers.Contract(confidentialEthAddress, CONFIDENTIAL_ETH_ABI, relayerWallet)
         : null;
     const cEthIface = confidentialEthAddress ? new ethers.Interface(CONFIDENTIAL_ETH_ABI) : null;
+    const completeWithdrawToOnChain = createWithdrawCompleter(relayerWallet, confidentialEthAddress);
 
     const staking = stakingManagerAddress
         ? new ethers.Contract(stakingManagerAddress, STAKING_MANAGER_ABI, provider)
@@ -149,9 +151,10 @@ export function startV09Watcher({
     }
 
     async function completeWithdrawToWithProof(user, transferableCleartexts, transferableProof) {
-        const completeTx = await cEth.completeWithdrawTo(user, transferableCleartexts, transferableProof);
-        const receipt = await completeTx.wait();
-        return receipt.hash;
+        if (!completeWithdrawToOnChain) {
+            throw new Error("ConfidentialETH not configured");
+        }
+        return completeWithdrawToOnChain(user, transferableCleartexts, transferableProof);
     }
 
     async function executePublicExit(item) {
@@ -200,8 +203,7 @@ export function startV09Watcher({
         );
         if (!transferable) {
             console.log(`Watcher: withdraw-to insufficient noop for ${user} (${id})`);
-            const noopTx = await cEth.completeWithdrawTo(user, cleartexts, proof);
-            await noopTx.wait();
+            await completeWithdrawToWithProof(user, cleartexts, proof);
             return;
         }
 
@@ -353,6 +355,7 @@ export function startV09Watcher({
         },
         lookupCompletionProof,
         submitPublicExit,
+        completeWithdrawTo: completeWithdrawToOnChain,
         batchQueue,
     };
 }

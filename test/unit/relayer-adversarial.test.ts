@@ -308,6 +308,60 @@ describe("Unit: relayer adversarial (REL-*)", function () {
                     : await mockUserDecryptUint64(cethAfter, cethAddr, stack.patient.address);
             expect(afterUnits).to.equal(beforeUnits);
         });
+
+        it("REL-FF-03: relayer finalize on plaintext trial with ineligible FHE cannot land Accepted", async function () {
+            const stack = await deployMedVaultStack();
+            const patient = await registerPatient(stack, stack.patient, PROFILE_FAIL_AGE);
+            const trialId = await createTrialForSponsor(stack);
+            const staged = await stageSemaphoreApply(stack, trialId, patient);
+
+            const { proofBytes, publicInputs } = await generateTestEligibilityProof({
+                identity: patient.identity,
+                commitment: patient.commitment,
+                trialId,
+                profile: PROFILE_FAIL_AGE,
+                profileSalt: patient.profileSalt,
+                eligible: false,
+                fheStageHandle: staged.finalCt,
+            });
+            const proofFresh = semaphoreProofFor(
+                staged.trialId,
+                staged.nullifier,
+                patient.commitment,
+                stack.patient.address
+            );
+            const applyArgs = await buildAnonymousApplyArgs(
+                stack.medVaultRegistry,
+                trialId,
+                patient.identity,
+                stack.patient.address
+            );
+
+            await stack.medVaultRegistry
+                .connect(stack.relayer)
+                .finalizeAnonymousApplyWithProof(
+                    trialId,
+                    proofFresh,
+                    patient.commitment,
+                    stack.patient.address,
+                    applyArgs.consentWallet,
+                    applyArgs.deadline,
+                    applyArgs.permitSignature,
+                    applyArgs.consentWalletSignature,
+                    proofBytes,
+                    publicInputs
+                );
+
+            expect(await stack.eligibilityEngine.silentApplyOutcome(staged.nullifier, trialId)).to.equal(
+                2
+            ); // SilentRejected
+            expect(await stack.medVaultRegistry.trialApplications(trialId, staged.nullifier)).to.equal(
+                false
+            );
+            expect(
+                await stack.eligibilityEngine.isAnonymousApplicationAccepted(staged.nullifier, trialId)
+            ).to.equal(false);
+        });
     });
 
     describe("REL-STALE: stale stage", function () {

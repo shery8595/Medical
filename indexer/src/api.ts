@@ -1,3 +1,4 @@
+import cors from "cors";
 import express, { Express, Request, Response } from "express";
 import type { IndexerConfig } from "./config.js";
 import type { IndexerDb } from "./db.js";
@@ -7,6 +8,8 @@ import { createIndexerAuthMiddleware } from "./auth.js";
 
 export function createIndexerApi(config: IndexerConfig, db: IndexerDb, cache: IndexerCache): Express {
   const app = express();
+
+  app.use(cors({ origin: true }));
 
   app.use(
     createIndexerAuthMiddleware({

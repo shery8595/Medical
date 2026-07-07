@@ -227,6 +227,7 @@ type AnonymousSubmission @entity(immutable: false) {
   attestationResultHash: Bytes
   attestationFheStageHash: Bytes
   attestationCriteriaSchemaHash: Bytes
+  hasHybridDocument: Boolean!
 }
 
 type ClaimLifecycle @entity(immutable: false) {

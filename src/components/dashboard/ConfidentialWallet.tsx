@@ -330,11 +330,30 @@ export function ConfidentialWallet({ variant = "default" }: Props) {
               </div>
             </div>
             {action === "withdraw" ? (
-              <WithdrawModeSelector
-                value={withdrawMode}
-                onChange={setWithdrawMode}
-                variant={isEnclave ? "enclave" : "default"}
-              />
+              <>
+                <WithdrawModeSelector
+                  value={withdrawMode}
+                  onChange={setWithdrawMode}
+                  variant={isEnclave ? "enclave" : "default"}
+                />
+                {isRevealed && parseFloat(walletBalanceEth || "0") <= 0 && parseFloat(rewardBalanceEth || "0") > 0 ? (
+                  <p
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-[10px] leading-relaxed",
+                      isEnclave
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    )}
+                  >
+                    Trial rewards ({rewardBalanceEth} ETH) must be claimed from My Applications first.
+                    Only wallet cETH can be unshielded here.
+                  </p>
+                ) : isRevealed && parseFloat(walletBalanceEth || "0") > 0 ? (
+                  <p className={cn("text-[10px]", isEnclave ? "text-slate-500" : "text-slate-500")}>
+                    Max unshield: <span className="font-mono">{walletBalanceEth} ETH</span>
+                  </p>
+                ) : null}
+              </>
             ) : null}
             <Button
               className={cn(
@@ -369,7 +388,7 @@ export function ConfidentialWallet({ variant = "default" }: Props) {
             </span>
           </div>
           <span className="rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-300">
-            End-to-end encrypted
+            FHE-encrypted balance
           </span>
         </div>
         {balanceBlock}
@@ -398,13 +417,13 @@ export function ConfidentialWallet({ variant = "default" }: Props) {
 
       <CardHeader className="relative z-10 px-8 pb-6 pt-8">
         <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-700">
-          <Activity className="h-3 w-3" /> Zero-Knowledge Proof enabled
+          <Activity className="h-3 w-3" /> FHE-encrypted balance
         </div>
         <CardTitle className="mt-4 flex items-center gap-3 text-3xl font-black tracking-tight text-slate-900">
           Confidential Vault
         </CardTitle>
         <CardDescription className="mt-2 max-w-sm text-sm text-slate-600">
-          Your trial incentives are fully encrypted via FHE. Only your private key can reveal the
+          Your trial incentives are FHE-encrypted on-chain. Only your private key can reveal the
           contents.
         </CardDescription>
       </CardHeader>

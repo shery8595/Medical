@@ -21,7 +21,7 @@ import { WithdrawModeSelector } from "./WithdrawModeSelector";
 
 const FEATURES = [
   { icon: Lock,        title: "AES-256",         sub: "Encryption Standard" },
-  { icon: Fingerprint, title: "Zero-Knowledge",  sub: "Proof Enabled" },
+  { icon: Fingerprint, title: "FHE attestation",  sub: "Encrypted operands" },
   { icon: Database,    title: "Decentralized",   sub: "On-Chain Storage" },
   { icon: ShieldCheck, title: "Tamper-Proof",    sub: "Blockchain Secured" },
 ] as const;
@@ -211,11 +211,24 @@ function EnclaveBalance() {
               </span>
             </div>
             {action === "withdraw" ? (
-              <WithdrawModeSelector
-                value={withdrawMode}
-                onChange={setWithdrawMode}
-                variant="enclave"
-              />
+              <>
+                <WithdrawModeSelector
+                  value={withdrawMode}
+                  onChange={setWithdrawMode}
+                  variant="enclave"
+                />
+                {isRevealed && parseFloat(walletBalanceEth || "0") <= 0 && parseFloat(rewardBalanceEth || "0") > 0 ? (
+                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
+                    Trial rewards ({rewardBalanceEth} ETH) live on your anonymous trial identity.
+                    Claim them from <strong>My Applications</strong> first — only wallet cETH can be unshielded here.
+                  </p>
+                ) : isRevealed && parseFloat(walletBalanceEth || "0") > 0 ? (
+                  <p className="text-[10px] text-slate-500">
+                    Max unshield from wallet: <span className="font-mono text-slate-300">{walletBalanceEth} ETH</span>
+                    {parseFloat(rewardBalanceEth || "0") > 0 ? " (trial rewards excluded)" : null}
+                  </p>
+                ) : null}
+              </>
             ) : null}
             <Button
               className={`h-11 w-full rounded-xl font-semibold text-white ${
@@ -276,7 +289,7 @@ export function FinancialEnclaveSection() {
             <div className="flex items-center gap-1.5">
               <Lock className="h-3 w-3 text-teal-400" strokeWidth={2} />
               <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
-                End-to-end encrypted
+                FHE-encrypted balance
               </span>
             </div>
           </div>

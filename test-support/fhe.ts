@@ -268,6 +268,21 @@ export async function mockUserDecryptUint32(
     );
 }
 
+export async function mockUserDecryptUint8(
+    ctHash: bigint | string | unknown,
+    contractAddress: string,
+    user: string | { provider?: unknown; getAddress?: () => Promise<string> }
+): Promise<bigint> {
+    assertFhevmMock();
+    const userSigner = typeof user === "string" ? await ethers.getSigner(user) : user;
+    return hre.fhevm.userDecryptEuint(
+        FhevmType.euint8,
+        coerceHandleHex(ctHash),
+        contractAddress,
+        userSigner as never
+    );
+}
+
 export async function mockUserDecryptUint64(
     ctHash: bigint | string | unknown,
     contractAddress: string,

@@ -3,7 +3,8 @@ import { ethers } from "ethers";
 import { usePrivy, useWallets, useCreateWallet, getEmbeddedConnectedWallet } from "@privy-io/react-auth";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { resetZamaSDK } from "./fhe";
-import { ETHEREUM_SEPOLIA_HEX, getSepoliaRpcUrl } from "./zamaChain";
+import { ensureEthereumSepolia } from "./ethereumWallet";
+import { getSepoliaRpcUrl } from "./zamaChain";
 
 interface Web3ContextType {
     account: string | null;
@@ -24,39 +25,6 @@ const Web3Context = createContext<Web3ContextType | undefined>(undefined);
 
 function pickEthereumWallet(wallets: ConnectedWallet[]): ConnectedWallet | undefined {
     return getEmbeddedConnectedWallet(wallets) ?? wallets[0];
-}
-
-async function ensureEthereumSepolia(eip1193: {
-    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-}) {
-    const chainId = await eip1193.request({ method: "eth_chainId" });
-    if (typeof chainId === "string" && chainId.toLowerCase() === ETHEREUM_SEPOLIA_HEX.toLowerCase()) {
-        return;
-    }
-    try {
-        await eip1193.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: ETHEREUM_SEPOLIA_HEX }],
-        });
-    } catch (switchError: unknown) {
-        const code = (switchError as { code?: number })?.code;
-        if (code === 4902) {
-            await eip1193.request({
-                method: "wallet_addEthereumChain",
-                params: [
-                    {
-                        chainId: ETHEREUM_SEPOLIA_HEX,
-                        chainName: "Ethereum Sepolia",
-                        nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-                        rpcUrls: [getSepoliaRpcUrl()],
-                        blockExplorerUrls: ["https://sepolia.etherscan.io"],
-                    },
-                ],
-            });
-        } else {
-            throw switchError;
-        }
-    }
 }
 
 export function Web3Provider({ children }: { children: ReactNode }) {
@@ -85,6 +53,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         () => (authenticated ? wallets.map((w) => w.address).sort().join(",") : ""),
         [authenticated, wallets]
     );
+    const stableWallets = useMemo(() => wallets, [walletKey]);
 
     const connect = useCallback(async () => {
         setError(null);
@@ -159,7 +128,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             setIsConnecting(true);
             setError(null);
             try {
-                const w = pickEthereumWallet(wallets);
+                const w = pickEthereumWallet(stableWallets);
                 if (!w) {
                     if (!cancelled) {
                         setError(
@@ -203,7 +172,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         return () => {
             cancelled = true;
         };
-    }, [privyReady, walletsReady, authenticated, walletKey, wallets]);
+    }, [privyReady, walletsReady, authenticated, walletKey, stableWallets]);
 
     return (
         <Web3Context.Provider

@@ -37,9 +37,11 @@ import {
 } from "../../lib/contracts";
 import { ETHEREUM_SEPOLIA_CHAIN_ID } from "../../lib/zamaChain";
 import { useEncryptedData } from "../../lib/EncryptedDataContext";
+import { useWeb3 } from "../../lib/Web3Context";
 import {
   getOrCreateIdentity,
   getStoredIdentity,
+  getEphemeralSigner,
   isMemberRegistered,
   resolveAnonymousNullifier,
 } from "../../lib/semaphore";
@@ -200,12 +202,16 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
             ? await resolveAnonymousNullifier(signer.provider, BigInt(trial.id))
             : null;
           if (nullifier) {
-            const holder = await getEligibilityEngine(signer).getDecryptPermitHolder(
-              nullifier,
-              BigInt(trial.id)
-            );
-            if (holder && holder !== ethers.ZeroAddress) {
-              participantAddress = holder;
+            try {
+              const holder = await getEligibilityEngine(signer).getDecryptPermitHolder(
+                nullifier,
+                BigInt(trial.id)
+              );
+              if (holder && holder !== ethers.ZeroAddress) {
+                participantAddress = holder;
+              }
+            } catch {
+              // Only the ephemeral permit holder (or authorized contracts) may read this before pool registration.
             }
           }
           const registered = await vault.isParticipantRegistered(BigInt(trial.id), participantAddress);
@@ -408,7 +414,7 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
       await onApplySuccess?.();
     } catch (err: any) {
       console.error('Semaphore apply failed:', err);
-      setRegistrationError(err.reason || err.message || 'Anonymous application failed.');
+      setRegistrationError(friendlyContractError(err));
       setRegistrationStatus('error');
     }
   };
@@ -438,7 +444,12 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
       if (!nullifier) {
         throw new Error("Unable to recover anonymous application nullifier for this trial. Re-open the original browser profile used during apply and retry.");
       }
-      const permitHolder = await eligibilityEngine.getDecryptPermitHolder(
+      const identity = getStoredIdentity();
+      const engineForPermit =
+        identity && signer.provider
+          ? eligibilityEngine.connect(getEphemeralSigner(identity, signer.provider))
+          : eligibilityEngine;
+      const permitHolder = await engineForPermit.getDecryptPermitHolder(
         nullifier,
         BigInt(trial.id)
       );
@@ -480,7 +491,6 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
       } catch (precheckErr) {
         console.warn("[Rewards] register:precheck_failed", precheckErr);
       }
-      const identity = getStoredIdentity();
       if (!identity) {
         throw new Error(
           "No local anonymous identity found. Use the same browser/profile used during registration."
@@ -528,7 +538,6 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
     if (autoEnrollAttemptedRef.current) return;
 
     autoEnrollAttemptedRef.current = true;
-    setIncentiveStatus("Accepted! Auto-enrolling in reward pool...");
     void handleRegisterForRewards();
   }, [signer, account, trial.id, trial.applicationStatus, poolFunded, isRegistered, isRegistering, incentiveCheckDone]);
 
@@ -840,18 +849,14 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                   </div>
                   {trial.incentivePool?.distributed ? (
                     <Badge className="bg-emerald-600 text-white border-0 text-[9px]">Confirmed</Badge>
-                  ) : (
-                    !isRegistered && (
-                      <Badge variant="outline" className="text-[9px] border-amber-500/30 text-amber-700 bg-amber-50">
-                        Action required
-                      </Badge>
-                    )
-                  )}
+                  ) : isRegistering ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                  ) : null}
                 </div>
                 <p className="text-[10px] text-slate-600 leading-relaxed">
                   {trial.incentivePool?.distributed
                     ? "Sponsor staged your entitlement. Confirm receipt in Medical Vault, then claim to your wallet."
-                    : "This trial has a funded incentive pool. Register to secure your encrypted reward share."}
+                    : "Incentive pool is active. Enrollment is handled automatically when your application is accepted."}
                 </p>
                 {trial.incentivePool?.distributed ? (
                   <Link to="/patient/medical-vault" className="block">
@@ -860,21 +865,12 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                       <ArrowUpRight className="h-3 w-3" />
                     </Button>
                   </Link>
-                ) : !isRegistered ? (
-                  <Button
-                    className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest gap-2"
-                    onClick={handleRegisterForRewards}
-                    disabled={isRegistering}
-                  >
-                    {isRegistering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                    {isRegistering ? "Registering..." : "Join reward pool"}
-                  </Button>
-                ) : (
+                ) : isRegistered ? (
                   <div className="flex items-center justify-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-700 text-[10px] font-bold">
                     <CheckCircle className="h-3 w-3" /> Registered for incentives
                   </div>
-                )}
-                {incentiveStatus && (
+                ) : null}
+                {incentiveStatus?.toLowerCase().includes("failed") && (
                   <p
                     className={cn(
                       "text-[9px] font-semibold text-center",
@@ -925,7 +921,7 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Secure disclosure</h4>
                   <p className="text-sm text-slate-600 mb-3 leading-relaxed">
-                    Apply with FHE-encrypted zero-knowledge proofs. Minimal metadata is shared with the investigator.
+                    Apply with FHE-encrypted eligibility and Semaphore identity attestation. Minimal metadata is shared with the investigator.
                   </p>
                   <div className="space-y-2 p-3 rounded-lg bg-white border border-slate-100">
                     {["Anonymized vitals", "Encrypted labs", "ZKP diagnosis"].map((tag) => (
@@ -1289,14 +1285,14 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                       </div>
                       {trial.incentivePool?.distributed ? (
                         <Badge className="bg-emerald-500 text-white border-0 text-[9px] animate-pulse">Confirmed</Badge>
-                      ) : !isRegistered && (
-                        <Badge variant="outline" className="text-[9px] border-amber-500/30 text-amber-600 bg-amber-500/5">Action Required</Badge>
-                      )}
+                      ) : isRegistering ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                      ) : null}
                     </div>
                     <p className="text-[10px] text-slate-500 leading-relaxed">
                       {trial.incentivePool?.distributed
                         ? "Sponsor staged your entitlement. Confirm receipt in Medical Vault, then claim to your wallet."
-                        : "This trial has a verified incentive pool. Register to secure your encrypted reward share upon trial completion."}
+                        : "Incentive pool is active. Enrollment is handled automatically when your application is accepted."}
                     </p>
                     {trial.incentivePool?.distributed ? (
                       <Link to="/patient/vault" className="block w-full">
@@ -1305,21 +1301,12 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                           <ArrowUpRight className="h-3 w-3" />
                         </Button>
                       </Link>
-                    ) : !isRegistered ? (
-                      <Button
-                        className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest flex gap-2 shadow-xl shadow-amber-500/20"
-                        onClick={handleRegisterForRewards}
-                        disabled={isRegistering}
-                      >
-                        {isRegistering ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
-                        {isRegistering ? "Registering..." : "Join Reward Pool"}
-                      </Button>
-                    ) : (
+                    ) : isRegistered ? (
                       <div className="flex items-center justify-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-[10px] font-bold">
                         <CheckCircle className="h-3 w-3" /> Registered for Incentives
                       </div>
-                    )}
-                    {incentiveStatus && (
+                    ) : null}
+                    {incentiveStatus?.toLowerCase().includes("failed") && (
                       <p className={cn(
                         "text-[9px] font-semibold text-center mt-2",
                         incentiveStatus.includes("failed") ? "text-rose-500" : "text-blue-500"
@@ -1395,7 +1382,7 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                           Secure Disclosure Plan
                         </h4>
                         <p className="text-sm text-slate-500 mb-4 leading-relaxed">
-                          Apply with FHE-encrypted zero-knowledge proofs. Minimal metadata will be
+                          Apply with FHE-encrypted eligibility and Semaphore identity attestation. Minimal metadata will be
                           shared with the investigator.
                         </p>
                         <div className="space-y-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
@@ -1532,14 +1519,14 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                                   </div>
                                   {trial.incentivePool?.distributed ? (
                                     <Badge className="bg-emerald-500 text-white border-0 text-[9px] animate-pulse">Confirmed</Badge>
-                                  ) : !isRegistered && (
-                                    <Badge variant="outline" className="text-[9px] border-amber-500/30 text-amber-600 bg-amber-500/5">Action Required</Badge>
-                                  )}
+                                  ) : isRegistering ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                                  ) : null}
                                 </div>
                                 <p className="text-[10px] text-slate-500 leading-relaxed">
                                   {trial.incentivePool?.distributed
                                     ? "Sponsor staged your entitlement. Confirm receipt in Medical Vault, then claim to your wallet."
-                                    : "This trial has a verified incentive pool. Register to secure your encrypted reward share upon trial completion."}
+                                    : "Incentive pool is active. Enrollment is handled automatically when your application is accepted."}
                                 </p>
                                 {trial.incentivePool?.distributed ? (
                                   <Link to="/patient/medical-vault" className="block w-full">
@@ -1548,21 +1535,12 @@ export function TrialCard({ trial, index = 0, variant = "default", onApplySucces
                                       <ArrowUpRight className="h-3 w-3" />
                                     </Button>
                                   </Link>
-                                ) : !isRegistered ? (
-                                  <Button
-                                    className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[11px] uppercase tracking-widest flex gap-2 shadow-xl shadow-amber-500/20"
-                                    onClick={handleRegisterForRewards}
-                                    disabled={isRegistering}
-                                  >
-                                    {isRegistering ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
-                                    {isRegistering ? "Registering..." : "Join Reward Pool"}
-                                  </Button>
-                                ) : (
+                                ) : isRegistered ? (
                                   <div className="flex items-center justify-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-[10px] font-bold">
                                     <CheckCircle className="h-3 w-3" /> Registered for Incentives
                                   </div>
-                                )}
-                                {incentiveStatus && (
+                                ) : null}
+                                {incentiveStatus?.toLowerCase().includes("failed") && (
                                   <p className={cn(
                                     "text-[9px] font-semibold text-center mt-2",
                                     incentiveStatus.includes("failed") ? "text-rose-500" : "text-blue-500"

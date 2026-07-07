@@ -13,6 +13,7 @@ import { Button } from "../components/ui/Button";
 import { usePatientProfile } from "../hooks/usePatientProfile";
 import { getContractAddressForChain } from "../lib/contracts";
 import { getSubgraphQueryPath } from "../lib/subgraph";
+import { isSubgraphRateLimited } from "../lib/subgraphClient";
 import { getStoredIdentity, isMemberRegistered } from "../lib/semaphore";
 import {
   Plus,
@@ -89,47 +90,68 @@ export function PatientVaultPage() {
       });
   }, [provider, account]);
 
-  // Subgraph often lags the confirmed registerPatient tx; poll briefly while on-chain says "member" but Patient entity is missing.
+  // Subgraph often lags the confirmed registerPatient tx; poll gently while on-chain says "member" but Patient entity is missing.
+  const refetchPatientRef = useRef(refetchPatient);
+  refetchPatientRef.current = refetchPatient;
+  const pollGenerationRef = useRef(0);
+
   useEffect(() => {
-    if (!account || onChainRegistered !== true || hasProfileFromGraph || loading) return;
+    if (!account || onChainRegistered !== true || hasProfileFromGraph) return;
+
+    const generation = ++pollGenerationRef.current;
     let cancelled = false;
-    let n = 0;
+    let attempts = 0;
+    const maxAttempts = 10;
+    const pollIntervalMs = 8_000;
+
     console.debug("[PatientVault] starting subgraph polling for patient profile", {
       account,
       onChainRegistered,
       hasProfileFromGraph,
+      maxAttempts,
+      pollIntervalMs,
     });
+
     const tick = async () => {
-      if (cancelled || n >= 30) return;
-      n += 1;
-      console.debug("[PatientVault] subgraph poll attempt", { attempt: n, account });
-      const data = await refetchPatient();
+      if (cancelled || generation !== pollGenerationRef.current || attempts >= maxAttempts) return;
+      if (isSubgraphRateLimited()) {
+        console.warn("[PatientVault] subgraph rate limited — pausing profile poll");
+        return;
+      }
+
+      attempts += 1;
+      console.debug("[PatientVault] subgraph poll attempt", { attempt: attempts, account });
+      const data = await refetchPatientRef.current();
+      if (isSubgraphRateLimited()) {
+        console.warn("[PatientVault] subgraph rate limited — pausing profile poll");
+        return;
+      }
       if (!cancelled && data?.patient) {
         console.debug("[PatientVault] subgraph patient profile found", {
-          attempt: n,
+          attempt: attempts,
           patientId: data.patient.id,
         });
         return;
       }
-      if (!cancelled) {
-        console.debug("[PatientVault] subgraph patient still missing", { attempt: n });
-      }
-      if (!cancelled && n < 30) {
-        setTimeout(tick, 4000);
+
+      if (!cancelled && attempts < maxAttempts) {
+        console.debug("[PatientVault] subgraph patient still missing", { attempt: attempts });
+        window.setTimeout(tick, pollIntervalMs);
       } else if (!cancelled) {
         console.warn("[PatientVault] polling stopped after max attempts without profile", {
-          attempts: n,
+          attempts,
           account,
         });
       }
     };
-    const id = window.setTimeout(tick, 2000);
+
+    const id = window.setTimeout(tick, 3_000);
     return () => {
       cancelled = true;
       window.clearTimeout(id);
       console.debug("[PatientVault] stopped subgraph polling loop");
     };
-  }, [account, onChainRegistered, hasProfileFromGraph, loading, refetchPatient]);
+  }, [account, onChainRegistered, hasProfileFromGraph]);
 
   const openManualUpload = () => {
     setUploadNonce((n) => n + 1);
@@ -254,10 +276,11 @@ export function PatientVaultPage() {
                     setShowUploadForm(false);
                     setFhirPrefill(null);
                     setFhirIssues([]);
-                    for (let i = 0; i < 20; i++) {
+                    for (let i = 0; i < 8; i++) {
+                      if (isSubgraphRateLimited()) break;
                       const fresh = await refetchPatient();
                       if (fresh?.patient) break;
-                      await new Promise((r) => setTimeout(r, 3000));
+                      await new Promise((r) => setTimeout(r, 5_000));
                     }
                   }}
                   onCancel={() => {

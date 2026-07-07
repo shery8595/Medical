@@ -81,9 +81,12 @@ export function IdentityPrivacyDoc() {
                 <p>
                     Anonymous trial apply uses a <strong>two-step</strong> relay: <code>POST /relay/apply-stage</code>{" "}
                     (registry stages FHE eligibility + Semaphore verify) then <code>POST /relay/apply-finalize</code> after
-                    the browser runs Zama FHE <strong>decrypt-for-tx</strong> on the staged boolean, builds a{" "}
-                    <strong>Noir UltraHonk</strong> eligibility attestation (optional hybrid document binding), and the
-                    relayer submits finalize. Client entry: <code>src/lib/relayer.ts</code> →{" "}
+                    the browser runs Zama FHE <strong>decrypt-for-tx</strong> on the staged boolean (patient ephemeral is{" "}
+                    <code>permitRecipient</code> — <strong>recommended default</strong>; relayer never sees the eligibility
+                    bit), builds a <strong>Noir UltraHonk</strong> eligibility attestation (optional hybrid document
+                    binding), and the relayer submits finalize. Optional P0.2 relayer-assisted mode (relayer as{" "}
+                    <code>permitRecipient</code>) improves server-side verification but gives the relayer visibility into
+                    the eligibility bit — not used by production UI. Client entry: <code>src/lib/relayer.ts</code> →{" "}
                     <code>submitViaRelayer(...)</code>. Deprecated <code>POST /relay/apply</code> returns HTTP 410 — do
                     not document it as the live path.
                 </p>

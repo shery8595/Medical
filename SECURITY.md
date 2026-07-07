@@ -26,10 +26,10 @@ Repository-level security findings and architectural limits. Indexed from [docs/
 |-------|------------|-------------------|
 | **FHE** | Homomorphic matching on ciphertext in `EligibilityEngine` | Off-chain PHI; wallet linkage; L1 ETH visibility |
 | **Noir** | Identity and policy attestation | fhEVM execution; compliance seal ≠ eligibility proof |
-| **Relayer** | Gasless relay; P0.2 staged-ciphertext re-decrypt before finalize (defense-in-depth); multi-relayer choice (P3.1) | Payout integrity via `FHE.select` gating (P2 shipped). Relayer can **censor or delay** only — see [docs/RELAYER_TRUST_BOUNDARIES.md](docs/RELAYER_TRUST_BOUNDARIES.md) |
+| **Relayer** | Gasless relay; default patient-decrypt (browser); optional P0.2 relayer-assisted re-decrypt (not default; learns eligibility bit); multi-relayer choice (P3.1) | Payout integrity via `FHE.select` gating (P2 shipped). The relayer cannot steal vault funds, cannot forge eligibility, and can only censor or delay — see [docs/RELAYER_TRUST_BOUNDARIES.md](docs/RELAYER_TRUST_BOUNDARIES.md) |
 | **Compliance** | Privacy-by-design on-chain | **Not HIPAA-compliant today** |
 
-Full disclosure: [README.md](README.md#limitations--trust-model), [relayer/README.md](relayer/README.md#transparency--logging-policy), `GET /transparency` on the relayer.
+Full disclosure: [docs/TRUST_ARCHITECTURE.md](docs/TRUST_ARCHITECTURE.md) (canonical trust model), [README.md](README.md#limitations--trust-model), [relayer/README.md](relayer/README.md#transparency--logging-policy), `GET /transparency` on the relayer.
 
 ## Trial criteria: two on-chain paths
 
@@ -56,7 +56,7 @@ MedVault combines **Zama FHE** (on-chain encrypted eligibility computation) with
 
 The Noir circuits do **not** cryptographically verify that FHE homomorphic operations were executed correctly inside the fhEVM coprocessor. After **P1**, encrypted mode no longer accepts an `eligible` or `decrypted_eligible` witness — dishonest eligibility bits cannot be smuggled via ZK in production encrypted-criteria trials. The residual gap is **Noir–FHE execution binding** (proving fhEVM ran the expected homomorphic program), not client-supplied eligibility bits.
 
-A contract-level `FHE.checkSignatures` binding was scoped but **deferred**: current Zama tooling exposes a KMS-signed `decryptionProof` only for **public** decrypt, which would re-leak the eligibility bit. **P0.2 defense-in-depth:** the trusted relayer re-decrypts the staged ciphertext before finalize (defense-in-depth on staging integrity). **P2 shipped:** `FHE.select` gating makes vault payout integrity independent of relayer honesty. See [docs/formal-verification/certora-halmos-results.md](docs/formal-verification/certora-halmos-results.md).
+A contract-level `FHE.checkSignatures` binding was scoped but **deferred**: current Zama tooling exposes a KMS-signed `decryptionProof` only for **public** decrypt, which would re-leak the eligibility bit. **P0.2 defense-in-depth (optional, not default):** when relayer is `permitRecipient`, the trusted relayer may re-decrypt the staged ciphertext before finalize — relayer learns the eligibility bit; production UI uses patient-decrypt (browser). **P2 shipped:** `FHE.select` gating makes vault payout integrity independent of relayer honesty. See [docs/formal-verification/certora-halmos-results.md](docs/formal-verification/certora-halmos-results.md).
 
 ### Mitigations in place
 
@@ -76,7 +76,7 @@ A contract-level `FHE.checkSignatures` binding was scoped but **deferred**: curr
 **Both modes:**
 
 4. **Trusted relayer gate (HIGH-1)** — `MedVaultRegistry.finalizeAnonymousApplyWithProof`, `finalizeAnonymousApplyWithConsent`, `cancelAnonymousApplyStage`, and `registerPatientViaRelayer` require `authorizedRelayers[msg.sender]` (timelocked via `scheduleRelayerAuth` / `applyRelayerAuth`). A patient EOA cannot self-submit finalize; non-relayer finalize reverts with `Only authorized relayer`. `EligibilityEngine.finalizeAnonymousEligibilityWithProof` is registry-only (`Only authorized registry`).
-5. **Relayer re-decrypt verification (P0.2 defense-in-depth)** — Before finalize, the relayer user-decrypts the staged `finalCt` ciphertext (relayer is `permitRecipient` from staging) via `@zama-fhe/sdk`. Cached per `(nullifier, trialId)` for `STAGING_TTL` (7 days); invalidated on cancel. Residual trust: honest relayer — same class as attester services. **P2 shipped:** `FHE.select` payout gating removes relayer honesty from the payout-integrity path.
+5. **Relayer re-decrypt verification (P0.2 optional defense-in-depth, not default)** — When relayer is `permitRecipient`, the relayer user-decrypts the staged `finalCt` ciphertext via `@zama-fhe/sdk` (relayer learns the eligibility bit). Production UI uses patient ephemeral `permitRecipient` and browser decrypt instead. Cached per `(nullifier, trialId)` for `STAGING_TTL` (7 days); invalidated on cancel. **P2 shipped:** `FHE.select` payout gating removes relayer honesty from the payout-integrity path.
 6. **Profile salt policy (MED-1)** — Production `registerPatient` requires `profileSaltCommitment = keccak256(high-entropy salt)`; zero and deterministic per-commitment salts are rejected. See `test-support/profileCommitment.ts` for integrator helpers.
 7. **Registration gate** — `SponsorIncentiveVault.registerAnonymousParticipant*` requires `eligibilityEngine.noirVerifiedResults(nullifier, trialId)` so pool enrollment follows a sealed attestation.
 8. **Pool enrollment auth (MED-3)** — `registerAnonymousParticipant` requires `msg.sender == decrypt permit holder`. Trial sponsor acceptance does **not** auto-enroll; patient must call directly or via `registerAnonymousParticipantFor` (EIP-712) / relayer `POST /relay/register-anon`.

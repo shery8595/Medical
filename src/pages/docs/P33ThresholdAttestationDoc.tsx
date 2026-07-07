@@ -19,6 +19,18 @@ export function P33ThresholdAttestationDoc() {
         attestations before finalize — making equivocation auditable without granting fund custody.
       </p>
 
+      <Callout type="warning" title="Visibility caveat">
+        P3.3 requires agreement among M relayers before finalize — it does <strong>not</strong> hide the eligibility bit
+        from any co-signing relayer. Each relayer that co-signs still independently decrypts and sees the same plaintext
+        result. It raises the bar from one relayer acting alone to M relayers agreeing; it does not add confidentiality
+        against relayers.
+      </Callout>
+
+      <Callout type="info" title="Recommended default today">
+        Production UI uses patient-decrypt (browser): ephemeral <code>permitRecipient</code>, browser decrypt via Zama SDK,
+        relayer relays only. P0.2 relayer-assisted decrypt is optional defense-in-depth with a visibility tradeoff.
+      </Callout>
+
       <CodeBlock
         filename="EIP-712 RelayerEligibilityAttestation (future)"
         language="typescript"

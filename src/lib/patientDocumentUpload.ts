@@ -78,16 +78,40 @@ export async function recordHybridDocumentOnChain(
     throw new Error("No pending hybrid document for this trial. Upload a file before applying.");
   }
 
+  const store = getPatientDocumentStore(signer);
+  const alreadyRecorded = await store.documentExists(nullifier, trialId);
+  if (alreadyRecorded) {
+    const documentBinding = await fetchDocumentBindingFromChain(signer, nullifier, trialId);
+    if (!documentBinding) {
+      throw new Error("Document exists on-chain but could not be read. Retry with the same browser profile.");
+    }
+    updatePendingHybridDocument(trialId, {
+      documentBinding,
+      aesKeyB64: "",
+    });
+    return {
+      txHash: stored.recordedTxHash ?? "",
+      cid: stored.cid,
+      documentBinding,
+      fheChunks: { chunks: [], inputProof: "0x" },
+    };
+  }
+
   const aesKey = base64ToBytes(stored.aesKeyB64);
+  if (aesKey.length !== 32) {
+    throw new Error(
+      "Document AES key is missing locally. Re-attach your medical document (IPFS + FHE) before applying."
+    );
+  }
   const userAddress = await signer.getAddress();
-  const fheChunks = await wrapKeyForFhe(aesKey, docStoreAddress, userAddress);
+  const provider = signer.provider ?? undefined;
+  const fheChunks = await wrapKeyForFhe(aesKey, docStoreAddress, userAddress, provider);
   const documentBinding = buildDocumentBindingFromFheChunks(
     stored.cid,
     stored.aesKeyCtHash,
     fheChunks
   );
 
-  const store = getPatientDocumentStore(signer);
   const tx = await store.recordDocumentCid(
     nullifier,
     trialId,
@@ -125,10 +149,24 @@ export async function resolveDocumentBindingForApply(
   const storeAddr =
     docStoreAddress ?? tryGetPatientDocumentStoreAddress(await resolveChainIdFromSigner(signer));
   const pending = getPendingHybridDocument(trialId);
+
   if (pending?.documentBinding?.hasDocument) {
     return pending.documentBinding;
   }
-  if (pending && !pending.recordedTxHash && storeAddr) {
+
+  if (storeAddr) {
+    try {
+      const onChain = await fetchDocumentBindingFromChain(signer, nullifier, trialId);
+      if (onChain) {
+        updatePendingHybridDocument(trialId, { documentBinding: onChain, aesKeyB64: "" });
+        return onChain;
+      }
+    } catch (err) {
+      console.warn("[apply] Could not read on-chain document binding:", err);
+    }
+  }
+
+  if (pending && !pending.recordedTxHash && storeAddr && pending.aesKeyB64) {
     const recorded = await recordHybridDocumentOnChain(
       signer,
       nullifier,
@@ -138,28 +176,8 @@ export async function resolveDocumentBindingForApply(
     );
     return recorded.documentBinding;
   }
-  if (!storeAddr) return undefined;
 
-  try {
-    const store = getPatientDocumentStore(signer);
-    const exists = await store.documentExists(nullifier, trialId);
-    if (!exists) return undefined;
-    const rec = await store.getDocumentRecord.staticCall(nullifier, trialId);
-    const handles = [rec.keyChunk0, rec.keyChunk1, rec.keyChunk2, rec.keyChunk3] as const;
-    return {
-      hasDocument: true,
-      docCidHash: docCidHashField(rec.cid as string),
-      aesKeyCtHash: BigInt(rec.aesKeyCtHash),
-      aesKeyFheHandleHashes: handles.map((h) => fheStageHandleToField(h)) as [
-        bigint,
-        bigint,
-        bigint,
-        bigint,
-      ],
-    };
-  } catch {
-    return undefined;
-  }
+  return undefined;
 }
 
 async function resolveChainIdFromSigner(signer: Signer): Promise<bigint | undefined> {
@@ -180,4 +198,29 @@ export async function checkDocumentExistsOnChain(
     provider
   );
   return Boolean(await store.documentExists(nullifier, trialId));
+}
+
+async function fetchDocumentBindingFromChain(
+  signer: Signer,
+  nullifier: bigint,
+  trialId: bigint,
+): Promise<DocumentBindingInputs | undefined> {
+  const store = getPatientDocumentStore(signer);
+  const reader = await signer.getAddress();
+  const exists = await store.documentExists(nullifier, trialId);
+  if (!exists) return undefined;
+
+  const rec = await store.getDocumentRecord.staticCall(nullifier, trialId, { from: reader });
+  const handles = [rec.keyChunk0, rec.keyChunk1, rec.keyChunk2, rec.keyChunk3] as const;
+  return {
+    hasDocument: true,
+    docCidHash: docCidHashField(rec.cid as string),
+    aesKeyCtHash: BigInt(rec.aesKeyCtHash),
+    aesKeyFheHandleHashes: handles.map((h) => fheStageHandleToField(h)) as [
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+    ],
+  };
 }

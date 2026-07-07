@@ -75,7 +75,7 @@ export function PatientDashboardHero({ account, connect, isConnecting, connectEr
                 <span className="text-teal-600">overview</span>
               </h2>
               <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-600">
-                Apply anonymously with zero-knowledge proofs — sponsors see eligibility, not your
+                Apply anonymously with Semaphore identity attestation — sponsors see eligibility, not your
                 identity.
               </p>
             </div>
@@ -84,8 +84,8 @@ export function PatientDashboardHero({ account, connect, isConnecting, connectEr
               {[
                 {
                   icon: Shield,
-                  title: "Zero-Knowledge",
-                  detail: "Prove eligibility without revealing health data",
+                  title: "FHE matching",
+                  detail: "Eligibility computed on encrypted vitals",
                 },
                 {
                   icon: KeyRound,

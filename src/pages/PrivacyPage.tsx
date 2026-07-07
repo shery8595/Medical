@@ -72,7 +72,7 @@ const commitments = [
 ];
 
 const comparisonRows = [
-  { label: "Raw lab values & diagnoses", patient: "Encrypted in vault", sponsor: "Never exposed" },
+  { label: "Raw lab values & diagnoses", patient: "Encrypted in vault", sponsor: "Encrypted; consent-gated after patient approval" },
   { label: "Eligibility outcome", patient: "You choose to apply", sponsor: "Match score / proof only" },
   { label: "Wallet address", patient: "Your account", sponsor: "Minimized until consent" },
   { label: "Consent history", patient: "Full audit trail", sponsor: "Scoped to granted trials" },
@@ -105,7 +105,7 @@ const auditTrailTrend = [
 
 const stackLayers = [
   { label: "On-chain consent & audit", sub: "DataAccessLog · revoke anytime", color: NAVY },
-  { label: "Zero-knowledge proofs", sub: "Semaphore · Noir certification", color: TEAL },
+  { label: "Identity attestation", sub: "Semaphore · Noir policy binding", color: TEAL },
   { label: "FHE eligibility engine", sub: "Compute on ciphertext", color: VIOLET },
   { label: "Client-side encryption", sub: "@zama-fhe/sdk before RPC", color: MINT },
 ];
@@ -394,7 +394,7 @@ export function PrivacyPage() {
             </motion.h1>
             <motion.p {...fadeUp(0.2)} className="mt-8 max-w-xl text-xl leading-relaxed text-[#3d4947]">
               MedVault is built for patients who need clinical trial discovery without trading away identity. Privacy is
-              enforced by encryption, zero-knowledge proofs, and on-chain consent — visualized below.
+              enforced by FHE encryption, Semaphore/Noir attestation, and on-chain consent — visualized below.
             </motion.p>
             <motion.div {...fadeUp(0.3)} className="mt-10 flex flex-wrap gap-4">
               <Link

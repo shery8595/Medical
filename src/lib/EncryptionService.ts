@@ -17,9 +17,11 @@ import {
   splitAesKeyToUint64Chunks,
   reassembleAesKeyFromUint64Chunks,
 } from "./crypto-utils";
-import { getZamaSDK } from "./fhe";
+import { getZamaSDK, ensureZamaConnected } from "./fhe";
 import type { Address } from "@zama-fhe/sdk";
 import { fetchEncryptedPayloadFromIpfs } from "./ipfs";
+import { ethers, type Provider } from "ethers";
+import { normalizeFheHandle } from "./criteriaSchema";
 
 export type { EncryptedPayload };
 
@@ -34,8 +36,12 @@ export type FheAesKeyChunks = {
 export async function wrapKeyForFhe(
   key: Uint8Array,
   contractAddress: string,
-  userAddress: string
+  userAddress: string,
+  provider?: Provider,
 ): Promise<FheAesKeyChunks> {
+  if (provider) {
+    await ensureZamaConnected(provider);
+  }
   const sdk = getZamaSDK();
   const uint64Chunks = splitAesKeyToUint64Chunks(key);
   const { encryptedValues, inputProof } = await sdk.encrypt({
@@ -44,10 +50,18 @@ export async function wrapKeyForFhe(
     userAddress: userAddress as Address,
   });
   const proofHex = inputProof as `0x${string}`;
-  const chunks = encryptedValues.map((ev) => ({
-    handle: ev.handle as `0x${string}`,
-    inputProof: proofHex,
-  }));
+  const chunks = encryptedValues.map((ev, i) => {
+    const handle = ethers.toBeHex(normalizeFheHandle(ev), 32) as `0x${string}`;
+    if (!handle || BigInt(handle) === 0n) {
+      throw new Error(
+        `FHE key wrap failed: missing ciphertext handle for chunk ${i}. Reconnect wallet and retry.`
+      );
+    }
+    return { handle, inputProof: proofHex };
+  });
+  if (chunks.length !== 4) {
+    throw new Error(`FHE key wrap expected 4 chunks, got ${chunks.length}`);
+  }
   return { chunks, inputProof: proofHex };
 }
 

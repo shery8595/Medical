@@ -18,6 +18,43 @@ export function RelayerTrustBoundariesDoc() {
         <Link to="/docs/testing/matrix">testing matrix</Link> (REL-EQV, REL-REP, REL-FF, REL-STALE).
       </Callout>
 
+      <h2>Trust &amp; Assurance Register (relayer)</h2>
+      <div className="not-prose overflow-x-auto text-sm my-4">
+        <table className="w-full border border-slate-200 rounded-lg">
+          <thead>
+            <tr className="bg-slate-50 border-b">
+              <th className="text-left px-3 py-2 font-bold">Concern</th>
+              <th className="text-left px-3 py-2 font-bold">Relayer honest?</th>
+              <th className="text-left px-3 py-2 font-bold">On-chain mitigation</th>
+            </tr>
+          </thead>
+          <tbody className="text-xs">
+            <tr className="border-b">
+              <td className="px-3 py-2">Payout forgery</td>
+              <td className="px-3 py-2">No — non-custodial</td>
+              <td className="px-3 py-2">FHE.select + pull-claim</td>
+            </tr>
+            <tr className="border-b">
+              <td className="px-3 py-2">Eligibility forgery</td>
+              <td className="px-3 py-2">No</td>
+              <td className="px-3 py-2">EligibilityEngine FHE staging</td>
+            </tr>
+            <tr>
+              <td className="px-3 py-2">Censorship / delay</td>
+              <td className="px-3 py-2">Yes — liveness only</td>
+              <td className="px-3 py-2">P3.1 multi-relayer choice</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Full register:{" "}
+        <Link to="/docs/trust-architecture" className="text-[#00685f] font-semibold hover:underline">
+          Trust architecture
+        </Link>
+        .
+      </p>
+
       <h2>Cannot steal vault funds</h2>
       <ul>
         <li>No cETH mint — relayer has no vault owner role</li>
@@ -27,9 +64,17 @@ export function RelayerTrustBoundariesDoc() {
       </ul>
 
       <h2>Cannot forge eligibility</h2>
+      <Callout type="info" title="Recommended default: patient-decrypt (browser)">
+        Production UI stages with the patient&apos;s ephemeral wallet as <code>permitRecipient</code>. The patient
+        decrypts locally; the relayer only relays transactions and never sees the eligibility bit.
+      </Callout>
       <ul>
         <li>FHE engine is sole on-chain compute authority</li>
-        <li>P0.2: relayer re-decrypt when <code>permitRecipient == relayerWallet</code> ignores client <code>eligible</code></li>
+        <li>
+          P0.2 (optional relayer-assisted): when <code>permitRecipient == relayerWallet</code>, relayer re-decrypts and
+          ignores client <code>eligible</code> — improves server-side verification but <strong>gives the relayer
+          visibility into the eligibility bit</strong>
+        </li>
         <li>Ineligible path → <code>SilentApply</code>, not payout (<code>SF-01</code>, <code>RDV-01</code>)</li>
       </ul>
 

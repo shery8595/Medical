@@ -2136,6 +2136,311 @@ export class AnonymousPatient extends Entity {
   set registeredAt(value: BigInt) {
     this.set("registeredAt", Value.fromBigInt(value));
   }
+
+  get registeredViaRelayer(): Bytes | null {
+    let value = this.get("registeredViaRelayer");
+    if (!value || value.kind == ValueKind.NULL) {
+      return null;
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set registeredViaRelayer(value: Bytes | null) {
+    if (!value) {
+      this.unset("registeredViaRelayer");
+    } else {
+      this.set("registeredViaRelayer", Value.fromBytes(<Bytes>value));
+    }
+  }
+}
+
+export class AuthorizedRelayer extends Entity {
+  constructor(id: Bytes) {
+    super();
+    this.set("id", Value.fromBytes(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id != null, "Cannot save AuthorizedRelayer entity without an ID");
+    if (id) {
+      assert(
+        id.kind == ValueKind.BYTES,
+        `Entities of type AuthorizedRelayer must have an ID of type Bytes but the id '${id.displayData()}' is of type ${id.displayKind()}`,
+      );
+      store.set("AuthorizedRelayer", id.toBytes().toHexString(), this);
+    }
+  }
+
+  static loadInBlock(id: Bytes): AuthorizedRelayer | null {
+    return changetype<AuthorizedRelayer | null>(
+      store.get_in_block("AuthorizedRelayer", id.toHexString()),
+    );
+  }
+
+  static load(id: Bytes): AuthorizedRelayer | null {
+    return changetype<AuthorizedRelayer | null>(
+      store.get("AuthorizedRelayer", id.toHexString()),
+    );
+  }
+
+  get id(): Bytes {
+    let value = this.get("id");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set id(value: Bytes) {
+    this.set("id", Value.fromBytes(value));
+  }
+
+  get authorized(): boolean {
+    let value = this.get("authorized");
+    if (!value || value.kind == ValueKind.NULL) {
+      return false;
+    } else {
+      return value.toBoolean();
+    }
+  }
+
+  set authorized(value: boolean) {
+    this.set("authorized", Value.fromBoolean(value));
+  }
+
+  get updatedAt(): BigInt {
+    let value = this.get("updatedAt");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set updatedAt(value: BigInt) {
+    this.set("updatedAt", Value.fromBigInt(value));
+  }
+}
+
+export class RelayerAuthEvent extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id != null, "Cannot save RelayerAuthEvent entity without an ID");
+    if (id) {
+      assert(
+        id.kind == ValueKind.STRING,
+        `Entities of type RelayerAuthEvent must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`,
+      );
+      store.set("RelayerAuthEvent", id.toString(), this);
+    }
+  }
+
+  static loadInBlock(id: string): RelayerAuthEvent | null {
+    return changetype<RelayerAuthEvent | null>(
+      store.get_in_block("RelayerAuthEvent", id),
+    );
+  }
+
+  static load(id: string): RelayerAuthEvent | null {
+    return changetype<RelayerAuthEvent | null>(
+      store.get("RelayerAuthEvent", id),
+    );
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get relayer(): Bytes {
+    let value = this.get("relayer");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set relayer(value: Bytes) {
+    this.set("relayer", Value.fromBytes(value));
+  }
+
+  get authorized(): boolean {
+    let value = this.get("authorized");
+    if (!value || value.kind == ValueKind.NULL) {
+      return false;
+    } else {
+      return value.toBoolean();
+    }
+  }
+
+  set authorized(value: boolean) {
+    this.set("authorized", Value.fromBoolean(value));
+  }
+
+  get blockNumber(): BigInt {
+    let value = this.get("blockNumber");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set blockNumber(value: BigInt) {
+    this.set("blockNumber", Value.fromBigInt(value));
+  }
+
+  get txHash(): Bytes {
+    let value = this.get("txHash");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set txHash(value: Bytes) {
+    this.set("txHash", Value.fromBytes(value));
+  }
+
+  get timestamp(): BigInt {
+    let value = this.get("timestamp");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set timestamp(value: BigInt) {
+    this.set("timestamp", Value.fromBigInt(value));
+  }
+}
+
+export class RelayerRegistration extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id != null, "Cannot save RelayerRegistration entity without an ID");
+    if (id) {
+      assert(
+        id.kind == ValueKind.STRING,
+        `Entities of type RelayerRegistration must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`,
+      );
+      store.set("RelayerRegistration", id.toString(), this);
+    }
+  }
+
+  static loadInBlock(id: string): RelayerRegistration | null {
+    return changetype<RelayerRegistration | null>(
+      store.get_in_block("RelayerRegistration", id),
+    );
+  }
+
+  static load(id: string): RelayerRegistration | null {
+    return changetype<RelayerRegistration | null>(
+      store.get("RelayerRegistration", id),
+    );
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get relayer(): Bytes {
+    let value = this.get("relayer");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set relayer(value: Bytes) {
+    this.set("relayer", Value.fromBytes(value));
+  }
+
+  get commitment(): BigInt {
+    let value = this.get("commitment");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set commitment(value: BigInt) {
+    this.set("commitment", Value.fromBigInt(value));
+  }
+
+  get blockNumber(): BigInt {
+    let value = this.get("blockNumber");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set blockNumber(value: BigInt) {
+    this.set("blockNumber", Value.fromBigInt(value));
+  }
+
+  get txHash(): Bytes {
+    let value = this.get("txHash");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytes();
+    }
+  }
+
+  set txHash(value: Bytes) {
+    this.set("txHash", Value.fromBytes(value));
+  }
+
+  get timestamp(): BigInt {
+    let value = this.get("timestamp");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set timestamp(value: BigInt) {
+    this.set("timestamp", Value.fromBigInt(value));
+  }
 }
 
 export class AnonymousSubmission extends Entity {

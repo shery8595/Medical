@@ -7,7 +7,13 @@ import { buildPatientProfileInputs, yieldToMain } from "../../lib/fhe";
 import { friendlyContractError } from "../../lib/contractErrors";
 import { getContractAddressForChain, getDataAccessLog } from "../../lib/contracts";
 import { storePatientProfilePlain } from "../../lib/profileStorage";
-import { cn } from "../../lib/utils";
+import {
+    getOrCreateIdentity,
+    isMemberRegistered,
+    isPatientRegistered,
+    registerPatientWithHealthData,
+} from "../../lib/semaphore";
+import { RelayerGovernancePanel } from "../apply/RelayerGovernancePanel";
 
 import {
   type ReclaimAttestation,
@@ -311,6 +317,15 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation, pre
                 <p className="text-slate-600">
                     Enter your baseline clinical metrics. This data is encrypted locally before transmission.
                 </p>
+                <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                    Your identity anchor and encrypted vitals are validated for consistency before submission.
+                    Direct registration links your wallet on-chain — see{" "}
+                    <a href="/docs/identity-privacy" className="font-semibold text-teal-700 hover:underline">
+                        identity &amp; privacy
+                    </a>
+                    .
+                </p>
+                <RelayerGovernancePanel className="mt-4" />
                 {reclaimAttestation ? (
                     <div
                         className={cn(
@@ -360,9 +375,10 @@ export function PatientRecordForm({ onSuccess, onCancel, reclaimAttestation, pre
                         <Lock className="h-4 w-4" />
                     </div>
                     <div>
-                        <p className="font-semibold text-violet-900 text-sm">Zero-Knowledge Proof Active</p>
+                        <p className="font-semibold text-violet-900 text-sm">FHE encryption active</p>
                         <p className="text-violet-800/90 text-sm">
-                            Your data is encrypted before leaving your device. Researchers receive verifying proof without exposing underlying values.
+                            Your identity anchor and encrypted vitals are validated for consistency before submission.
+                            Researchers receive FHE ciphertext without exposing underlying values.
                         </p>
                     </div>
                 </div>

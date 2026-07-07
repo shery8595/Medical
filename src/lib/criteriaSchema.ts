@@ -32,14 +32,11 @@ export function docSchemaHashField(): bigint {
 }
 
 /** Map a staged Zama FHE ebool handle (bytes32) to the BN254 public input field. */
-export function fheStageHandleToField(handle: bigint | string): bigint {
-    const hex =
-        typeof handle === "string"
-            ? handle.startsWith("0x")
-                ? handle
-                : `0x${handle}`
-            : ethers.toBeHex(handle, 32);
-    return BigInt(hex) % BN254_FIELD_ORDER;
+export function fheStageHandleToField(handle: bigint | string | null | undefined): bigint {
+    if (handle == null) {
+        throw new Error("Missing FHE ciphertext handle for document binding.");
+    }
+    return normalizeFheHandle(handle) % BN254_FIELD_ORDER;
 }
 
 /** Normalize ethers / FHE SDK return values to a bytes32 handle. */

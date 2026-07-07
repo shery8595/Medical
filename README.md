@@ -15,7 +15,8 @@
 | **Demo video** | [YouTube walkthrough](https://www.youtube.com/watch?v=1wR01KflBOM&t=88s) |
 | **Pitch deck outline** | [docs/PITCH_DECK.md](docs/PITCH_DECK.md) |
 | **Lightpaper** | [docs/LIGHTPAPER.md](docs/LIGHTPAPER.md) |
-| **FHE audit map** | [docs/FHE_AUDIT_README.md](docs/FHE_AUDIT_README.md) — primitive → contract → test |
+| **FHE audit map** | [docs/FHE_AUDIT_README.md](docs/FHE_AUDIT_README.md) — primitive → contract → test; includes [who can decrypt what](docs/FHE_AUDIT_README.md#who-can-decrypt-what) |
+| **Relayer trust bounds** | [docs/RELAYER_TRUST_BOUNDARIES.md](docs/RELAYER_TRUST_BOUNDARIES.md) — payout does not depend on relayer honesty (REL-FF-02, P5-SELECT) |
 | **Terminal demo** | `npm run demo:fhe` ([scripts/demo-fhe-lifecycle.mjs](scripts/demo-fhe-lifecycle.mjs)) |
 | **Repo** | [github.com/shery8595/Med-Vault](https://github.com/shery8595/Med-Vault) |
 | **SDK** | `npm install @medvault/sdk ethers@6.16.0` |
@@ -42,11 +43,11 @@ MedVault uses strong cryptography, but not every layer proves the same thing. Th
 | Layer | What it guarantees | What it does **not** guarantee |
 |-------|-------------------|-------------------------------|
 | **Zama FHE** (`EligibilityEngine._computeEligibility`) | Homomorphic matching on ciphertext — validators and indexers never see plaintext vitals during on-chain scoring | Off-chain PHI handling (IPFS documents, AI service, indexer caches); wallet linkage on non-relayer registration; L1 native ETH visibility at deposit/withdraw |
-| **Noir + Honk** | **Identity and policy attestation** — Semaphore nullifier, profile commitment, staged FHE handle binding, encrypted-criteria echo binding | fhEVM homomorphic correctness; the compliance seal is **not** a proof that you passed eligibility — only that your witness matches your registered profile and staged handle |
-| **Authorized relayers (P3.1)** | Gasless staging/finalize/cancel; P0.2 re-decrypt when relayer is `permitRecipient`; patient chooses among N relayers | Can **censor or delay** only — see [docs/RELAYER_TRUST_BOUNDARIES.md](docs/RELAYER_TRUST_BOUNDARIES.md); cannot steal funds or forge eligibility (FHE.select + pull-claim) |
+| **Noir + Honk** | **Identity and policy attestation** — Semaphore nullifier, staged FHE handle binding, encrypted-criteria echo binding; **encrypted mode: identity/binding only — eligibility is FHE-only** | fhEVM homomorphic correctness; the compliance seal is **not** a proof that you passed eligibility |
+| **Authorized relayers (P3.1)** | Gasless staging/finalize/cancel; default patient-decrypt (browser); optional P0.2 relayer-assisted when relayer is `permitRecipient` (not default; learns eligibility bit); patient chooses among N relayers | The relayer cannot steal vault funds, cannot forge eligibility, and can only censor or delay (mitigated by P3.1 multi-relayer choice) — see [docs/RELAYER_TRUST_BOUNDARIES.md](docs/RELAYER_TRUST_BOUNDARIES.md) |
 | **Compliance posture** | Privacy-by-design for on-chain clinical matching | **Not HIPAA-compliant today** — off-chain PHI (IPFS, AI pre-screening, indexer), optional wallet linkage, and settlement-layer ETH visibility remain |
 
-See [SECURITY.md](SECURITY.md), [docs/REGULATORY_POSTURE.md](docs/REGULATORY_POSTURE.md), [internal-docs/threat-model.md](internal-docs/threat-model.md), and in-app **Docs → Security Model** for residual risks and mitigations.
+See [docs/TRUST_ARCHITECTURE.md](docs/TRUST_ARCHITECTURE.md), [docs/GLOSSARY.md](docs/GLOSSARY.md), [SECURITY.md](SECURITY.md), [docs/REGULATORY_POSTURE.md](docs/REGULATORY_POSTURE.md), and in-app **Docs → Trust architecture** for the layered model and assurance register.
 
 ---
 
@@ -201,7 +202,7 @@ Recent product areas: FHIR JSON prefill, sponsor representation monitoring, encr
 
 **The one thing to remember:** private clinical-trial matching — encrypted patient inputs against encrypted sponsor criteria, with outcomes decrypted only by the patient.
 
-MedVault is the most socially significant **end-to-end** fhEVM clinical-research application: matching is the hook; the full workflow proves it ships as a real system.
+MedVault is the **reference fhEVM architecture for encrypted clinical-trial matching**, with a complete patient-to-reward workflow on Sepolia. Platform services (relayer, Semaphore/Noir, subgraph, AI, cETH) make the core deployable — see [docs/TRUST_ARCHITECTURE.md](docs/TRUST_ARCHITECTURE.md).
 
 | Layer | What MedVault delivers |
 |-------|------------------------|
@@ -623,6 +624,10 @@ See also [docs/README.md](docs/README.md) for the full index.
 
 | Resource | Location |
 |----------|----------|
+| **Start here — FHE audit map** | [docs/FHE_AUDIT_README.md](docs/FHE_AUDIT_README.md) — technical reviewers |
+| **Judge brief** | [docs/JUDGE_BRIEF.md](docs/JUDGE_BRIEF.md) |
+| **Trust architecture** | [docs/TRUST_ARCHITECTURE.md](docs/TRUST_ARCHITECTURE.md) |
+| **Glossary** | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | **Doc index** | [docs/README.md](docs/README.md) |
 | **Regulatory posture** | [docs/REGULATORY_POSTURE.md](docs/REGULATORY_POSTURE.md) — HIPAA/IRB/GDPR scope boundaries |
 | **External security audit** | [docs/EXTERNAL_AUDIT_SUMMARY.md](docs/EXTERNAL_AUDIT_SUMMARY.md) · [docs/EXTERNAL_AUDIT_SCOPE.md](docs/EXTERNAL_AUDIT_SCOPE.md) |
@@ -742,8 +747,8 @@ See also [docs/ATOMIC_FLOWS.md](docs/ATOMIC_FLOWS.md).
 ### Known privacy limits (honest disclosure)
 
 - **Plaintext trial criteria** — legacy `createTrial` is Hardhat-only (chainid 31337); Sepolia/production require `createTrialWithEncryptedCriteria`.
-- **Noir–FHE binding** — encrypted-criteria eligibility still trusts the client `decrypted_eligible` witness for attestation; on-chain `FHE.checkSignatures` binding deferred (Zama SDK tooling gap). Mitigated by P0.2 relayer re-decrypt (defense-in-depth) and P2 `FHE.select` payout gating (shipped). See [docs/formal-verification/certora-halmos-results.md](docs/formal-verification/certora-halmos-results.md).
-- **Forward-only revocation** — sponsors who already decrypted hybrid documents may retain AES keys off-chain; epoch gating + `rotateDocument` block new reads; `DocumentLegacyHandleRevoked` enables best-effort IPFS unpin.
+- **Noir–FHE separation** — Noir attests identity and binding; FHE is sole eligibility authority in encrypted mode. `FHE.select` payout gating (P2) makes payout integrity independent of the attestation layer. See [docs/TRUST_ARCHITECTURE.md](docs/TRUST_ARCHITECTURE.md).
+- **Epoch-based key rotation** — sponsors who already decrypted hybrid documents may retain AES keys off-chain; epoch gating + `rotateDocument` block new reads; `DocumentLegacyHandleRevoked` enables best-effort IPFS unpin.
 - **Withdrawal staging** — sufficiency comparison is homomorphic (`FHE.select`); no pre-settlement boolean leak. Failed ETH sends escrow to `pendingFailedWithdrawWei` (claim via `claimFailedWithdraw`); failed `completePublicExit` credits the cETH owner, not the stealth recipient.
 - **Registration unlinkability** — direct wallet registration links `tx.from` ↔ commitment in one tx; use relayer path for stronger anonymity.
 

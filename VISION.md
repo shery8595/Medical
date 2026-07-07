@@ -2,7 +2,7 @@
 
 **Private clinical-trial matching over encrypted patient vitals and encrypted sponsor trial criteria on Ethereum Sepolia.**
 
-MedVault is the most socially significant **end-to-end** fhEVM clinical-research application — homomorphic eligibility, consent, anonymous application, audit trail, rewards, and an honest regulatory posture. Optional Semaphore anonymity and Noir identity/policy attestation extend the core matching workflow.
+MedVault is the **reference fhEVM architecture for encrypted clinical-trial matching**, with a complete patient-to-reward workflow on Sepolia. Homomorphic eligibility is the core; Semaphore anonymity and Noir identity/policy attestation extend the matching workflow — see [docs/TRUST_ARCHITECTURE.md](docs/TRUST_ARCHITECTURE.md).
 
 MedVault is privacy-centric clinical trial infrastructure on **Zama (Zama FHE)**. Using **Fully Homomorphic Encryption (FHE)**, it bridges individual medical sovereignty and collective research—patient records stay mathematically private during matching, scoring, and incentive settlement.
 
@@ -85,7 +85,7 @@ Sponsors publish trial criteria via **`createTrialWithEncryptedCriteria`** (reco
 |-------|------------|-------------------|
 | **FHE** | Homomorphic eligibility on ciphertext | Off-chain PHI, wallet linkage, L1 ETH visibility |
 | **Noir** | Identity and policy attestation | fhEVM correctness; seal ≠ eligibility proof |
-| **Relayer** | Gasless relay; interim decrypt-verify before finalize (P0.2 defense-in-depth) | Payout integrity via `FHE.select` (P2 shipped); relayer re-decrypt is defense-in-depth |
+| **Relayer** | Gasless relay; default patient-decrypt (browser); optional P0.2 relayer-assisted (not default; learns eligibility bit) | Payout integrity via `FHE.select` (P2 shipped); relayer cannot steal vault funds, cannot forge eligibility, can only censor or delay |
 | **Compliance** | Privacy-by-design matching | **Not HIPAA-compliant today** |
 
 ---

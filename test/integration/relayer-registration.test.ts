@@ -101,4 +101,72 @@ describe("Integration: relayer registration privacy", function () {
         expect(linked).to.equal(0n);
         expect(await stack.medVaultRegistry.connect(stack.patient).isRegistered()).to.equal(true);
     });
+
+    it("REL-REG-02: registration reverts when EIP-712 healthDataHash does not match ciphertext bundle", async function () {
+        const stack = await deployMedVaultStack();
+        const relayer = stack.stranger;
+        await authorizeRelayer(stack.medVaultRegistry, stack.owner, relayer.address);
+
+        const id = new Identity();
+        const mvrAddr = await stack.medVaultRegistry.getAddress();
+        const aprAddr = await stack.anonymousPatientRegistry.getAddress();
+        const inputs = await buildPatientProfileInputs(aprAddr, mvrAddr, ELIGIBLE_PROFILE);
+        const profileSalt = randomProfileSalt();
+        const profileCommitment = computeProfileCommitment(id.commitment, ELIGIBLE_PROFILE, profileSalt);
+        const saltCommitment = profileSaltCommitment(profileSalt);
+        const nonce = await stack.medVaultRegistry.registerNonces(stack.patient.address);
+
+        const wrongHash = ethers.keccak256(ethers.toUtf8Bytes("wrong-bundle"));
+
+        const domain = {
+            name: "MedVaultRegistry",
+            version: "1",
+            chainId: (await ethers.provider.getNetwork()).chainId,
+            verifyingContract: mvrAddr,
+        };
+        const types = {
+            RegisterViaRelayer: [
+                { name: "patientWallet", type: "address" },
+                { name: "identityCommitment", type: "uint256" },
+                { name: "viewPermitRecipient", type: "address" },
+                { name: "profileCommitment", type: "bytes32" },
+                { name: "healthDataHash", type: "bytes32" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" },
+            ],
+        };
+        const deadline = BigInt((await ethers.provider.getBlock("latest"))!.timestamp + 3600);
+        const value = {
+            patientWallet: stack.patient.address,
+            identityCommitment: id.commitment,
+            viewPermitRecipient: stack.patient.address,
+            profileCommitment: `0x${profileCommitment.toString(16).padStart(64, "0")}`,
+            healthDataHash: wrongHash,
+            nonce,
+            deadline,
+        };
+        const signature = await stack.patient.signTypedData(domain, types, value);
+
+        await expect(
+            stack.medVaultRegistry.connect(relayer).registerPatientViaRelayer(
+                stack.patient.address,
+                id.commitment,
+                stack.patient.address,
+                value.profileCommitment,
+                saltCommitment,
+                inputs.age.handle,
+                inputs.gender.handle,
+                inputs.weight.handle,
+                inputs.height.handle,
+                inputs.hasDiabetes.handle,
+                inputs.hbLevel.handle,
+                inputs.isSmoker.handle,
+                inputs.hasHypertension.handle,
+                inputs.inputProof,
+                nonce,
+                deadline,
+                signature
+            )
+        ).to.be.reverted;
+    });
 });

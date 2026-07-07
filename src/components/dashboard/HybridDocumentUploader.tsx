@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { FileUp, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { DocumentIpfsConfirmCallout } from "../ui/DocumentIpfsConfirmCallout";
 import { Button } from "../ui/Button";
 import { cn } from "../../lib/utils";
 import { prepareHybridDocumentUpload } from "../../lib/patientDocumentUpload";
@@ -59,6 +60,7 @@ export function HybridDocumentUploader({ trialId, className, compact, disabled }
 
   return (
     <div className={cn("space-y-2", className)}>
+      <DocumentIpfsConfirmCallout />
       <input
         ref={inputRef}
         type="file"

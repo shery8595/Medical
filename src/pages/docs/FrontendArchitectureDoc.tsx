@@ -105,7 +105,7 @@ export function FrontendArchitectureDoc() {
                     The root <code>PrivyProvider</code> in <code>App.tsx</code> (with <code>VITE_PRIVY_APP_ID</code>)
                     wraps <code>Web3Provider</code> before any routed UI. Users authenticate with Privy; the embedded
                     wallet is switched to <strong>Ethereum Sepolia</strong> inside <code>Web3Context.tsx</code>.
-                    For Semaphore, ephemeral decrypt wallet, HTTP relayer (<code>/relay/apply-stage</code> / finalize),
+                    For Semaphore, ephemeral decrypt wallet (recommended default — patient-decrypt browser), HTTP relayer (<code>/relay/apply-stage</code> / finalize),
                     private faucet, Noir/Honk, and Chainlink CRE pointers, see the{" "}
                     <Link to="/docs/identity-privacy" className="text-blue-600 font-semibold no-underline hover:underline">
                         identity, relayer &amp; testnet
@@ -325,6 +325,11 @@ export function FrontendArchitectureDoc() {
                         "/docs/testing/infrastructure",
                         "/docs/testing/ci",
                         "/docs/security-model",
+                        "/docs/trust-architecture",
+                        "/docs/relayer-trust-boundaries",
+                        "/docs/p3-3-threshold-attestation",
+                        "/docs/glossary",
+                        "/docs/judge-brief",
                         "/docs/compliance",
                         "/docs/faq",
                         "/docs/changelog",

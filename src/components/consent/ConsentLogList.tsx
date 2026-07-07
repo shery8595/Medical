@@ -183,7 +183,7 @@ export function ConsentLogList({
             e.stopPropagation();
             if (!onRevokeTrial || !log.trialId) return;
             const ok = window.confirm(
-              `Revoke sponsor access for "${log.trialName}"?\n\nThis blocks future consent-gated eligibility for this trial. Already-decrypted data cannot be recalled on-chain (forward-only revocation).`
+              `Revoke sponsor access for "${log.trialName}"?\n\nThis blocks future consent-gated eligibility for this trial. Already-decrypted data cannot be recalled on-chain (epoch-based key rotation).`
             );
             if (!ok) return;
             await onRevokeTrial(String(log.trialId));

@@ -1,19 +1,27 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { getSubgraphQueryPath } from '../lib/subgraph';
 import { fetchFromIndexer, mapQueryToIndexerRoute } from '../lib/indexerClient';
+import { isSubgraphRateLimited, querySubgraph } from '../lib/subgraphClient';
 
 const SUBGRAPH_URL = import.meta.env.VITE_SUBGRAPH_URL;
 
-// Simple in-memory cache (initial state only; each fetch always hits the network)
-const subgraphCache: Record<string, any> = {};
+const subgraphCache: Record<string, unknown> = {};
+const cacheFetchedAt: Record<string, number> = {};
+/** Serve cached sponsor/patient lists without re-fetching on every route change. */
+const CACHE_STALE_MS = 30_000;
 
 export function useSubgraph<T = any>(query: string, variables?: any, options?: { enabled?: boolean }) {
     const enabled = options?.enabled ?? true;
     const variablesKey = useMemo(() => JSON.stringify(variables ?? {}), [variables]);
+    // Callers commonly pass fresh object literals/arrays on every render
+    // (for example `{ sponsor }` or `{ ids }`). Use a content-stable copy so
+    // the fetch effect only reruns when the serialized variables actually
+    // change, not when object identity changes.
+    const stableVariables = useMemo(() => variables ?? {}, [variablesKey]);
     const queryName = query.match(/query\s+([A-Za-z0-9_]+)/)?.[1] ?? 'AnonymousQuery';
     const isPatientQuery = query.includes('query GetPatient');
     const debugPrefix = `[Subgraph:${queryName}]`;
-    const cacheKey = useMemo(() => JSON.stringify({ query, variables: variables ?? {} }), [query, variablesKey]);
+    const cacheKey = useMemo(() => JSON.stringify({ query, variables: stableVariables }), [query, stableVariables]);
     const latestRequestKeyRef = useRef<string | null>(null);
     const [data, setData] = useState<T | null>(() => {
         const cached = subgraphCache[cacheKey];
@@ -21,7 +29,7 @@ export function useSubgraph<T = any>(query: string, variables?: any, options?: {
             delete subgraphCache[cacheKey];
             return null;
         }
-        return cached || null;
+        return (cached as T) || null;
     });
     const [loading, setLoading] = useState(enabled && !data);
     const [error, setError] = useState<Error | null>(null);
@@ -30,7 +38,7 @@ export function useSubgraph<T = any>(query: string, variables?: any, options?: {
         async (isRefresh = false): Promise<T | null> => {
             if (!enabled) {
                 if (isPatientQuery) {
-                    console.debug(`${debugPrefix} skipped:disabled`, { variables });
+                    console.debug(`${debugPrefix} skipped:disabled`, { variables: stableVariables });
                 }
                 latestRequestKeyRef.current = null;
                 setData(null);
@@ -52,9 +60,20 @@ export function useSubgraph<T = any>(query: string, variables?: any, options?: {
                 console.debug(`${debugPrefix} request:start`, {
                     isRefresh,
                     url: SUBGRAPH_URL,
-                    variables,
+                    variables: stableVariables,
                     cacheHit: !!subgraphCache[cacheKey],
                 });
+            }
+
+            const cached = subgraphCache[cacheKey];
+            if (!isRefresh && cached && !isPatientQuery) {
+                const age = Date.now() - (cacheFetchedAt[cacheKey] ?? 0);
+                if (age < CACHE_STALE_MS) {
+                    setData(cached as T);
+                    setLoading(false);
+                    setError(null);
+                    return cached as T;
+                }
             }
 
             try {
@@ -62,85 +81,71 @@ export function useSubgraph<T = any>(query: string, variables?: any, options?: {
                     setLoading(true);
                 }
 
-                const indexerRoute = mapQueryToIndexerRoute(query, variables);
-                if (indexerRoute) {
-                    const indexerData = await fetchFromIndexer<T>(indexerRoute);
-                    if (indexerData != null) {
-                        if (latestRequestKeyRef.current !== cacheKey) {
-                            return null;
+                const indexerRoute = mapQueryToIndexerRoute(query, stableVariables);
+
+                try {
+                    const resultData = await querySubgraph<T>(SUBGRAPH_URL, query, stableVariables);
+                    if (latestRequestKeyRef.current !== cacheKey) {
+                        if (isPatientQuery) {
+                            console.debug(`${debugPrefix} request:ignored-stale`, {
+                                variables: stableVariables,
+                                elapsedMs: Date.now() - start,
+                            });
                         }
-                        subgraphCache[cacheKey] = indexerData;
-                        setData(indexerData);
-                        setError(null);
-                        setLoading(false);
-                        return indexerData;
+                        return null;
                     }
-                }
 
-                const response = await fetch(SUBGRAPH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query, variables }),
-                });
-                if (isPatientQuery) {
-                    console.debug(`${debugPrefix} request:response`, {
-                        status: response.status,
-                        ok: response.ok,
-                        elapsedMs: Date.now() - start,
-                    });
-                }
-
-                const result = await response.json();
-                if (latestRequestKeyRef.current !== cacheKey) {
+                    if (isPatientQuery && resultData && (resultData as { patient?: unknown }).patient == null) {
+                        delete subgraphCache[cacheKey];
+                        delete cacheFetchedAt[cacheKey];
+                        console.info(`${debugPrefix} patient:null — not cached (avoids stale empty profile)`, {
+                            variables: stableVariables,
+                            subgraphQueryPath: getSubgraphQueryPath(SUBGRAPH_URL),
+                        });
+                    } else {
+                        subgraphCache[cacheKey] = resultData;
+                        cacheFetchedAt[cacheKey] = Date.now();
+                    }
+                    setData(resultData);
+                    setError(null);
                     if (isPatientQuery) {
-                        console.debug(`${debugPrefix} request:ignored-stale`, {
-                            variables,
+                        const p = (resultData as { patient?: { id?: string } | null })?.patient;
+                        console.info(`${debugPrefix} request:success`, {
+                            hasPatient: !!p,
+                            patientId: p?.id ?? null,
+                            idMatchesRequested:
+                                p?.id != null && stableVariables?.id != null
+                                    ? String(p.id).toLowerCase() === String(stableVariables.id).toLowerCase()
+                                    : null,
                             elapsedMs: Date.now() - start,
                         });
                     }
-                    return null;
+                    return resultData;
+                } catch (subgraphErr: unknown) {
+                    if (indexerRoute) {
+                        const indexerData = await fetchFromIndexer<T>(indexerRoute, 1500, queryName);
+                        if (indexerData != null && latestRequestKeyRef.current === cacheKey) {
+                            subgraphCache[cacheKey] = indexerData;
+                            cacheFetchedAt[cacheKey] = Date.now();
+                            setData(indexerData);
+                            setError(null);
+                            setLoading(false);
+                            return indexerData;
+                        }
+                    }
+                    throw subgraphErr;
                 }
-
-                if (result.errors) {
-                    if (isPatientQuery) console.error(`${debugPrefix} graphql:error`, result.errors);
-                    throw new Error(result.errors[0].message);
-                }
-
-                // Do not cache "no Patient row yet" — otherwise the Medical Vault stays stuck on a stale
-                // `{ patient: null }` after the subgraph indexes the registration (same cacheKey).
-                if (isPatientQuery && result.data && (result.data as { patient?: unknown }).patient == null) {
-                    delete subgraphCache[cacheKey];
-                    console.info(`${debugPrefix} patient:null — not cached (avoids stale empty profile)`, {
-                        variables,
-                        subgraphQueryPath: getSubgraphQueryPath(SUBGRAPH_URL),
-                    });
-                } else {
-                    subgraphCache[cacheKey] = result.data;
-                }
-                setData(result.data);
-                setError(null);
-                if (isPatientQuery) {
-                    const p = (result.data as { patient?: { id?: string } | null })?.patient;
-                    console.info(`${debugPrefix} request:success`, {
-                        hasPatient: !!p,
-                        patientId: p?.id ?? null,
-                        idMatchesRequested:
-                            p?.id != null && variables?.id != null
-                                ? String(p.id).toLowerCase() === String(variables.id).toLowerCase()
-                                : null,
-                        elapsedMs: Date.now() - start,
-                    });
-                }
-                return result.data as T;
-            } catch (err: any) {
+            } catch (err: unknown) {
                 if (latestRequestKeyRef.current !== cacheKey) {
                     return null;
                 }
-                setError(err);
+                const error = err instanceof Error ? err : new Error(String(err));
+                setError(error);
                 if (isPatientQuery) {
                     console.error(`${debugPrefix} request:failed`, {
-                        message: err?.message ?? String(err),
+                        message: error.message,
                         elapsedMs: Date.now() - start,
+                        rateLimited: isSubgraphRateLimited(),
                     });
                 }
                 return null;
@@ -150,7 +155,7 @@ export function useSubgraph<T = any>(query: string, variables?: any, options?: {
                 }
             }
         },
-        [query, variablesKey, cacheKey, enabled]
+        [query, cacheKey, enabled, queryName, isPatientQuery, debugPrefix, stableVariables]
     );
 
     useEffect(() => {
@@ -171,13 +176,13 @@ export function useSubgraph<T = any>(query: string, variables?: any, options?: {
         }
         const effective = subgraphCache[cacheKey];
         if (effective) {
-            setData(effective);
+            setData(effective as T);
             setLoading(false);
         } else {
             setData(null);
             setLoading(true);
         }
-    }, [cacheKey, enabled]);
+    }, [cacheKey, enabled, isPatientQuery]);
 
     const refetch = useCallback(() => fetchData(true), [fetchData]);
 

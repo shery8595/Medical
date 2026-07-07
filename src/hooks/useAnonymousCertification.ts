@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useWeb3 } from "../lib/Web3Context";
 import { getContractAddressForChain } from "../lib/contracts";
 import { fetchCertificationStatus } from "../lib/certificationStatus";
+import { ETHEREUM_SEPOLIA_CHAIN_ID } from "../lib/zamaChain";
+import { getSepoliaReadOnlyProvider } from "../lib/sepoliaReadOnlyProvider";
 
 export type AnonymousCertificationSubgraph = {
     noirCertified?: boolean;
@@ -22,7 +24,7 @@ export function useAnonymousCertification(
     fheCommitted: boolean;
     loading: boolean;
 } {
-    const { provider, chainId } = useWeb3();
+    const { chainId } = useWeb3();
     const [certified, setCertified] = useState(false);
     const [eligible, setEligible] = useState<boolean | null>(null);
     const [loading, setLoading] = useState(false);
@@ -52,14 +54,13 @@ export function useAnonymousCertification(
             return;
         }
 
-        if (!provider) {
-            setCertified(subgraphCertified);
-            setEligible(subgraphCertified ? subgraphEligible : null);
-            setLoading(false);
-            return;
-        }
-
-        const engineAddress = getContractAddressForChain("EligibilityEngine", chainId ?? undefined);
+        // Anonymous certifications are Sepolia-only; use the read-only fallback
+        // provider instead of the wallet provider so a CORS/429 failure on the
+        // wallet's configured RPC (e.g. rpc.sepolia.org, Privy) can't block the
+        // patient-matches page. chainId from useWeb3 is only used to resolve the
+        // engine address; fall back to Sepolia when unknown.
+        const resolvedChainId = chainId ? Number(chainId) : ETHEREUM_SEPOLIA_CHAIN_ID;
+        const engineAddress = getContractAddressForChain("EligibilityEngine", resolvedChainId);
         if (!engineAddress) {
             setCertified(false);
             setEligible(null);
@@ -70,7 +71,7 @@ export function useAnonymousCertification(
         let cancelled = false;
         setLoading(true);
 
-        fetchCertificationStatus(provider, engineAddress, nullifier, trialId)
+        readCertification(engineAddress, resolvedChainId, nullifier, trialId)
             .then((status) => {
                 if (cancelled) return;
                 setCertified(status.certified);
@@ -92,13 +93,57 @@ export function useAnonymousCertification(
     }, [
         nullifier,
         trialId,
-        provider,
         chainId,
         subgraphCertified,
         subgraphEligible,
     ]);
 
     return { certified, eligible, fheCommitted, loading };
+}
+
+// --- Per-key dedup + short TTL cache -------------------------------------
+// Like documentExists, certification reads fire once per match row. Dedup
+// collapses identical concurrent reads into one request so a busy matches page
+// doesn't exhaust the read-only RPCs.
+
+type CacheEntry = { value: { certified: boolean; eligible: boolean | null }; expires: number };
+const cache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<{ certified: boolean; eligible: boolean | null }>>();
+const CACHE_TTL_MS = 15_000;
+
+function cacheKey(engineAddress: string, chainId: number, nullifier: string, trialId: string): string {
+    return `${chainId}:${engineAddress.toLowerCase()}:${nullifier}:${trialId}`;
+}
+
+async function readCertification(
+    engineAddress: string,
+    chainId: number,
+    nullifier: string,
+    trialId: string
+): Promise<{ certified: boolean; eligible: boolean | null }> {
+    const key = cacheKey(engineAddress, chainId, nullifier, trialId);
+
+    const cachedEntry = cache.get(key);
+    if (cachedEntry && cachedEntry.expires > Date.now()) {
+        return cachedEntry.value;
+    }
+
+    const existing = inFlight.get(key);
+    if (existing) return existing;
+
+    const task = (async () => {
+        try {
+            const provider = getSepoliaReadOnlyProvider(chainId);
+            const status = await fetchCertificationStatus(provider, engineAddress, nullifier, trialId);
+            cache.set(key, { value: status, expires: Date.now() + CACHE_TTL_MS });
+            return status;
+        } finally {
+            inFlight.delete(key);
+        }
+    })();
+
+    inFlight.set(key, task);
+    return task;
 }
 
 /** @deprecated Prefer useAnonymousCertification for eligible + certified. */

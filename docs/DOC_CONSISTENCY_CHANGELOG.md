@@ -128,7 +128,7 @@ npm test                   # 428 passing (default)
 | Workstream | Status | Evidence |
 |------------|--------|----------|
 | **P2 — `FHE.select` payout gating** | Shipped | `SponsorIncentiveVault._gatedRewardUnits`; tests P2-01..04, P5-SELECT-01/02 |
-| **P0.2 — Relayer re-decrypt** | Shipped (defense-in-depth) | `relayer/eligibility-decrypt.mjs`; tests RDV-01..05 |
+| **P0.2 — Relayer re-decrypt** | Shipped (optional, defense-in-depth, not default) | `relayer/eligibility-decrypt.mjs`; tests RDV-01..05, PDV-01..03 |
 | **P5 — Formal / differential** | Shipped (differential fallbacks) | [certora-halmos-results.md](./formal-verification/certora-halmos-results.md); tests P1–P3 PROP, DIFF-03, BIND-01 |
 | **P3.2 — Open finalize** | **Superseded** | HIGH-1 remediation: only `authorizedRelayers` may finalize; docs aligned 2026-07-04 |
 
@@ -137,7 +137,10 @@ npm test                   # 428 passing (default)
 Use this wording consistently across README, SECURITY, VISION, LIGHTPAPER, in-app docs, and audit surfaces:
 
 - **P2 `FHE.select` payout gating (SHIPPED):** Payout integrity is independent of relayer honesty. `FHE.select(eligible, units, 0)` — decrypted payout delta is zero iff decrypted eligibility is false (screening milestone 0 and milestone > 0). Tests: `P5-SELECT-01`, `P5-SELECT-02`, `P2-01`..`P2-04`.
-- **P0.2 relayer re-decrypt (defense-in-depth):** Remains an interim relayer-trust mitigation — relayer user-decrypts staged `finalCt` and ignores client `eligible` before authorizing finalize. It is **not** the payout-integrity anchor; do not describe it as "the structural fix" or "in flight."
+- **P0.2 relayer-assisted decrypt (optional defense-in-depth):** Optional mode when relayer is `permitRecipient` — relayer user-decrypts staged `finalCt`, ignores client `eligible`, and **learns the eligibility bit**. Improves server-side verification but costs relayer visibility. **Not the default.** Production UI uses patient-decrypt (browser). It is **not** the payout-integrity anchor; do not describe it as "the structural fix" or "in flight."
+- **Patient-decrypt (browser) — recommended default:** Patient ephemeral wallet is `permitRecipient`; browser decrypts via Zama SDK; relayer relays finalize only — relayer never sees eligibility bit. Tests: PDV-01..03.
+- **Canonical trust model link:** `Canonical trust model: [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) (in-app: /docs/trust-architecture).` — point readers here first; README § Limitations & Trust Model is a summary that links to this doc.
+- **Canonical relayer-cannot statement:** The relayer cannot steal vault funds, cannot forge eligibility, and can only censor or delay (residual liveness risk, mitigated by P3.1 multi-relayer choice).
 - **Phase 5 formal verification:** Certora/Halmos are **blocked** on fhEVM `FHE.*` types. Differential fallbacks **PASS** on the Hardhat mock network. Evidence: [certora-halmos-results.md](./formal-verification/certora-halmos-results.md).
 - **Milestone > 0:** Ciphertext-gated via `FHE.select` on `anonymousResults` (not plaintext eligibility).
 
@@ -145,7 +148,7 @@ Use this wording consistently across README, SECURITY, VISION, LIGHTPAPER, in-ap
 
 - **Noir–FHE `checkSignatures` binding** — still deferred (Zama SDK exposes KMS proof only via public decrypt, which would re-leak the eligibility bit).
 - **StakingManager formal verification** — not done (EligibilityEngine has Phase 5 differential evidence only).
-- **P3.3 threshold decrypt committee** — deferred until institutional pilot.
+- **P3.3 threshold decrypt committee** — deferred until institutional pilot. Requires M relayer agreement; each co-signing relayer still sees the eligibility bit — does not add confidentiality against relayers.
 - **Not HIPAA-compliant today** — off-chain PHI handling remains out of scope.
 
 ## Link inventory — `certora-halmos-results.md`
@@ -195,6 +198,30 @@ Every index/audit surface should link to [formal-verification/certora-halmos-res
 | `docs/TESTING_GUIDE.md` | Trust-gap & Phase 5 section + canonical counts |
 | `src/pages/docs/testing/testSuiteData.ts` | In-app test catalog + audit traceability rows |
 | `src/lib/docsStats.ts` | `testSuiteDefaultPassing = 428` (369 + trust-gap rows 12–14 + stale-test sweep) |
+
+## Enterprise narrative consistency pass (2026-07-06)
+
+Unified trust story across docs, UI, and pitch surfaces:
+
+| Artifact | Change |
+|----------|--------|
+| `docs/TRUST_ARCHITECTURE.md` | Layered responsibility model + Trust & Assurance Register + compliance roadmap |
+| `docs/GLOSSARY.md` | Canonical terminology (scoped terms) |
+| `docs/JUDGE_BRIEF.md` | 2-page judge/auditor summary |
+| `src/pages/docs/TrustArchitectureDoc.tsx` | In-app trust architecture |
+| `src/pages/docs/GlossaryDoc.tsx` | In-app glossary |
+| `README.md`, `VISION.md`, `PITCH_DECK.md` | Core Protocol lead; rescoped "end-to-end" / "real system" language |
+| `docs/LIGHTPAPER.md` | Stale dishonest-witness line removed; epoch-based key rotation |
+| `docs/HYBRID_STORAGE.md` | Sponsor application Phase 0 section; epoch-based key rotation |
+| `docs/PRODUCTION_READINESS_COMPLIANCE.md` | Phase 0/1/2 roadmap table at top |
+| `docs/RELAYER_TRUST_BOUNDARIES.md` | Trust register summary table |
+| UI components | FHE-encrypted / Semaphore-attested copy; Phase0ScopeBadge; DocumentIpfsConfirmCallout |
+| `src/lib/semaphore.ts` | `assertRegistrationFheBundle` input-validation layer |
+| `relayer/server.js` | `healthDataHash` validation + `deadline` on `/relay/register`; transparency metadata |
+| `test/integration/relayer-registration.test.ts` | REL-REG-02 wrong healthDataHash reverts |
+| `src/pages/docs/JudgeBriefDoc.tsx` | In-app judge brief route `/docs/judge-brief` |
+| `src/components/apply/RelayerStatusPanel.tsx` | `/transparency` governance surface |
+| `test/unit/registration-consistency-client.test.ts` | REG-CONSIST-01 |
 
 ## Verification commands
 

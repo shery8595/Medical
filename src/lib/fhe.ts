@@ -318,6 +318,22 @@ export async function decryptForView(
     return userDecryptOne(contractAddress, toHandleHex(ctHash));
 }
 
+export async function decryptManyForView(
+    ctHashes: Array<bigint | string>,
+    contractAddress: string
+): Promise<ClearValue[]> {
+    const sdk = mainSdkOrThrow();
+    const handles = ctHashes.map(toHandleHex);
+    await sdk.permits.grantPermit([contractAddress as Address]);
+    const values = await sdk.decryption.decryptValues(
+        handles.map((handle) => ({
+            encryptedValue: handle,
+            contractAddress: contractAddress as Address,
+        }))
+    );
+    return handles.map((handle) => values[handle]!);
+}
+
 /** User-decrypt with a Semaphore-derived ephemeral signer (isolated SDK, no main-session swap). */
 export async function decryptForViewWithEphemeral(
     ephemeralSigner: Signer,

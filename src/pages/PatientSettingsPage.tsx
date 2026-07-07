@@ -163,7 +163,7 @@ export function PatientSettingsPage() {
               to="/docs/security-model"
               icon={Globe}
               label="Security model"
-              description="How MedVault handles encryption, consent, and zero-knowledge proofs."
+              description="How MedVault handles FHE encryption, consent, and identity attestation."
             />
             <SettingsRow
               to={`${ETH_SEPOLIA_EXPLORER}/address/${account}`}

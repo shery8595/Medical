@@ -76,7 +76,7 @@ const steps = [
 
 const trustSignals = [
   "Health-data aware",
-  "Zero-Knowledge Proofs",
+  "Semaphore attestation",
   "Patient-Owned Keys",
   "256-bit Encryption",
   "Open Source",
@@ -117,7 +117,7 @@ const infraFlow = ["Wallet Auth", "Consent Policy", "Encrypted Match", "ZK Proof
 
 const trustItems = [
   { label: "Health-data aware", Icon: Shield },
-  { label: "Zero-Knowledge Proofs", Icon: Eye },
+  { label: "FHE Input Proofs", Icon: Eye },
   { label: "Patient-Owned Keys", Icon: KeyRound },
   { label: "256-bit Encryption", Icon: Lock },
   { label: "Open Source", Icon: Globe },
@@ -929,7 +929,7 @@ function PoweredByZamaSection() {
         >
           <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/25 bg-teal-500/[0.07] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.22em] text-[#8fd4c8] [box-shadow:inset_0_1px_0_rgba(255,255,255,0.05)]">
             <Server className="h-2.5 w-2.5" strokeWidth={1.5} />
-            Confidential compute layer
+            Core Protocol — Zama fhEVM
           </span>
           <h2
             id="zama-fhe-heading"
@@ -1105,7 +1105,7 @@ export function LandingPage() {
                 className="inline-flex w-fit items-center gap-2 rounded-full border border-[#bcc9c6]/50 bg-white/70 px-3 py-1 text-[11px] font-medium tracking-[0.18em] text-[#3d4947]"
               >
                 <span className="h-2 w-2 rounded-full bg-[#6bd8cb]" />
-                ENCRYPTED • CONSENT-FIRST • PATIENT-OWNED
+                CORE PROTOCOL · FHE CLINICAL MATCHING
               </motion.p>
 
               <motion.h1
@@ -1114,10 +1114,9 @@ export function LandingPage() {
                 transition={transition}
                 className="mt-5 text-4xl font-bold tracking-tight text-[#191c1e] sm:text-5xl md:text-6xl lg:text-[64px] lg:leading-[1.05]"
               >
-                Your Health Data.
+                Private clinical-trial matching
                 <br />
-                Your Keys. Your{" "}
-                <span className="text-[#008378]">Control.</span>
+                on <span className="text-[#008378]">encrypted data.</span>
               </motion.h1>
 
               <motion.p
@@ -1125,7 +1124,9 @@ export function LandingPage() {
                 transition={transition}
                 className="mt-5 max-w-xl text-lg leading-relaxed text-[#3d4947]"
               >
-                A decentralized medical record system where patients own their data, doctors access what you approve, and nothing is stored without your consent.
+                Patients encrypt vitals; sponsors encrypt trial criteria;{" "}
+                <code className="text-sm font-semibold text-[#00685f]">EligibilityEngine</code> matches
+                homomorphically on Ethereum Sepolia — validators and indexers never see plaintext PHI during on-chain scoring.
               </motion.p>
 
               <motion.div
@@ -1424,6 +1425,22 @@ export function LandingPage() {
 
       <PoweredByZamaSection />
 
+      <section className="bg-white px-4 pt-16 sm:px-8" aria-labelledby="platform-services-heading">
+        <div className="mx-auto max-w-screen-xl">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">Platform Services</p>
+          <h2
+            id="platform-services-heading"
+            className="mt-3 max-w-2xl text-2xl font-bold tracking-tight text-[#191c1e] sm:text-3xl"
+          >
+            Extended capabilities around the core FHE matching flow
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#3d4947]">
+            MCP tools, AI criteria extraction, Chainlink CRE automation, confidential staking, and mobile SDK — deployability
+            layers, not the core innovation claim.
+          </p>
+        </div>
+      </section>
+
       <McpLandingSection />
 
       {/* ── Stats — hairline-grid strip ───────────────────────────────────── */}
@@ -1451,12 +1468,12 @@ export function LandingPage() {
             variants={fadeUp}
             transition={transition}
           >
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">Infrastructure</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00685f]">Platform Services</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#191c1e] sm:text-4xl">
-              Built like clinical infrastructure, not a demo app
+              Deployment infrastructure around the core protocol
             </h2>
             <p className="mt-4 max-w-2xl leading-relaxed text-[#3d4947]">
-              Each request moves through layered controls, encrypted processing, and auditability designed for healthcare-grade trust.
+              Relayer network, audit logging, confidential rewards, and consent controls — secondary to homomorphic eligibility matching.
             </p>
           </motion.div>
 

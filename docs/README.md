@@ -43,9 +43,12 @@ MedVault maintains **two documentation layers**. Each topic has **one canonical 
 
 | Document | Description |
 |----------|-------------|
+| [JUDGE_BRIEF.md](./JUDGE_BRIEF.md) | 2-page judge/auditor technical summary |
+| [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) | Layered responsibility model + Trust & Assurance Register |
+| [GLOSSARY.md](./GLOSSARY.md) | Canonical terminology (scope definitions) |
 | [LIGHTPAPER.md](./LIGHTPAPER.md) | Judge/investor lightpaper — problem, FHE core, roadmap, business model |
 | [PITCH_DECK.md](./PITCH_DECK.md) | 10–15 slide pitch outline (render externally) |
-| [FHE_AUDIT_README.md](./FHE_AUDIT_README.md) | FHE primitive map for Zama Builder Track judges |
+| [FHE_AUDIT_README.md](./FHE_AUDIT_README.md) | **Start here for technical reviewers** — FHE primitive map for Zama Builder Track judges |
 | [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md) | Docker Compose one-command setup + legacy `npm run dev` |
 | [DOCKER.md](./DOCKER.md) | Docker architecture, profiles, production build, troubleshooting |
 | [../README.md](../README.md) | Project overview, capabilities, environment variables |
@@ -55,6 +58,9 @@ MedVault maintains **two documentation layers**. Each topic has **one canonical 
 
 | Document | Description |
 |----------|-------------|
+| [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) | Layered trust model + assurance register + compliance roadmap |
+| [GLOSSARY.md](./GLOSSARY.md) | Canonical terminology |
+| [JUDGE_BRIEF.md](./JUDGE_BRIEF.md) | Judge/auditor 2-page summary |
 | [../SECURITY.md](../SECURITY.md) | Noir–FHE gap, remediation mitigations (HIGH-1 … INFO), operational guidance |
 | [MEDIUM_FINDINGS_CLOSEOUT.md](./MEDIUM_FINDINGS_CLOSEOUT.md) | Closeout for 3 open Medium threat-model rows (auditor, silent reject, RegConsistency) |
 | [REGCONSISTENCY_B_FINDING.md](./REGCONSISTENCY_B_FINDING.md) | P5 SDK investigation — registration consistency binding **not available**; RegConsistency-A blocked |
@@ -99,7 +105,7 @@ MedVault maintains **two documentation layers**. Each topic has **one canonical 
 
 | Document | Description |
 |----------|-------------|
-| [../SECURITY.md](../SECURITY.md) | Plaintext trial criteria Hardhat-only; forward-only revocation; no public sufficiency bit. Noir-FHE binding deferred (Zama SDK tooling gap). |
+| [SECURITY.md](../SECURITY.md) | Plaintext trial criteria Hardhat-only; epoch-based key rotation; no public sufficiency bit. Noir-FHE binding deferred (Zama SDK tooling gap). |
 | [../internal-docs/threat-model.md](../internal-docs/threat-model.md) | STRIDE threat model (maps to contract/indexer findings) |
 | [../internal-docs/zama-integration.md](../internal-docs/zama-integration.md) | Zama FHE + ERC-7984 integrator guide |
 

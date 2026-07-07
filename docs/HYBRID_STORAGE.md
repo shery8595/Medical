@@ -59,14 +59,25 @@ Hybrid documents use **client-generated AES-256-GCM keys** that never appear on-
 - [ ] Owner `setUnpinIndexer` for production indexer wallet; verify `LegacyCidUnpinAttested` events
 - [ ] Document sponsor off-chain plaintext retention in trial agreements (see [REGULATORY_POSTURE.md](./REGULATORY_POSTURE.md))
 
-## Known limitation (forward-only revocation)
+## Known limitation (epoch-based key rotation)
 
-fhEVM `FHE.allow` is **irreversible** — sponsors who already decrypted the AES key retain it off-chain. Mitigation is **forward-only**:
+fhEVM `FHE.allow` is **irreversible** — sponsors who already decrypted the AES key retain it off-chain. Mitigation is **epoch-based key rotation** (industry-standard content-key model):
 
 1. **Atomic `revokeAccess`** bumps `documentEpoch` and rotates CID + FHE key; sponsor `getKeyForSponsor` / `getDocumentRecord` reverts when `sponsorGrantEpoch != documentEpoch` (or pull not completed).
 2. Emits **`DocumentLegacyHandleRevoked`** with `oldCid` for indexer unpin + **`attestLegacyCidUnpinned`** (P7). fhEVM ACL on prior handles remains irrevocable.
 3. **`rotateDocument`** / **`updateDocumentKey`** are **deprecated** — revert `Use revokeAccess`.
 4. Already-decrypted IPFS payloads cannot be cryptographically un-decrypted; unpinned CIDs may still exist on other IPFS nodes.
+
+## Sponsor application documents (Phase 0)
+
+Sponsor organization proofs use a **Phase 0** transport model (see [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) compliance roadmap):
+
+1. Browser AES-256-GCM encrypts PDF/video.
+2. Ciphertext is pinned to **public IPFS** (Pinata).
+3. AES key is held by the **authorized relayer** for admin decrypt only (`sponsorApplicationStore` in `relayer/server.js`).
+4. Admin reviews via registry-owner-gated relayer endpoint.
+
+**Phase 1 roadmap:** upgrade sponsor applications to the same FHE-wrapped-key + epoch-based key rotation model used for patient hybrid documents.
 
 ## Frontend entry points
 

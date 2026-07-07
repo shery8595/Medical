@@ -90,9 +90,9 @@ Clinical trials need **computation**, not just a vault.
 
 - Patients decrypt match outcomes **locally**
 
-- Sponsors never see plaintext PHI
+- Sponsors never see plaintext PHI **during on-chain scoring** (consent-gated document/profile access is a separate, patient-controlled flow)
 
-- Validators never see plaintext PHI
+- Validators never see plaintext PHI during on-chain scoring
 
 
 
@@ -172,7 +172,7 @@ flowchart LR
 
 
 
-MedVault is the most socially significant **end-to-end** fhEVM clinical-research application — breadth proves the matching story is production-shaped, not the pitch opener.
+MedVault is the **reference fhEVM architecture for encrypted clinical-trial matching** — platform breadth proves the core is production-shaped, not the pitch opener.
 
 
 
@@ -186,11 +186,13 @@ MedVault is the most socially significant **end-to-end** fhEVM clinical-research
 
 | **Operations** | Audit trail, milestone rewards, trial finalization |
 
+| **Platform Services** *(secondary)* | MCP sponsor tools, AI PDF criteria extraction, Chainlink CRE trial finalization, Capacitor Android wrapper, confidential cETH staking |
+
 | **Verification** | 491 tests, dual relayer bounds, [FHE audit map](./FHE_AUDIT_README.md) |
 
 
 
-Extensions (Semaphore, Noir, Chainlink CRE, subgraph, relayer) support the core matching workflow — they are not the opening hook.
+See [JUDGE_BRIEF.md](./JUDGE_BRIEF.md) for the 2-page technical summary.
 
 
 
@@ -198,7 +200,7 @@ Extensions (Semaphore, Noir, Chainlink CRE, subgraph, relayer) support the core 
 
 
 
-## Slide 9 — End-to-end differentiation
+## Slide 9 — Workflow differentiation
 
 
 
@@ -214,9 +216,9 @@ Extensions (Semaphore, Noir, Chainlink CRE, subgraph, relayer) support the core 
 
 | Judge verification | [FHE_AUDIT_README.md](./FHE_AUDIT_README.md) primitive map |
 
-| Relayer trust bounds | [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) — cannot steal / cannot forge / can only censor |
+| Relayer trust bounds | [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) — cannot steal vault funds, cannot forge eligibility, can only censor or delay · **Canonical trust model:** [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) |
 
-| Multi-relayer (P3.1) | Dual Railway relayers + patient picker; P3.3 threshold spec (deferred) |
+| Multi-relayer (P3.1) | Dual Railway relayers + patient picker; default patient-decrypt (browser); P3.3 threshold spec (deferred — agreement, not confidentiality) |
 
 | Test depth | 491 default / ~2,028 registered · 17 production contracts |
 
@@ -262,7 +264,7 @@ Extensions (Semaphore, Noir, Chainlink CRE, subgraph, relayer) support the core 
 
 2. Apply wizard shows two relayers green; switch relayer and submit anonymous apply
 
-3. `GET /transparency` on each relayer — `committeeMode: P3.1-dual-independent`, metrics counters
+3. `GET /transparency` on each relayer — `committeeMode: P3.1-dual-independent`, `defaultDecryptPath` (patient-decrypt browser), metrics counters. Do **not** demo P0.2 relayer-assisted decrypt unless explaining the visibility tradeoff.
 
 4. Run `npx hardhat test test/unit/relayer-adversarial.test.ts` — REL-EQV/REP/FF/STALE
 

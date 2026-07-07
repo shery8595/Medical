@@ -1,7 +1,7 @@
 import { FileCheck, Lock, Shield } from "lucide-react";
 
 const FEATURES = [
-  { icon: Shield,    title: "zk-Proofs Active",   detail: "Zero-knowledge verification" },
+  { icon: Shield,    title: "Semaphore attested",   detail: "Identity attestation on-chain" },
   { icon: FileCheck, title: "Immutable Records",   detail: "Tamper-proof on blockchain" },
   { icon: Lock,      title: "Instant Revocation",  detail: "Access revoked immediately" },
 ] as const;
@@ -33,7 +33,7 @@ export function ConsentSecureBanner() {
               Your data. Your control.
             </h2>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-400">
-              All consents are encrypted on-chain using zero-knowledge proofs.
+              All consents are encrypted on-chain; consent state is Semaphore-attested.
               You can grant, review, or revoke access anytime.
             </p>
           </div>

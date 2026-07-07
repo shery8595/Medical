@@ -177,6 +177,8 @@
     "deploy:finish-upgrade:sepolia": "hardhat run scripts/finish-attestation-upgrade-sepolia.ts --network sepolia",
     "deploy:wiring:sepolia": "hardhat run scripts/finish-wiring.ts --network sepolia --no-compile",
     "deploy:apply-wiring:sepolia": "hardhat run scripts/apply-pending-wiring.ts --network sepolia --no-compile",
+    "deploy:schedule-dal:sepolia": "hardhat run scripts/schedule-dal-wiring.ts --network sepolia --no-compile",
+    "deploy:check-pending:sepolia": "hardhat run scripts/check-pending-wiring.ts --network sepolia --no-compile",
     "deploy:check-wiring:sepolia": "hardhat run scripts/check-wiring-status.ts --network sepolia",
     "deploy:chainlink-forwarder:sepolia": "hardhat run scripts/set-chainlink-forwarder.ts --network sepolia",
     "deploy:cre-receiver:sepolia": "hardhat run scripts/deploy-cre-receiver.ts --network sepolia",

@@ -90,7 +90,9 @@ export function semaphoreProofFor(
     return buildMockSemaphoreProof(trialId, nullifier, commitment, permitRecipient);
 }
 
-/** Stage anonymous apply via MedVaultRegistry (Semaphore path). */
+/** Stage anonymous apply via MedVaultRegistry (Semaphore path).
+ *  @param permitRecipient Patient ephemeral (default, recommended) or relayer wallet (P0.2 optional — relayer sees eligibility bit).
+ */
 export async function stageSemaphoreApply(
     stack: MedVaultStack,
     trialId: bigint,

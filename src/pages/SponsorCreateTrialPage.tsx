@@ -35,6 +35,7 @@ import { useSponsorVerification } from "../hooks/useSponsorVerification";
 import {
   extractCriteriaFromProtocolPdf,
   isAiServiceConfigured,
+  checkAiServiceHealth,
   type RedactionReport,
 } from "../lib/aiServiceClient";
 
@@ -53,7 +54,7 @@ export function SponsorCreateTrialPage() {
   const { account, connect, isConnecting } = useWeb3();
   const { isVerified, isLoading: verifyLoading, isAdmin } = useSponsorVerification();
   const [step, setStep] = useState(1);
-  const { status, setStatus, submitTrial } = useSponsorTrialCreation();
+  const { status, setStatus, submitTrial, isSubmitting } = useSponsorTrialCreation();
   const canActAsSponsor = isVerified || isAdmin;
   const blockedFromCreate = Boolean(account && !verifyLoading && !canActAsSponsor);
   const [formData, setFormData] = useState({
@@ -88,9 +89,25 @@ export function SponsorCreateTrialPage() {
   const [redactionAcknowledged, setRedactionAcknowledged] = useState(false);
   const [aiExtracting, setAiExtracting] = useState(false);
   const [aiExtractError, setAiExtractError] = useState<string | null>(null);
+  const [aiServiceDown, setAiServiceDown] = useState<string | null>(null);
   const [redactionBannerDismissed, setRedactionBannerDismissed] = useState(false);
   const protocolFileRef = useRef<HTMLInputElement>(null);
   const aiConfigured = isAiServiceConfigured();
+
+  useEffect(() => {
+    if (!aiConfigured) {
+      setAiServiceDown(null);
+      return;
+    }
+    let cancelled = false;
+    void checkAiServiceHealth().then((health) => {
+      if (cancelled) return;
+      setAiServiceDown(health.ok ? null : health.error ?? "AI service unavailable");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [aiConfigured]);
 
   const nextStep = () => setStep(step + 1);
   const prevStep = () => setStep(step - 1);
@@ -113,15 +130,13 @@ export function SponsorCreateTrialPage() {
   }, [formData.duration, formData.durationUnit]);
 
   const handleSubmit = async () => {
-    if (!formData.name) {
-      setStatus("Error: Trial name is required.");
-      setStep(1);
+    if (!formData.name.trim()) {
+      setStatus("Error: Trial name is required before creating the protocol.");
       return;
     }
 
     if (redactionReport && redactionReport.tokensRedacted > 0 && !redactionAcknowledged) {
       setStatus("Error: Acknowledge PHI redaction before submitting.");
-      setStep(4);
       return;
     }
 
@@ -138,6 +153,10 @@ export function SponsorCreateTrialPage() {
   };
 
   const handleNext = () => {
+    if (step === 1 && !formData.name.trim()) {
+      setStatus("Error: Enter a trial name before continuing.");
+      return;
+    }
     if (step === 3 && usePhasedPayouts) {
       const totalWeight = milestones.reduce((acc, curr) => acc + curr.weight, 0);
       if (totalWeight !== 10000) {
@@ -154,6 +173,10 @@ export function SponsorCreateTrialPage() {
   };
 
   const handleProtocolPdfUpload = async (file: File) => {
+    if (!formData.name.trim()) {
+      setAiExtractError("Enter a trial name above before uploading a protocol PDF.");
+      return;
+    }
     setAiExtracting(true);
     setAiExtractError(null);
     setRedactionAcknowledged(false);
@@ -240,8 +263,14 @@ export function SponsorCreateTrialPage() {
           <div className="min-w-0 space-y-2 text-sm">
             <p className="font-semibold text-amber-950">Verified sponsor required</p>
             <p className="leading-relaxed text-amber-900/90">
-              Trial creation is restricted to wallets on the SponsorRegistry allowlist. Connect with an approved sponsor
-              wallet, or ask a protocol admin to add this address.
+              Trial creation is restricted to wallets on the SponsorRegistry allowlist.{" "}
+              <Link
+                to="/sponsor/verification"
+                className="font-semibold text-amber-950 underline decoration-amber-700/50 underline-offset-2 hover:text-amber-900"
+              >
+                Register your sponsor wallet
+              </Link>{" "}
+              or ask a protocol admin to approve your address.
             </p>
             {isAdmin && (
               <Link
@@ -396,6 +425,11 @@ export function SponsorCreateTrialPage() {
                       {!aiConfigured && (
                         <p className="text-[11px] text-amber-800 text-right max-w-[220px]">
                           Set <code>VITE_AI_SERVICE_URL</code> to enable
+                        </p>
+                      )}
+                      {aiConfigured && aiServiceDown && (
+                        <p className="text-[11px] text-amber-800 text-right max-w-[260px]" role="alert">
+                          {aiServiceDown}
                         </p>
                       )}
                     </div>
@@ -738,20 +772,19 @@ export function SponsorCreateTrialPage() {
                     underlying health fields.
                   </p>
                 </div>
+                <div className="space-y-2">
+                  <label className={labelClass}>Trial name</label>
+                  <Input
+                    placeholder="e.g. Phase 2 mRNA immune response"
+                    className={cn(inputLg, !formData.name.trim() && "border-amber-300 ring-1 ring-amber-200")}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                  {!formData.name.trim() && (
+                    <p className="text-xs text-amber-800">Required to create the protocol on-chain.</p>
+                  )}
+                </div>
                 <CriteriaBuilder criteria={criteria} onChange={setCriteria} />
-                {status && (
-                  <div
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium",
-                      status.startsWith("Error")
-                        ? "border-rose-200 bg-rose-50 text-rose-900"
-                        : "border-teal-200 bg-teal-50 text-teal-900",
-                    )}
-                  >
-                    <AlertCircle className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    {status}
-                  </div>
-                )}
                 {!account && (
                   <Button
                     onClick={connect}
@@ -765,6 +798,21 @@ export function SponsorCreateTrialPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {status && (
+            <div
+              className={cn(
+                "mt-8 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium",
+                status.startsWith("Error")
+                  ? "border-rose-200 bg-rose-50 text-rose-900"
+                  : "border-teal-200 bg-teal-50 text-teal-900",
+              )}
+              role={status.startsWith("Error") ? "alert" : "status"}
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" strokeWidth={2} />
+              {status}
+            </div>
+          )}
 
           <div className="mt-10 flex flex-col gap-4 border-t border-slate-200/80 pt-8 sm:flex-row sm:items-center sm:justify-between">
             <Button
@@ -785,19 +833,37 @@ export function SponsorCreateTrialPage() {
               </Button>
             ) : (
               <Button
-                onClick={handleSubmit}
-                disabled={!account || blockedFromCreate || submitBlockedByRedaction}
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={
+                  !account ||
+                  blockedFromCreate ||
+                  submitBlockedByRedaction ||
+                  isSubmitting ||
+                  !formData.name.trim()
+                }
                 title={
-                  submitBlockedByRedaction
-                    ? "Acknowledge PHI redaction before submitting"
-                    : blockedFromCreate
-                      ? "Wallet must be allowlisted on Sponsor Registry or be the registry owner"
-                      : undefined
+                  !formData.name.trim()
+                    ? "Enter a trial name on this step"
+                    : submitBlockedByRedaction
+                      ? "Acknowledge PHI redaction before submitting"
+                      : blockedFromCreate
+                        ? "Wallet must be allowlisted on Sponsor Registry or be the registry owner"
+                        : undefined
                 }
                 className="order-1 gap-2 rounded-xl border border-emerald-700 bg-emerald-600 px-6 font-semibold text-white shadow-none hover:bg-emerald-700 disabled:opacity-50 sm:order-2 sm:ml-auto"
               >
-                Create protocol
-                <ShieldIcon className="h-4 w-4" strokeWidth={2} />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating protocol…
+                  </>
+                ) : (
+                  <>
+                    Create protocol
+                    <ShieldIcon className="h-4 w-4" strokeWidth={2} />
+                  </>
+                )}
               </Button>
             )}
           </div>

@@ -355,6 +355,7 @@ async function main() {
   ok(`Eligibility staged — finalCt handle ${finalCt} — ${txLink(stageReceipt.hash)}`);
 
   step(8, "Decrypt eligibility result (local FHE)");
+  ok("Decrypt path: patient-decrypt (browser/wallet) — relayer never sees the eligibility bit");
   try {
     const handleHex = ethers.hexlify(finalCt);
     await fhevm.generateKeypair();

@@ -314,7 +314,7 @@ const EncryptionPipelineDiagram = () => {
                 <div className="mt-6 flex items-center gap-3 p-3 rounded-xl bg-rose-50 border border-rose-200/50">
                     <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
                     <p className="text-xs text-rose-700 m-0 font-medium">
-                        <strong>Zero Plaintext Exposure:</strong> Raw values exist only in browser memory for milliseconds. After encryption, plaintext is discarded. The blockchain never sees unencrypted data.
+                        <strong>Zero Plaintext Exposure:</strong> Raw PHI values exist only in browser memory for milliseconds. After encryption, plaintext is discarded. PHI fields remain FHE-protected on-chain; trial metadata, nullifiers, and wallet addresses are public by design.
                     </p>
                 </div>
             </div>
@@ -812,7 +812,7 @@ export function IntroductionDoc() {
                         { id: "S4", title: "Operations", desc: "User workflows, private yield staking, deployment, timelock wiring, and release notes.", color: "amber", links: [{ label: "Workflows", href: "/docs/guides" }, { label: "Staking", href: "/docs/staking" }, { label: "Deploy", href: "/docs/deployment" }, { label: "Timelock", href: "/docs/timelock-wiring" }, { label: "Changelog", href: "/docs/changelog" }] },
                         { id: "S7", title: "MCP & SDK", desc: "TypeScript SDK for integrators plus local MCP for Cursor, Codex, and sponsor automation — not hosted in production.", color: "cyan", links: [{ label: "SDK", href: "/docs/mcp/sdk" }, { label: "MCP", href: "/docs/mcp" }, { label: "Setup", href: "/docs/mcp/setup" }, { label: "Tools", href: "/docs/mcp/tools" }] },
                         { id: "S6", title: "Tests & verification", desc: `${REPO_STATS.testSuiteDefaultPassing} Hardhat cases: unit, integration, timelock wiring (TL-*), IERC7984 (CET-13/14), Zama FHE mocks, matrix IDs, and CI.`, color: "emerald", links: [{ label: "Overview", href: "/docs/testing" }, { label: "Matrix", href: "/docs/testing/matrix" }, { label: "Fixtures", href: "/docs/testing/infrastructure" }, { label: "CI", href: "/docs/testing/ci" }] },
-                        { id: "S5", title: "Security & Compliance", desc: "Threat model, FHE security guarantees, HIPAA/GDPR compliance, and immutable audit trail.", color: "rose", links: [{ label: "Security Model", href: "/docs/security-model" }, { label: "Compliance", href: "/docs/compliance" }, { label: "FAQ", href: "/docs/faq" }] },
+                        { id: "S5", title: "Security & Compliance", desc: "Canonical trust model, threat analysis, relayer boundaries, compliance posture, and judge brief.", color: "rose", links: [{ label: "Trust architecture", href: "/docs/trust-architecture" }, { label: "Security model", href: "/docs/security-model" }, { label: "Relayer boundaries", href: "/docs/relayer-trust-boundaries" }, { label: "P3.3 threshold", href: "/docs/p3-3-threshold-attestation" }, { label: "Glossary", href: "/docs/glossary" }, { label: "Judge brief", href: "/docs/judge-brief" }, { label: "Compliance", href: "/docs/compliance" }, { label: "FAQ", href: "/docs/faq" }] },
                     ].map(section => (
                         <div key={section.id} className="p-5 border border-slate-200 rounded-2xl group hover:bg-slate-50 transition-colors">
                             <div className="flex items-center gap-4 mb-3">

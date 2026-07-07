@@ -71,6 +71,19 @@ export function coerceEligibleBit(value) {
 }
 
 /**
+ * P0.2 relayer-assisted decrypt requires explicit opt-in — relayer learns eligibility bit.
+ * @param {{ relayerIsPermitHolder: boolean, acknowledged?: boolean }} params
+ */
+export function assertRelayerVisibilityAcknowledged({ relayerIsPermitHolder, acknowledged }) {
+    if (relayerIsPermitHolder && !acknowledged) {
+        throw Object.assign(
+            new Error("Relayer-assisted decrypt (P0.2) requires explicit acknowledgeRelayerVisibility=true"),
+            { code: "RELAYER_VISIBILITY_NOT_ACKNOWLEDGED" }
+        );
+    }
+}
+
+/**
  * Resolve staged finalCt from in-memory stage cache or Noir public input index 5.
  * @param {{ nullifier: bigint | string | number, trialId: bigint | string | number, publicInputs?: string[] }} params
  */

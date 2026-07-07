@@ -44,7 +44,7 @@ const steps = [
     title: "Find & apply",
     persona: "Dr. Chen's trial criteria",
     detail:
-      "EligibilityEngine compares Alex's encrypted profile against Dr. Chen's encrypted inclusion bounds homomorphically. Sponsors never see Alex's vitals.",
+      "EligibilityEngine compares Alex's encrypted profile against Dr. Chen's encrypted inclusion bounds homomorphically — sponsors do not see Alex's vitals during on-chain scoring.",
     icon: Telescope,
     tint: "indigo",
     to: "/patient/find-trials",

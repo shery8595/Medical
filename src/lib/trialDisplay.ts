@@ -25,7 +25,7 @@ export function trialDiscoverDescription(trial: Trial): string {
   const loc = trial.location?.trim() || "Multiple sites";
   const age = `Ages ${trial.minAge}–${trial.maxAge}`;
   const focus = trial.requiresDiabetes ? " Criteria include diabetes-related markers." : "";
-  return `${age}. Recruiting in ${loc}.${focus} Eligibility is evaluated with encrypted, zero-knowledge proofs.`.trim();
+  return `${age}. Recruiting in ${loc}.${focus} Eligibility is evaluated with FHE-encrypted matching and Semaphore identity attestation.`.trim();
 }
 
 export function formatPhaseBadge(trial: Trial): string {

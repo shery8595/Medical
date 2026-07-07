@@ -17,14 +17,14 @@ MedVault is an fhEVM clinical-trial matching reference architecture on Ethereum 
 |-------|------------|----------|
 | **A** | `EligibilityEngine`, `MedVaultRegistry` finalize, `SponsorIncentiveVault` FHE.select gating, `EncryptedConsentGate` | **Highest** |
 | **B** | `ConfidentialETH7984`, vault accounting, withdrawal staging | High |
-| **C** | Relayer re-decrypt finalize, Noir circuit public inputs, Honk verifier alignment | Medium |
+| **C** | Optional P0.2 relayer-assisted re-decrypt finalize (not default), Noir circuit public inputs, Honk verifier alignment | Medium |
 
 ## Internal pre-audit mitigations (already shipped)
 
 | Finding family | Mitigation | Verification |
 |----------------|------------|--------------|
-| Noir–FHE integrity gap (forged `eligible` witness) | P0.2 relayer re-decrypt (defense-in-depth); **P2 `FHE.select` ciphertext gating** (shipped) | `test/integration/relayer-decrypt-verify.test.ts`, `test/unit/sponsor-incentive-vault-payout.test.ts`, `test/unit/formal-eligibility-properties.test.ts`, `test/unit/encrypted-criteria.test.ts` (DIFF-03) |
-| Trusted relayer TCB | P0.2 defense-in-depth + P3.1 multi-relayer + REL-* adversarial tests; P3.3 threshold spec (deferred); P2 payout gating shipped | [relayer/README.md](../relayer/README.md), [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) |
+| Noir–FHE integrity gap (forged `eligible` witness) | Default patient-decrypt (browser); optional P0.2 relayer-assisted re-decrypt (defense-in-depth, not default); **P2 `FHE.select` ciphertext gating** (shipped) | `test/integration/relayer-decrypt-verify.test.ts`, `test/integration/relayer-decrypt-visibility.test.ts`, `test/unit/sponsor-incentive-vault-payout.test.ts`, `test/unit/formal-eligibility-properties.test.ts`, `test/unit/encrypted-criteria.test.ts` (DIFF-03) |
+| Trusted relayer TCB | Default patient-decrypt (browser) + P3.1 multi-relayer + REL-* / PDV-* adversarial tests; optional P0.2 relayer-assisted (visibility tradeoff); P3.3 threshold spec (deferred — agreement, not confidentiality); P2 payout gating shipped | [relayer/README.md](../relayer/README.md), [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) |
 | AI protocol PHI leakage | Redaction before every LLM call; no-retention policy | `ai-service/src/redaction.ts`, `ai-service/src/retention.ts` |
 | Indexer data exposure | Bearer auth on data routes (`INDEXER_API_SECRET`) | [indexer/README.md](../indexer/README.md) |
 | Sponsor incentive accounting | CRIT-2 / HIGH-3 remediations | `test/unit/remediation-vuln-fixes.test.ts` |

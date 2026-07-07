@@ -3,6 +3,8 @@
  * CI-safe: no live LLM calls; tests redaction, schema validation, heuristic extraction, NER fallback.
  */
 import { expect } from "chai";
+import fs from "node:fs";
+import path from "node:path";
 import {
   redactProtocolRegexOnly,
   redactProtocol,
@@ -166,6 +168,34 @@ describe("AI criteria + PHI redaction (Plan 07)", () => {
         redactionReport: { tokensRedacted: number };
       };
       expect(body.criteria.minAge).to.equal(21);
+      expect(body.redactionReport.tokensRedacted).to.be.greaterThan(0);
+    } finally {
+      server.close();
+    }
+  });
+
+  it("POST /ai/extract-criteria accepts sponsor demo protocol PDF upload", async () => {
+    const fixturePath = path.join(process.cwd(), "fixtures", "sponsor-medvault-demo-protocol.pdf");
+    const pdfBytes = fs.readFileSync(fixturePath);
+    const app = createAiServiceApp(mockAiConfig());
+    const { server, url } = await listen(app);
+    try {
+      const form = new FormData();
+      form.append(
+        "protocol",
+        new Blob([pdfBytes], { type: "application/pdf" }),
+        "sponsor-medvault-demo-protocol.pdf"
+      );
+      const res = await fetch(`${url}/ai/extract-criteria`, { method: "POST", body: form });
+      const raw = await res.text();
+      expect(res.ok).to.equal(true, raw);
+      const body = JSON.parse(raw) as {
+        criteria: { minAge: number; maxAge: number; genderRequirement: number };
+        redactionReport: { tokensRedacted: number };
+      };
+      expect(body.criteria.minAge).to.equal(25);
+      expect(body.criteria.maxAge).to.equal(60);
+      expect(body.criteria.genderRequirement).to.equal(2);
       expect(body.redactionReport.tokensRedacted).to.be.greaterThan(0);
     } finally {
       server.close();

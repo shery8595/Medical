@@ -194,6 +194,28 @@ export async function ensureCethContractAuth(
 ): Promise<void> {
     const c = cETH as ethers.Contract;
     const label = `ConfidentialETH ${authorize ? "authorize" : "deauthorize"} ${contract.slice(0, 10)}…`;
+
+    const current = await c.authorizedContracts(contract);
+    if (current === authorize) return;
+
+    const eta = await c.contractAuthChangeEta(contract);
+    const pending = await c.pendingContractAuth(contract);
+    const block = await ethers.provider.getBlock("latest");
+    const now = BigInt(block?.timestamp ?? Math.floor(Date.now() / 1000));
+
+    if (eta > 0n) {
+        if (now >= eta && pending === authorize) {
+            await (await c.applyContractAuth(contract)).wait();
+            console.log(`✓ ${label}`);
+            return;
+        }
+        if (now < eta) {
+            const waitH = Number(eta - now) / 3600;
+            console.warn(`  ${label}: already scheduled — apply in ~${waitH.toFixed(2)}h (re-run finish-wiring)`);
+            return;
+        }
+    }
+
     await scheduleAndApply(
         () => c.scheduleContractAuth(contract, authorize),
         () => c.applyContractAuth(contract),

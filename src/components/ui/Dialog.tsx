@@ -28,12 +28,12 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative z-[110] w-full max-w-lg overflow-hidden bg-white dark:bg-slate-950 shadow-2xl rounded-[32px] border border-slate-200 dark:border-slate-800"
+                            className="relative z-[110] w-full max-w-md overflow-hidden bg-white dark:bg-slate-950 shadow-2xl rounded-2xl border border-slate-200 dark:border-slate-800"
                         >
                             {children}
                             <button
                                 onClick={() => onOpenChange(false)}
-                                className="absolute right-6 top-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
                             >
                                 <X className="h-5 w-5" />
                             </button>

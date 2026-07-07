@@ -8,7 +8,7 @@ interface ImportMetaEnv {
     readonly VITE_TESTNET_FAUCET_URL?: string;
     /** Public faucet web page (opens in new tab). Not a JSON API. */
     readonly VITE_TESTNET_FAUCET_PAGE_URL?: string;
-    /** Zama fhEVM relayer base URL (default: same-origin `/api/relayer/11155111` behind host proxy). */
+    /** Zama fhEVM relayer base URL (default: same-origin `/api/relayer/11155111/v2` behind host proxy). */
     readonly VITE_ZAMA_RELAYER_URL?: string;
     /** MedVault anonymous-apply relayer HTTP origin. */
     readonly VITE_RELAYER_URL?: string;
@@ -17,6 +17,8 @@ interface ImportMetaEnv {
     readonly VITE_RECLAIM_PROVIDER_ID?: string;
     readonly VITE_RECLAIM_ALLOW_SKIP?: string;
     readonly VITE_SPONSOR_OPEN_ACCESS?: string;
+    /** Show demo “instant approve” on sponsor verification (requires relayer test auto-approve). */
+    readonly VITE_SPONSOR_TEST_AUTO_APPROVE?: string;
     readonly VITE_CAPACITOR_BUILD?: string;
 }
 

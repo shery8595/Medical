@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers } from "hardhat";
 import type { BaseContract } from "ethers";
 
 const LEGACY_DAL_ABI = [
@@ -51,14 +51,24 @@ export async function ensureDataAccessLogger(
 
     const eta = await dal.loggerChangeEta(logger);
     const pending = await dal.pendingLoggerChanges(logger);
-    const now = BigInt(Math.floor(Date.now() / 1000));
+    const block = await ethers.provider.getBlock("latest");
+    const now = BigInt(block?.timestamp ?? Math.floor(Date.now() / 1000));
 
-    if (eta > 0n && now >= eta && pending === status) {
-        try {
-            await (await dal.applyAuthorizedLogger(logger)).wait();
+    if (eta > 0n) {
+        if (now >= eta && pending === status) {
+            try {
+                await (await dal.applyAuthorizedLogger(logger)).wait();
+                return;
+            } catch {
+                /* fall through */
+            }
+        }
+        if (now < eta) {
+            const waitH = Number(eta - now) / 3600;
+            console.warn(
+                `  DAL logger ${logger.slice(0, 10)}… → ${status}: already scheduled — apply in ~${waitH.toFixed(2)}h`
+            );
             return;
-        } catch {
-            /* fall through */
         }
     }
 
@@ -69,9 +79,9 @@ export async function ensureDataAccessLogger(
         return;
     }
 
-    const waitSecs = Number(newEta - now);
-    const days = (waitSecs / 86400).toFixed(1);
+    const waitSecs = Number(newEta > now ? newEta - now : 0n);
+    const hours = (waitSecs / 3600).toFixed(2);
     console.warn(
-        `  DAL logger ${logger} → ${status}: scheduled; apply after ~${days}d (re-run finish script)`
+        `  DAL logger ${logger.slice(0, 10)}… → ${status}: scheduled; apply after ~${hours}h (re-run deploy:apply-wiring:sepolia)`
     );
 }

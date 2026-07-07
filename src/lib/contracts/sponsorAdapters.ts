@@ -8,9 +8,20 @@ import {
   getTrialManager,
 } from "./index";
 import { encryptUint64, ensureZamaConnected } from "../fhe";
-import { signClaimAuthorization, signRegisterAuthorization, getEphemeralSigner } from "../semaphore";
+import {
+  generateEphemeralAddress,
+  signClaimAuthorization,
+  signRegisterAuthorization,
+  getEphemeralSigner,
+} from "../semaphore";
 import { resolveChainIdFrom } from "./index";
 import { buildWithdrawToAuthorization, computeEncryptedAmountCommitment } from "../withdrawFlow";
+import {
+  fetchPendingRegisterAuthFromRelayer,
+  getPendingRegisterAuthLocal,
+  submitVaultRegisterAuth,
+  type PendingRegisterAuth,
+} from "../pendingRegisterAuth";
 import {
   parseParticipantCreditFailures,
   type ParticipantCreditFailure,
@@ -18,6 +29,44 @@ import {
 import type { Identity } from "@semaphore-protocol/identity";
 
 export type { ParticipantCreditFailure };
+
+async function resolveDecryptPermitHolder(
+  engine: ReturnType<typeof getEligibilityEngine>,
+  provider: ethers.Provider,
+  trialId: bigint,
+  nullifier: bigint,
+  identity?: Identity
+): Promise<string> {
+  if (identity) {
+    const ephemeralSigner = getEphemeralSigner(identity, provider);
+    return engine.connect(ephemeralSigner).getDecryptPermitHolder(nullifier, trialId);
+  }
+  return engine.getDecryptPermitHolder(nullifier, trialId);
+}
+
+/** Reward pool + payout keys are keyed by EligibilityEngine permit holder, not the main wallet. */
+export async function resolveParticipantRewardAddress(
+  signer: ethers.Signer | ethers.Provider,
+  trialId: string,
+  nullifier: bigint,
+  identity?: Identity,
+): Promise<string> {
+  // Anonymous patients: permit holder is always the deterministic ephemeral address
+  // from apply time. Avoid getDecryptPermitHolder here — it reverts unless msg.sender
+  // is the holder or an authorized protocol contract.
+  if (identity) {
+    return ethers.getAddress(await generateEphemeralAddress(identity));
+  }
+
+  const provider = "provider" in signer ? signer.provider : signer;
+  if (!provider) throw new Error("Wallet provider not available");
+  const engine = getEligibilityEngine(signer);
+  const addr = await resolveDecryptPermitHolder(engine, provider, BigInt(trialId), nullifier);
+  if (!addr || addr === ethers.ZeroAddress) {
+    throw new Error("No reward participant address found for this application.");
+  }
+  return ethers.getAddress(addr);
+}
 
 export async function getPoolFundingAndRegistration(
   signer: ethers.Signer,
@@ -49,6 +98,119 @@ export async function getEncryptedScoreHandle(
   return engine.getEncryptedScore(account, BigInt(trialId));
 }
 
+async function resolvePendingRegisterAuth(
+  trialId: bigint,
+  nullifier: bigint,
+  relayerBaseUrl?: string
+): Promise<PendingRegisterAuth | null> {
+  const local = getPendingRegisterAuthLocal(trialId, nullifier);
+  if (local) return local;
+  try {
+    return await fetchPendingRegisterAuthFromRelayer(trialId, nullifier, relayerBaseUrl);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Anonymous permit holder for sponsor-side flows. Sponsors cannot call
+ * `getDecryptPermitHolder` directly — use pre-signed register auth when available,
+ * otherwise staticCall as SponsorIncentiveVault (an authorized reader).
+ */
+export async function resolveAnonymousPermitHolder(
+  signer: ethers.Signer | ethers.Provider,
+  trialId: bigint,
+  nullifier: bigint,
+  options?: { relayerBaseUrl?: string }
+): Promise<string> {
+  const auth = await resolvePendingRegisterAuth(trialId, nullifier, options?.relayerBaseUrl);
+  if (auth?.permitHolder) return ethers.getAddress(auth.permitHolder);
+
+  const provider = "provider" in signer && signer.provider ? signer.provider : (signer as ethers.Provider);
+  const vault = getSponsorIncentiveVault(provider);
+  const engine = getEligibilityEngine(provider);
+  const vaultAddress = await vault.getAddress();
+  const holder = await engine.getDecryptPermitHolder.staticCall(nullifier, trialId, {
+    from: vaultAddress,
+  });
+  if (!holder || holder === ethers.ZeroAddress) {
+    throw new Error("No anonymous permit holder found for this application.");
+  }
+  return ethers.getAddress(holder);
+}
+
+/**
+ * After sponsor accepts an anonymous applicant, enroll using the patient's pre-signed
+ * register authorization from apply time (MED-3 consent preserved via EIP-712).
+ * Best-effort: does not throw if pool unfunded or auth missing.
+ */
+export async function enrollAcceptedParticipantWithPreAuth(
+  signer: ethers.Signer,
+  trialId: string,
+  nullifier: string | bigint,
+  options?: { relayerBaseUrl?: string }
+): Promise<{ enrolled: boolean; txHash?: string; reason?: string }> {
+  const tid = BigInt(trialId);
+  const nullifierBn = BigInt(nullifier);
+
+  const vault = getSponsorIncentiveVault(signer);
+  const auth = await resolvePendingRegisterAuth(tid, nullifierBn, options?.relayerBaseUrl);
+  if (!auth) {
+    return { enrolled: false, reason: "No pre-signed enrollment authorization found." };
+  }
+
+  const permitHolder = ethers.getAddress(auth.permitHolder);
+  const alreadyRegistered = await vault.isParticipantRegistered(tid, permitHolder);
+  if (alreadyRegistered) {
+    return { enrolled: true, reason: "Already registered in incentive pool." };
+  }
+
+  try {
+    const txHash = await submitVaultRegisterAuth(signer, auth);
+    if (txHash == null) {
+      return { enrolled: true, reason: "Already registered in incentive pool." };
+    }
+    return { enrolled: true, txHash };
+  } catch (err: unknown) {
+    const msg =
+      (err as { reason?: string; message?: string })?.reason ||
+      (err as Error)?.message ||
+      "Enrollment failed";
+    return { enrolled: false, reason: msg };
+  }
+}
+
+/**
+ * Gap-fill enrollment before staging: only enrolls participants who were accepted
+ * but are not yet registered (e.g. pool was unfunded at accept time). Skips anyone
+ * already enrolled at accept time — no duplicate registration txs.
+ */
+export async function enrollUnregisteredAcceptedParticipants(
+  signer: ethers.Signer,
+  trialId: string,
+  nullifiers: Array<string | undefined | null>,
+): Promise<{ enrolled: number; alreadyRegistered: number; failed: number }> {
+  let enrolled = 0;
+  let alreadyRegistered = 0;
+  let failed = 0;
+
+  for (const nullifier of nullifiers) {
+    if (!nullifier) continue;
+    const result = await enrollAcceptedParticipantWithPreAuth(signer, trialId, nullifier);
+    if (result.enrolled) {
+      if (result.txHash) enrolled += 1;
+      else alreadyRegistered += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  return { enrolled, alreadyRegistered, failed };
+}
+
+/** @deprecated Use enrollUnregisteredAcceptedParticipants — same behavior, clearer name. */
+export const enrollAllAcceptedParticipantsForTrial = enrollUnregisteredAcceptedParticipants;
+
 export async function registerAnonymousParticipantByNullifier(
   signer: ethers.Signer,
   trialId: string,
@@ -57,16 +219,27 @@ export async function registerAnonymousParticipantByNullifier(
 ) {
   const vault = getSponsorIncentiveVault(signer);
   const engine = getEligibilityEngine(signer);
-  const permitHolder = await engine.getDecryptPermitHolder(nullifier, BigInt(trialId));
+  const provider = signer.provider;
+  if (!provider) throw new Error("Wallet provider not available");
+  const permitHolder = await resolveDecryptPermitHolder(
+    engine,
+    provider,
+    BigInt(trialId),
+    nullifier,
+    identity
+  );
   if (permitHolder && permitHolder !== ethers.ZeroAddress) {
     const alreadyRegistered = await vault.isParticipantRegistered(BigInt(trialId), permitHolder);
     if (alreadyRegistered) return;
   }
   const signerAddress = await signer.getAddress();
-  const provider = signer.provider;
-  if (!provider) throw new Error("Wallet provider not available");
 
   if (permitHolder && permitHolder.toLowerCase() !== signerAddress.toLowerCase()) {
+    const pending = getPendingRegisterAuthLocal(BigInt(trialId), nullifier);
+    if (pending) {
+      await submitVaultRegisterAuth(signer, pending);
+      return;
+    }
     if (!identity) {
       throw new Error("Semaphore identity required for gasless ephemeral registration.");
     }
@@ -112,12 +285,18 @@ export async function claimRewards(
   const cEthAddress = await cEth.getAddress();
   const vaultAddress = await vault.getAddress();
   const engine = getEligibilityEngine(signer);
-  const permitHolder = await engine.getDecryptPermitHolder(nullifier, BigInt(trialId));
+  const provider = signer.provider;
+  if (!provider) throw new Error("Wallet provider not available");
+  const permitHolder = await resolveDecryptPermitHolder(
+    engine,
+    provider,
+    BigInt(trialId),
+    nullifier,
+    identity
+  );
   if (!permitHolder || permitHolder === ethers.ZeroAddress) {
     throw new Error("No reward permit holder found for this claim.");
   }
-  const provider = signer.provider;
-  if (!provider) throw new Error("Wallet provider not available");
   await ensureZamaConnected(provider, signer);
   const encrypted = await encryptUint64(cEthAddress, vaultAddress, units);
   const encryptedAmountCommitment = computeEncryptedAmountCommitment(
@@ -381,6 +560,27 @@ export async function getTrialPoolReclaimStatus(
   };
 }
 
+/**
+ * Sponsor-only pool size via eth_call with `from: sponsor` (no wallet signer required in UI).
+ * Returns wei string, or null when the caller is not the trial sponsor / call reverts.
+ */
+export async function fetchSponsorPoolDepositedWei(
+  provider: ethers.Provider,
+  trialId: string | number | bigint,
+  sponsorAddress: string
+): Promise<string | null> {
+  if (!sponsorAddress || !ethers.isAddress(sponsorAddress)) return null;
+  try {
+    const vault = getSponsorIncentiveVault(provider);
+    const wei = await vault.getTotalDeposited.staticCall(BigInt(trialId), {
+      from: ethers.getAddress(sponsorAddress),
+    });
+    return wei.toString();
+  } catch {
+    return null;
+  }
+}
+
 export async function reclaimUndistributedPool(
   signer: ethers.Signer,
   trialId: string
@@ -465,17 +665,16 @@ export async function updateTrialApplicationStatus(
   trialId: string,
   patientAddress: string,
   newStatus: number,
-  decisionMessage: string
+  decisionMessage: string,
+  nullifier?: string | bigint
 ) {
   const engine = getEligibilityEngine(signer);
   const hexMessage = ethers.hexlify(ethers.toUtf8Bytes(decisionMessage || "No message provided"));
   const tx = await engine.updateApplicationStatus(trialId, patientAddress, newStatus, hexMessage);
   await tx.wait();
 
-  if (newStatus === 2) {
-    const vault = getSponsorIncentiveVault(signer);
-    const regTx = await vault.registerParticipant(BigInt(trialId), patientAddress);
-    await regTx.wait();
+  if (newStatus === 2 && nullifier) {
+    await enrollAcceptedParticipantWithPreAuth(signer, trialId, nullifier);
   }
 }
 
@@ -559,13 +758,15 @@ export async function promoteAnonymousParticipantAndDistribute(
   signer: ethers.Signer,
   trialId: string,
   nullifier: string | bigint,
-  milestoneIndex: number
+  milestoneIndex: number,
+  options?: { relayerBaseUrl?: string }
 ) {
-  const engine = getEligibilityEngine(signer);
-  const patientAddress = await engine.getDecryptPermitHolder(BigInt(nullifier), BigInt(trialId));
-  if (!patientAddress || patientAddress === ethers.ZeroAddress) {
-    throw new Error("No reward participant found for this anonymous nullifier.");
-  }
+  const patientAddress = await resolveAnonymousPermitHolder(
+    signer,
+    BigInt(trialId),
+    BigInt(nullifier),
+    options
+  );
 
   return promoteParticipantAndDistribute(signer, trialId, patientAddress, milestoneIndex);
 }
@@ -591,17 +792,15 @@ export async function getParticipantPayoutStatus(
   const vault = getSponsorIncentiveVault(signer);
   const tid = BigInt(trialId);
   const idx = BigInt(milestoneIndex);
-  const [entitlementStaged, confirmedPayout, stagedShareWei, challengeDeadline] = await Promise.all([
+  const [entitlementStaged, confirmedPayout, stagedShareWei] = await Promise.all([
     vault.entitlementStaged(tid, participantAddress, idx),
     vault.confirmedPayout(tid, participantAddress, idx),
     vault.getStagedShareWei(tid, participantAddress, idx),
-    vault.challengeDeadline(tid, participantAddress),
   ]);
   return {
     entitlementStaged: Boolean(entitlementStaged),
     confirmedPayout: Boolean(confirmedPayout),
     stagedShareWei: BigInt(stagedShareWei),
-    challengeDeadline: BigInt(challengeDeadline),
   };
 }
 
@@ -609,15 +808,17 @@ export async function getAnonymousParticipantMilestoneState(
   signer: ethers.Signer,
   trialId: string,
   nullifier: string | bigint,
-  milestoneCount: number
+  milestoneCount: number,
+  options?: { relayerBaseUrl?: string }
 ) {
-  const engine = getEligibilityEngine(signer);
   const vault = getSponsorIncentiveVault(signer);
   const mm = getTrialMilestoneManager(signer);
-  const participant = await engine.getDecryptPermitHolder(BigInt(nullifier), BigInt(trialId));
-  if (!participant || participant === ethers.ZeroAddress) {
-    return null;
-  }
+  const participant = await resolveAnonymousPermitHolder(
+    signer,
+    BigInt(trialId),
+    BigInt(nullifier),
+    options
+  );
 
   const [registered, progress, staged, confirmed] = await Promise.all([
     vault.isParticipantRegistered(BigInt(trialId), participant),

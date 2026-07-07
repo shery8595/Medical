@@ -66,10 +66,11 @@ const GET_EPOCHS = `
 
 export function useMatches(sponsorAddress?: string) {
   const sponsor = sponsorAddress?.toLowerCase() || "0x0000000000000000000000000000000000000000";
+  const sponsorVariables = useMemo(() => ({ sponsor }), [sponsor]);
 
   const { data, loading: loadingTrials, error: errTrials, refetch: refetchTrials } = useSubgraph(
     GET_SPONSOR_DATA,
-    { sponsor }
+    sponsorVariables
   );
 
   const patientIds = useMemo(() => {
@@ -83,10 +84,14 @@ export function useMatches(sponsorAddress?: string) {
     return Array.from(s);
   }, [data]);
 
-  const epochIds = patientIds.length > 0 ? patientIds : ["0x0000000000000000000000000000000000000000"];
+  const epochIds = useMemo(
+    () => (patientIds.length > 0 ? patientIds : ["0x0000000000000000000000000000000000000000"]),
+    [patientIds]
+  );
+  const epochVariables = useMemo(() => ({ ids: epochIds }), [epochIds]);
 
   const { data: epochData, loading: loadingEpochs, error: errEpochs, refetch: refetchEpochs } =
-    useSubgraph(GET_EPOCHS, { ids: epochIds });
+    useSubgraph(GET_EPOCHS, epochVariables);
 
   const loading = loadingTrials || loadingEpochs;
   const error = errTrials || errEpochs;

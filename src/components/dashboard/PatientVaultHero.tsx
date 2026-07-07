@@ -20,7 +20,7 @@ type Props = {
 };
 
 const FEATURES = [
-  { icon: Lock,     title: "Fully encrypted",   detail: "End-to-end encryption" },
+  { icon: Lock,     title: "FHE-encrypted vault",   detail: "Ciphertext at rest on-chain" },
   { icon: Database, title: "Decentralized",      detail: "Stored on blockchain" },
   { icon: KeyRound, title: "You are in control", detail: "Only you control access" },
 ] as const;

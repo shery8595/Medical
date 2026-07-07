@@ -46,10 +46,12 @@ function attachPayoutFields(trials: Trial[]): TrialPortfolioRow[] {
 
 export function useSponsorPortfolioMetrics(account?: string) {
   const sponsor = account || undefined;
-  const { trials, loading: trialsLoading, error: trialsError } = useTrials(
-    sponsor,
-    sponsor,
-  );
+  const {
+    trials,
+    loading: trialsLoading,
+    refreshing: trialsRefreshing,
+    error: trialsError,
+  } = useTrials(sponsor, sponsor);
   const { charts, biasIndicators, recentActivity, loading: dashLoading, error: dashError } =
     useSponsorDashboard();
 
@@ -111,7 +113,7 @@ export function useSponsorPortfolioMetrics(account?: string) {
     charts,
     biasIndicators,
     recentActivity,
-    loading: trialsLoading || dashLoading,
+    loading: trialsLoading || trialsRefreshing || dashLoading,
     error: trialsError || dashError,
     formatEthCompact,
   };

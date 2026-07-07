@@ -57,7 +57,7 @@ export function useSponsorTrialCreation() {
       return false;
     }
 
-    if (!formData.name) {
+    if (!formData.name.trim()) {
       setStatus("Error: Trial name is required.");
       return false;
     }

@@ -1,39 +1,142 @@
 import { ethers } from "ethers";
 
-import { getSponsorIncentiveVault } from "./contracts";
-import { ensureZamaConnected, publicDecrypt } from "./fhe";
+import { getConfidentialETH, getSponsorIncentiveVault } from "./contracts";
+import { fetchConfidentialBalanceHandle, readPendingWithdrawHandle } from "./confidentialBalance";
+import { ensureZamaConnected, publicDecrypt, reencryptUint64WithEphemeral } from "./fhe";
+import { withRpcRetry } from "./rpcRetry";
 
 export type ParticipantReceiptStatus = {
   entitlementStaged: boolean;
   confirmedPayout: boolean;
   stagedShareWei: bigint;
-  challengeDeadline: bigint;
-  challengeOpen: boolean;
 };
 
+/**
+ * Read payout flags via a plain JSON-RPC provider (no wallet `from` address).
+ * Ephemeral-wallet eth_call is flaky on some RPC / wallet providers.
+ */
 export async function getParticipantReceiptStatus(
-  signer: ethers.Signer | ethers.Provider,
+  provider: ethers.Provider,
   trialId: string,
   participantAddress: string,
-  milestoneIndex: number
+  milestoneIndex: number,
 ): Promise<ParticipantReceiptStatus> {
-  const vault = getSponsorIncentiveVault(signer);
+  const vault = getSponsorIncentiveVault(provider);
   const tid = BigInt(trialId);
   const idx = BigInt(milestoneIndex);
-  const [entitlementStaged, confirmedPayout, stagedShareWei, challengeDeadline, challengeOpen] =
-    await Promise.all([
+
+  return withRpcRetry(async () => {
+    const [entitlementStaged, confirmedPayout, stagedShareWei] = await Promise.all([
       vault.entitlementStaged(tid, participantAddress, idx),
       vault.confirmedPayout(tid, participantAddress, idx),
       vault.getStagedShareWei(tid, participantAddress, idx),
-      vault.challengeDeadline(tid, participantAddress),
-      vault.challengeOpen(tid, participantAddress),
     ]);
+    return {
+      entitlementStaged: Boolean(entitlementStaged),
+      confirmedPayout: Boolean(confirmedPayout),
+      stagedShareWei: BigInt(stagedShareWei),
+    };
+  });
+}
+
+export type PatientRewardReadiness = {
+  participantAddress: string;
+  registered: boolean;
+  stagedMilestones: number[];
+  pendingConfirmMilestones: number[];
+  confirmedMilestones: number[];
+  pendingStagedWei: bigint;
+  /** True only when decrypted cETH units > 0 (raw FHE handle may persist after withdraw). */
+  hasCethBalance: boolean;
+  /** Milestones with participantMilestonePaid on vault. */
+  paidMilestones: number[];
+  /** Withdraw-to already staged — needs relayer completeWithdrawTo, not a new claim. */
+  hasPendingWithdraw: boolean;
+};
+
+export type PatientRewardReadinessOptions = {
+  /** Ephemeral permit-holder signer — decrypts cETH to avoid false-positive handles. */
+  ephemeralSigner?: ethers.Signer;
+};
+
+async function resolveHasClaimableCethBalance(
+  provider: ethers.Provider,
+  participantAddress: string,
+  ephemeralSigner?: ethers.Signer,
+): Promise<boolean> {
+  const handleStr = await fetchConfidentialBalanceHandle(participantAddress, provider);
+  if (!handleStr || BigInt(handleStr) === 0n) return false;
+  if (!ephemeralSigner) return true;
+
+  try {
+    const cEthAddress = await getConfidentialETH(provider).getAddress();
+    const decrypted = await reencryptUint64WithEphemeral(ephemeralSigner, cEthAddress, handleStr);
+    return Number(decrypted) > 0;
+  } catch {
+    return true;
+  }
+}
+
+export async function getPatientRewardReadiness(
+  provider: ethers.Provider,
+  trialId: string,
+  participantAddress: string,
+  maxMilestones = 4,
+  options?: PatientRewardReadinessOptions,
+): Promise<PatientRewardReadiness> {
+  const vault = getSponsorIncentiveVault(provider);
+  const tid = BigInt(trialId);
+  const scanCount = Math.min(Math.max(maxMilestones, 1), 12);
+
+  const registered = Boolean(
+    await withRpcRetry(() => vault.isParticipantRegistered(tid, participantAddress)),
+  );
+
+  const stagedMilestones: number[] = [];
+  const pendingConfirmMilestones: number[] = [];
+  const confirmedMilestones: number[] = [];
+  const paidMilestones: number[] = [];
+  let pendingStagedWei = 0n;
+
+  for (let i = 0; i < scanCount; i++) {
+    const status = await getParticipantReceiptStatus(provider, trialId, participantAddress, i);
+    const idx = BigInt(i);
+    const milestonePaid = Boolean(
+      await withRpcRetry(() => vault.participantMilestonePaid(tid, participantAddress, idx)),
+    );
+    if (milestonePaid) {
+      paidMilestones.push(i);
+    }
+    if (status.entitlementStaged) {
+      stagedMilestones.push(i);
+      if (!status.confirmedPayout) {
+        pendingConfirmMilestones.push(i);
+        pendingStagedWei += status.stagedShareWei;
+      }
+    }
+    if (status.confirmedPayout) {
+      confirmedMilestones.push(i);
+    }
+  }
+
+  const hasCethBalance = await resolveHasClaimableCethBalance(
+    provider,
+    participantAddress,
+    options?.ephemeralSigner,
+  );
+
+  const pendingWithdrawHandle = await readPendingWithdrawHandle(provider, participantAddress);
+
   return {
-    entitlementStaged: Boolean(entitlementStaged),
-    confirmedPayout: Boolean(confirmedPayout),
-    stagedShareWei: BigInt(stagedShareWei),
-    challengeDeadline: BigInt(challengeDeadline),
-    challengeOpen: Boolean(challengeOpen),
+    participantAddress,
+    registered,
+    stagedMilestones,
+    pendingConfirmMilestones,
+    confirmedMilestones,
+    pendingStagedWei,
+    hasCethBalance,
+    paidMilestones,
+    hasPendingWithdraw: pendingWithdrawHandle !== null,
   };
 }
 
@@ -46,7 +149,7 @@ export async function confirmStagedEntitlementReceipt(
   ephemeralSigner: ethers.Signer,
   trialId: string,
   milestoneIndex: number,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
 ): Promise<{ confirmTxHash: string; skipped: boolean }> {
   const provider = ephemeralSigner.provider ?? fheSigner.provider;
   if (!provider) throw new Error("Wallet provider not available");
@@ -99,7 +202,7 @@ export async function confirmAllPendingReceipts(
   ephemeralSigner: ethers.Signer,
   trialId: string,
   maxMilestones = 12,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
 ): Promise<string[]> {
   const vault = getSponsorIncentiveVault(fheSigner);
   const tid = BigInt(trialId);
@@ -118,7 +221,7 @@ export async function confirmAllPendingReceipts(
       ephemeralSigner,
       trialId,
       i,
-      onProgress
+      onProgress,
     );
     if (confirmTxHash) txHashes.push(confirmTxHash);
   }

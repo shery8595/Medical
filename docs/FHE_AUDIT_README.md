@@ -16,6 +16,23 @@ One-page map of every **Zama FHE** primitive in MedVault and where it lives. For
 | Incentive balances | Yes — `euint64` in `ConfidentialETH7984` (IERC7984) | Native ETH `msg.value` visible at tx layer |
 | Trial metadata (name, sponsor address) | No | Public by design |
 
+## Who can decrypt what
+
+Actor × data-type matrix for judges. **Legend:** **Yes** = can decrypt with normal flow; **No** = no decrypt path; **Partial** = scoped or consent-gated; **Public** = visible without decryption.
+
+| Actor | Patient vitals | Sponsor criteria | Eligibility result | Documents (AES) | Consent flag | Wallet ↔ identity |
+|-------|----------------|------------------|--------------------|-----------------|--------------|-------------------|
+| **Patient** | **Yes** — EIP-712 viewing key via `@zama-fhe/sdk` | **No** — encrypted on-chain | **Yes** — staged `finalCt` when ACL granted | **Yes** — holds AES key in browser | **Yes** — grants/revokes | **Yes** — owns wallet; anonymous path unlinks apply |
+| **Sponsor** | **No** — no ACL on `AnonymousPatientRegistry` vitals | **Yes** — own trial criteria | **Partial** — blind ranking / aggregate only during matching; no per-patient plaintext bit on-chain | **Partial** — after accept + `pullSponsorKeyAccess` + patient consent | **Partial** — sees grant event, not plaintext `ebool` | **Public** — sponsor wallet on trial record |
+| **Relayer** | **No** — relays encrypted handles only | **No** | **No** (default) — patient ephemeral is `permitRecipient`; browser decrypts; relayer relays only. **Partial** (optional P0.2) — relayer-assisted user-decrypt when relayer is `permitRecipient`; relayer learns eligibility bit | **No** — pins ciphertext; holds Pinata creds, not AES keys | **No** | **Partial** — sees tx metadata; anonymous apply unlinks wallet from nullifier |
+| **AI service** | **No** — never receives patient vitals | **Partial** — sees redacted protocol PDF/text for criteria extraction | **No** | **No** | **No** | **No** |
+| **Indexer / subgraph** | **No** — no ciphertext decrypt | **No** | **No** — indexes structural events only (`trialId`, `nullifier`, status) | **No** — CID hashes only | **No** | **Public** — mirrors on-chain structural fields |
+| **Validator / coprocessor** | **No** — homomorphic compute only | **No** | **No** | **No** | **No** | **Public** — L1 tx layer |
+| **Trial admin / owner** | **No** | **No** | **No** | **No** — Phase 0 sponsor apps via relayer-held AES key (admin path) | **No** | **Public** — contract owner actions on-chain |
+| **Zama KMS** | **Partial** — threshold decrypt when patient/sponsor presents EIP-712 permit | **Partial** — same, scoped to authorized handles | **Partial** — patient/sponsor permit paths | **No** — document keys are AES, not KMS | **No** | **No** |
+
+Sources: [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) · [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) · [REGULATORY_POSTURE.md](./REGULATORY_POSTURE.md) · [HYBRID_STORAGE.md](./HYBRID_STORAGE.md)
+
 ## FHE primitive → file map
 
 | Primitive | Contract / module | Usage |
@@ -45,15 +62,22 @@ One-page map of every **Zama FHE** primitive in MedVault and where it lives. For
 
 - Registration via wallet (not relayer) links `tx.from` ↔ Semaphore commitment in one tx.
 - Native ETH amounts visible at transaction layer for `fundTrial` / `deposit`.
-- Noir attestation binds identity + plaintext witness to staged handle hash; full proof that FHE ciphertext plaintext equals witness requires Zama input-proof in circuit (future). Contract-level `FHE.checkSignatures` binding was **deferred** — Zama SDK exposes KMS `decryptionProof` only via public decrypt, which would re-leak the eligibility bit; frontend + relayer remain trusted for encrypted-criteria eligibility attestation. **P2 shipped:** `FHE.select` payout gating prevents forged witnesses from authorizing incentive payouts. **Phase 5:** differential evidence in [formal-verification/certora-halmos-results.md](formal-verification/certora-halmos-results.md).
+- Noir attestation binds identity + plaintext witness to staged handle hash; full proof that FHE ciphertext plaintext equals witness requires Zama input-proof in circuit (future). Contract-level `FHE.checkSignatures` binding was **deferred** — Zama SDK exposes KMS `decryptionProof` only via public decrypt, which would re-leak the eligibility bit; frontend + relayer remain trusted for encrypted-criteria eligibility attestation. **P2 shipped:** `FHE.select` payout gating prevents forged witnesses from authorizing incentive payouts — proven by **REL-FF-02** and **P5-SELECT-01/02** ([RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) test matrix). **Phase 5:** differential evidence in [formal-verification/certora-halmos-results.md](formal-verification/certora-halmos-results.md).
 - Forward-only document revocation: sponsors who already decrypted may retain AES keys off-chain; epoch gating blocks new reads; **`rotateDocument`** emits `DocumentLegacyHandleRevoked` with `oldCid` for indexer unpin + on-chain `attestLegacyCidUnpinned` (P7).
 - Withdraw/stake sufficiency is homomorphic (`FHE.select`); no pre-settlement boolean leak — final wei amount still public at settlement.
+
+### Known limitations / future hardening
+
+- **Wallet ↔ commitment linkage:** direct `registerPatient` (non-relayer) links `tx.from` to Semaphore commitment in one transaction; anonymous apply path reduces but does not eliminate metadata linkage.
+- **Metadata inference:** public `trialId`, `nullifier`, and application timestamps remain visible on-chain; sophisticated observers may infer diagnosis patterns from participation metadata without decrypting vitals.
+- **Nullifier / replay hardening:** consumed-nullifier and stale-permit protections are tested (REL-REP-01/02); stronger unlinkability across trials and relayer equivocation detection (P3.3 M-of-N committee) remain roadmap items — see [P3_3_THRESHOLD_ATTESTATION.md](./P3_3_THRESHOLD_ATTESTATION.md). P3.3 requires M relayer agreement but does **not** hide the eligibility bit from co-signing relayers.
 
 ## Test coverage
 
 | Suite | Command | Focus |
 |-------|---------|-------|
 | Unit + integration | `npm test` | FHE eligibility, encrypted criteria, attestation binding, aggregates, batch, relayer registration |
+| Adversarial privacy | `test/unit/relayer-adversarial.test.ts` (REL-FF-03), `test/unit/sponsor-acl-negative.test.ts` (SPN-ACL-01), `test/unit/privacy-events.test.ts` (PRIV-06) | False-finalize rejection, sponsor vitals ACL, encrypted event leak checks |
 | Crypto | `npm run test:crypto` | Noir nullifier alignment |
 | Honk (slow) | `npm run test:honk` | Full browser-compatible proof pipeline |
 

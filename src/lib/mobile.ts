@@ -3,7 +3,14 @@ import { probeWebCryptoAesGcm } from "./crypto-fallback";
 
 const ETHEREUM_SEPOLIA_CHAIN_ID = 11155111;
 
-const ZAMA_RELAYER_PRODUCTION = "https://relayer.testnet.zama.org";
+/** Zama fhEVM relayer API base — SDK v3 appends paths like `/keyurl` under `/v2`. */
+const ZAMA_RELAYER_PRODUCTION = "https://relayer.testnet.zama.org/v2";
+
+function normalizeZamaRelayerUrl(url: string): string {
+  const trimmed = url.replace(/\/$/, "");
+  if (/\/v2$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/v2`;
+}
 
 /** True when running inside a Capacitor native shell (Android/iOS). */
 export function isNativeApp(): boolean {
@@ -39,20 +46,25 @@ export function needsDirectApiUrls(): boolean {
 /** Zama fhEVM relayer base URL for the current runtime. */
 export function getZamaRelayerUrl(): string {
   const fromEnv = import.meta.env.VITE_ZAMA_RELAYER_URL?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (fromEnv) return normalizeZamaRelayerUrl(fromEnv);
   if (needsDirectApiUrls()) {
     return ZAMA_RELAYER_PRODUCTION;
   }
-  return `${window.location.origin}/api/relayer/${ETHEREUM_SEPOLIA_CHAIN_ID}`;
+  return `${window.location.origin}/api/relayer/${ETHEREUM_SEPOLIA_CHAIN_ID}/v2`;
 }
 
 /** MedVault anonymous-apply relayer HTTP origin. */
 export function getMedVaultRelayerUrl(): string {
-  const fromEnv = import.meta.env.VITE_RELAYER_URL?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  const legacy = import.meta.env.VITE_RELAYER_URL?.trim();
+  if (legacy) return legacy.replace(/\/$/, "");
+  const fromList = import.meta.env.VITE_RELAYER_URLS?.trim();
+  if (fromList) {
+    const first = fromList.split(",")[0]?.trim().replace(/\/$/, "");
+    if (first) return first;
+  }
   if (import.meta.env.DEV && !needsDirectApiUrls()) return "";
   throw new Error(
-    "VITE_RELAYER_URL is required for native builds and non-dev deployments"
+    "VITE_RELAYER_URLS (or VITE_RELAYER_URL) is required for native builds and non-dev deployments"
   );
 }
 

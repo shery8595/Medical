@@ -149,6 +149,107 @@ describe("Unit: privacy-safe events", function () {
         }
     });
 
+    it("PRIV-06: encrypted eligibility finalize events omit plaintext eligibility bit and score", async function () {
+        const stack = await deployMedVaultStack();
+        const { createEncryptedTrialForSponsor } = await import("../../test-support/deployments");
+        const { stageSemaphoreApply } = await import("../../test-support/journey");
+        const {
+            generateTestEncryptedEligibilityProof,
+            BN254_FIELD_ORDER,
+        } = await import("../../test-support/noirProof");
+        const { buildAnonymousApplyArgs } = await import("../../test-support/anonymousApply");
+        const { semaphoreProofFor } = await import("../../test-support/journey");
+
+        const patient = await registerPatient(stack);
+        const trialId = await createEncryptedTrialForSponsor(stack);
+        const staged = await stageSemaphoreApply(stack, trialId, patient);
+
+        const bindingField =
+            BigInt(await stack.eligibilityEngine.encryptedCriteriaBindingHash(trialId)) %
+            BN254_FIELD_ORDER;
+        const { proofBytes, publicInputs } = await generateTestEncryptedEligibilityProof({
+            identity: patient.identity,
+            trialId,
+            fheStageHandle: staged.finalCt,
+            encryptedCriteriaBindingHash: bindingField,
+        });
+        const proofFresh = semaphoreProofFor(
+            staged.trialId,
+            staged.nullifier,
+            patient.commitment,
+            stack.patient.address
+        );
+        const applyArgs = await buildAnonymousApplyArgs(
+            stack.medVaultRegistry,
+            trialId,
+            patient.identity,
+            stack.patient.address
+        );
+
+        const tx = await stack.medVaultRegistry
+            .connect(stack.relayer)
+            .finalizeAnonymousApplyWithProof(
+                trialId,
+                proofFresh,
+                patient.commitment,
+                stack.patient.address,
+                applyArgs.consentWallet,
+                applyArgs.deadline,
+                applyArgs.permitSignature,
+                applyArgs.consentWalletSignature,
+                proofBytes,
+                publicInputs
+            );
+        const rc = await tx.wait();
+        const iface = stack.eligibilityEngine.interface;
+
+        const stageParsed = (staged.stageReceipt.logs ?? [])
+            .map((l) => {
+                try {
+                    return iface.parseLog(l);
+                } catch {
+                    return null;
+                }
+            })
+            .filter((p): p is NonNullable<typeof p> => p !== null);
+        const stagedEv = stageParsed.find((p) => p.name === "AnonymousEligibilityStaged");
+        expect(stagedEv?.args.finalCt).to.be.a("string");
+        expect(stagedEv?.args.finalCt).to.match(/^0x[0-9a-fA-F]{64}$/);
+
+        const parsed = (rc?.logs ?? [])
+            .map((l) => {
+                try {
+                    return iface.parseLog(l);
+                } catch {
+                    return null;
+                }
+            })
+            .filter((p): p is NonNullable<typeof p> => p !== null);
+
+        const proofVerified = parsed.find((p) => p.name === "EligibilityProofVerified");
+        if (proofVerified) {
+            expect(proofVerified.args.eligible).to.equal(false);
+        }
+
+        for (const ev of parsed) {
+            for (let i = 0; i < ev.args.length; i++) {
+                const arg = ev.args[i];
+                if (typeof arg === "boolean") {
+                    expect(arg).to.not.equal(true, `${ev.name} arg[${i}] leaked eligible=true`);
+                }
+                if (typeof arg === "bigint" && arg > 0n && arg < 256n) {
+                    expect(ev.name).to.not.equal(
+                        "PropensityScoreRevealed",
+                        "plaintext score in event"
+                    );
+                }
+            }
+        }
+
+        const silentApply = parsed.find((p) => p.name === "SilentApply");
+        expect(silentApply?.args.length).to.equal(2);
+    });
+
     it("ACL-05: revokeAllConsent increments epoch; getActiveConsent is encrypted-false", async function () {
         const stack = await deployMedVaultStack();
         const trialId = await createTrialForSponsor(stack);

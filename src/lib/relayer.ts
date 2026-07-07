@@ -6,6 +6,7 @@ import {
     getEphemeralSigner,
     hasAppliedToTrial,
     parseAnonymousApplyStagedFinalCt,
+    findStagedAnonymousApplyFinalCt,
     toContractSemaphoreProof,
     signAnonymousApplyPermit,
     signAnonymousApplyCancelPermit,
@@ -17,8 +18,10 @@ import { generateEligibilityProof } from './noir';
 import { BN254_FIELD_ORDER } from './criteriaSchema';
 import { fetchTrialCriteria } from './trialCriteria';
 import { getStoredPatientProfilePlain } from './profileStorage';
-import { getMedVaultRelayerUrl } from './mobile';
+import { createAndPublishPendingRegisterAuthorization } from './pendingRegisterAuth';
+import { getRelayersInFailoverOrder, probeAllRelayerHealth } from './relayerRegistry';
 import { resolveDocumentBindingForApply } from './patientDocumentUpload';
+import { getPendingHybridDocument } from './pendingHybridDocument';
 import { tryGetPatientDocumentStoreAddress } from './contracts';
 import type { DocumentBindingInputs } from './noir';
 
@@ -50,13 +53,18 @@ export function isNotEligibleForTrialMessage(text: string | null | undefined): b
     );
 }
 
-async function postRelay(
+export function isAlreadyStagedApplyError(text: string | null | undefined): boolean {
+    if (!text) return false;
+    return /already staged/i.test(text);
+}
+
+async function postRelayOnce(
     path: string,
     body: Record<string, unknown>,
-    baseUrl?: string
+    baseUrl: string
 ): Promise<{ txHash: string; eligible?: boolean; cancelled?: boolean }> {
-    const relayerUrl = (baseUrl ?? getMedVaultRelayerUrl()).replace(/\/$/, "");
-    const response = await fetch(`${relayerUrl}${path}`, {
+    const relayerUrl = baseUrl.replace(/\/$/, "");
+    const response = await fetch(`${relayerUrl || ""}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body, (_key, val) => (typeof val === 'bigint' ? val.toString() : val))
@@ -66,6 +74,11 @@ async function postRelay(
 
     if (!response.ok) {
         const errorMsg = typeof data.error === 'string' ? data.error : 'Relayer request failed';
+        if (errorMsg.includes('Only authorized relayer')) {
+            throw new Error(
+                'The MedVault relayer is not authorized on-chain yet. The protocol owner must schedule relayer authorization (6-hour timelock on Sepolia), then run finish-wiring. Check relayer health: relayerAuthorized should be true.'
+            );
+        }
         if (data.code === 'NOT_ELIGIBLE' || isNotEligibleForTrialMessage(errorMsg)) {
             throw new Error(NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE);
         }
@@ -80,6 +93,55 @@ async function postRelay(
         eligible: data.eligible as boolean | undefined,
         cancelled: data.cancelled as boolean | undefined,
     };
+}
+
+function isRetryableRelayError(message: string): boolean {
+    if (isNotEligibleForTrialMessage(message)) return false;
+    if (message.includes('Only authorized relayer')) return false;
+    if (message.includes('Not eligible for this trial')) return false;
+    if (/missing .+ fields/i.test(message)) return false;
+    return true;
+}
+
+type PostRelayOptions = {
+    /** Try only this URL (no failover). */
+    baseUrl?: string;
+    /** Override failover sequence (e.g. prefer relayer that staged successfully). */
+    failoverOrder?: string[];
+    /** When user explicitly picked a relayer in the UI, try it first. */
+    manualPreferred?: string | null;
+};
+
+async function postRelay(
+    path: string,
+    body: Record<string, unknown>,
+    options?: PostRelayOptions | string
+): Promise<{ txHash: string; relayerUrl: string; eligible?: boolean; cancelled?: boolean }> {
+    const opts: PostRelayOptions =
+        typeof options === 'string' ? { baseUrl: options } : (options ?? {});
+
+    const urls = opts.baseUrl
+        ? [opts.baseUrl.replace(/\/$/, "")]
+        : opts.failoverOrder?.length
+          ? opts.failoverOrder.map((u) => u.replace(/\/$/, ""))
+          : getRelayersInFailoverOrder(opts.manualPreferred);
+
+    let lastError = 'Relayer request failed';
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i]!;
+        try {
+            const result = await postRelayOnce(path, body, url);
+            return { ...result, relayerUrl: url };
+        } catch (err: unknown) {
+            lastError = (err as Error)?.message || lastError;
+            const hasNext = i < urls.length - 1;
+            if (!hasNext || !isRetryableRelayError(lastError)) {
+                throw err;
+            }
+            console.warn(`[relayer] ${url || 'dev-proxy'} failed — trying next relayer…`, lastError);
+        }
+    }
+    throw new Error(lastError);
 }
 
 /** Cancel staged anonymous apply via authorized relayer (`onlyAuthorizedRelayer`). */
@@ -111,17 +173,17 @@ export async function stageViaRelayer(
     permitRecipient: string,
     deadline: bigint,
     permitSignature: string,
-    baseUrl?: string
-): Promise<string> {
-    const { txHash } = await postRelay('/relay/apply-stage', {
+    options?: { manualPreferred?: string | null }
+): Promise<{ txHash: string; relayerUrl: string }> {
+    const { txHash, relayerUrl } = await postRelay('/relay/apply-stage', {
         trialId: Number(trialId),
         proof: serializeProofForRelay(proof),
         commitment: commitment.toString(),
         permitRecipient,
         deadline: deadline.toString(),
         permitSignature,
-    }, baseUrl);
-    return txHash;
+    }, { manualPreferred: options?.manualPreferred });
+    return { txHash, relayerUrl };
 }
 
 /**
@@ -161,8 +223,29 @@ export async function finalizeAnonymousApplyDirect(
 }
 
 /**
+ * Reject relayer-wallet permitRecipient unless caller explicitly acknowledges visibility tradeoff.
+ */
+export async function assertPatientDecryptPermitRecipient(
+    permitRecipient: string,
+    options?: { acknowledgeRelayerVisibility?: boolean }
+): Promise<void> {
+    if (options?.acknowledgeRelayerVisibility) return;
+    const normalized = ethers.getAddress(permitRecipient);
+    const health = await probeAllRelayerHealth();
+    for (const h of health) {
+        if (!h.relayerWallet) continue;
+        if (ethers.getAddress(h.relayerWallet) === normalized) {
+            throw new Error(
+                'Relayer-assisted decrypt (P0.2) gives the relayer visibility into the eligibility bit. ' +
+                    'Use patient ephemeral permitRecipient (recommended default), or pass acknowledgeRelayerVisibility: true to opt in.'
+            );
+        }
+    }
+}
+
+/**
  * Finalize relay with Noir proof (client generates proof after local FHE decrypt).
- * Optional gasless path when relayer is authorized and patient uses relayer as permitRecipient.
+ * Optional gasless path when relayer is authorized and patient uses relayer as permitRecipient (P0.2 — visibility tradeoff).
  */
 export async function finalizeViaRelayerWithProof(
     trialId: number | bigint,
@@ -176,8 +259,9 @@ export async function finalizeViaRelayerWithProof(
     noirProof: string,
     publicInputs: string[],
     eligible: boolean,
-    baseUrl?: string
+    options?: { failoverOrder?: string[]; manualPreferred?: string | null; acknowledgeRelayerVisibility?: boolean }
 ): Promise<string> {
+    await assertPatientDecryptPermitRecipient(permitRecipient, options);
     const { txHash } = await postRelay('/relay/apply-finalize', {
         trialId: Number(trialId),
         proof: serializeProofForRelay(proof),
@@ -190,12 +274,16 @@ export async function finalizeViaRelayerWithProof(
         noirProof,
         publicInputs,
         eligible,
-    }, baseUrl);
+        ...(options?.acknowledgeRelayerVisibility ? { acknowledgeRelayerVisibility: true } : {}),
+    }, options);
     return txHash;
 }
 
 /**
  * Full anonymous apply: relayer stage → browser decrypt + Noir proof → relayer finalize (HIGH-1).
+ *
+ * Recommended default: patient ephemeral wallet is `permitRecipient` — browser decrypts locally;
+ * relayer only relays transactions and never sees the eligibility bit.
  */
 export async function submitViaRelayer(
     trialId: number | bigint,
@@ -203,13 +291,31 @@ export async function submitViaRelayer(
     commitment: string,
     permitRecipient: string,
     ctx: { provider: Provider; identity: Identity; consentSigner: import('ethers').Signer },
-    relayerBaseUrl?: string
+    manualPreferredRelayer?: string | null,
+    options?: { acknowledgeRelayerVisibility?: boolean }
 ): Promise<string> {
+    await assertPatientDecryptPermitRecipient(permitRecipient, options);
     const provider = ctx.provider;
     const registry = getMedVaultRegistry(provider);
     const registryAddr = await registry.getAddress();
     const chainId = requireChainId(await resolveChainIdFrom(ctx.consentSigner));
     const ephemeralSigner = getEphemeralSigner(ctx.identity, provider);
+
+    const engine = getEligibilityEngine(provider, chainId);
+    const engineAddress = await engine.getAddress();
+
+    const alreadyApplied = await hasAppliedToTrial(provider, trialId, proof.nullifier);
+    if (alreadyApplied) {
+        throw new Error("You have already applied to this trial. Check My Applications for status.");
+    }
+
+    const appStatus = Number(
+        await engine.getAnonymousApplicationStatus(proof.nullifier, BigInt(trialId))
+    );
+    if (appStatus !== 0) {
+        const label = appStatus === 1 ? "Pending" : appStatus === 2 ? "Accepted" : appStatus === 3 ? "Rejected" : "Submitted";
+        throw new Error(`Application already on-chain (${label}). Check My Applications.`);
+    }
 
     const stageDeadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
     const stagePermitSignature = await signAnonymousApplyPermit(
@@ -225,22 +331,49 @@ export async function submitViaRelayer(
         }
     );
 
-    const stageTxHash = await stageViaRelayer(
-        trialId,
-        proof,
-        commitment,
-        permitRecipient,
-        stageDeadline,
-        stagePermitSignature,
-        relayerBaseUrl
-    );
+    let stageTxHash: string;
+    let stageRelayerUrl: string;
+    let finalCt: bigint;
 
-    const receipt = await provider.getTransactionReceipt(stageTxHash);
-    if (!receipt) throw new Error('Stage receipt not found');
+    try {
+        const staged = await stageViaRelayer(
+            trialId,
+            proof,
+            commitment,
+            permitRecipient,
+            stageDeadline,
+            stagePermitSignature,
+            { manualPreferred: manualPreferredRelayer }
+        );
+        stageTxHash = staged.txHash;
+        stageRelayerUrl = staged.relayerUrl;
+        const receipt = await provider.getTransactionReceipt(stageTxHash);
+        if (!receipt) throw new Error('Stage receipt not found');
+        finalCt = parseAnonymousApplyStagedFinalCt(receipt, registryAddr);
+    } catch (err: unknown) {
+        const msg = (err as Error)?.message || String(err);
+        if (!isAlreadyStagedApplyError(msg)) throw err;
 
-    const finalCt = parseAnonymousApplyStagedFinalCt(receipt, registryAddr);
-    const engine = getEligibilityEngine(provider, chainId);
-    const engineAddress = await engine.getAddress();
+        const resumed = await findStagedAnonymousApplyFinalCt(
+            provider,
+            registryAddr,
+            BigInt(trialId),
+            proof.nullifier,
+        );
+        if (!resumed) {
+            throw new Error(
+                "Apply is already staged on-chain but the stage transaction could not be found. Wait a minute and retry."
+            );
+        }
+        stageTxHash = resumed.stageTxHash;
+        finalCt = resumed.finalCt;
+        stageRelayerUrl =
+            manualPreferredRelayer?.replace(/\/$/, "") ||
+            (await probeAllRelayerHealth()).find((r) => r.ok)?.url ||
+            getRelayersInFailoverOrder(manualPreferredRelayer)[0] ||
+            "";
+        console.info("[apply] Resuming finalize after on-chain Already staged", stageTxHash);
+    }
 
     const eligible = Boolean(
         await decryptForViewWithEphemeral(ephemeralSigner, finalCt, FheTypes.Bool, engineAddress)
@@ -292,13 +425,24 @@ export async function submitViaRelayer(
         : { criteriaMode: 0 as const };
 
     const docStoreAddr = tryGetPatientDocumentStoreAddress(chainId);
+    const pendingHybridDoc = getPendingHybridDocument(trialId);
     let documentBinding: DocumentBindingInputs | undefined;
     if (docStoreAddr) {
+        // Bind using the same nullifier that was staged on-chain (`proof`), not a
+        // freshly regenerated proof object, so PatientDocumentStore keys match the
+        // subgraph AnonymousSubmission nullifier sponsors review.
         documentBinding = await resolveDocumentBindingForApply(
             ephemeralSigner,
-            proofFresh.nullifier,
+            proof.nullifier,
             BigInt(trialId),
             docStoreAddr
+        );
+    }
+
+    if (pendingHybridDoc?.aesKeyB64 && !pendingHybridDoc.recordedTxHash && !documentBinding?.hasDocument) {
+        throw new Error(
+            "Medical document was attached locally but could not be bound on-chain before apply. " +
+                "Re-attach the file on the trial card and submit again."
         );
     }
 
@@ -354,18 +498,40 @@ export async function submitViaRelayer(
         proofBytes,
         publicInputs,
         eligible,
-        relayerBaseUrl
+        {
+            failoverOrder: [
+                stageRelayerUrl,
+                ...getRelayersInFailoverOrder(manualPreferredRelayer).filter((u) => u !== stageRelayerUrl),
+            ],
+            acknowledgeRelayerVisibility: options?.acknowledgeRelayerVisibility,
+        }
     ).then(async (txHash) => {
         const applied = await hasAppliedToTrial(provider, trialId, proofFresh.nullifier);
-        if (applied) return txHash;
-
-        const outcome = await engine.silentApplyOutcome(proofFresh.nullifier, BigInt(trialId));
-        if (Number(outcome) === 2) {
-            throw new Error(NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE);
+        if (!applied) {
+            const outcome = await engine.silentApplyOutcome(proofFresh.nullifier, BigInt(trialId));
+            if (Number(outcome) === 2) {
+                throw new Error(NOT_ELIGIBLE_FOR_TRIAL_ERROR_MESSAGE);
+            }
+            throw new Error(
+                "Application finalize confirmed but trial enrollment was not recorded. Check Applied Trials or retry."
+            );
         }
-        throw new Error(
-            "Application finalize confirmed but trial enrollment was not recorded. Check Applied Trials or retry."
-        );
+
+        // Pre-sign "enroll if accepted" so sponsor (or relayer) can register in the vault on accept.
+        try {
+            await createAndPublishPendingRegisterAuthorization({
+                identity: ctx.identity,
+                provider,
+                trialId: BigInt(trialId),
+                nullifier: proofFresh.nullifier,
+                permitHolder: permitRecipient,
+                relayerBaseUrl: stageRelayerUrl,
+            });
+        } catch (err) {
+            console.warn("[apply] pending register auth failed (apply still succeeded):", err);
+        }
+
+        return txHash;
     });
 }
 
@@ -401,15 +567,24 @@ export async function signCompletionProofRequest(
     return signer.signMessage(ethers.getBytes(digest));
 }
 
-export async function fetchCompletionProof(params: {
-    kind: CompletionProofKind;
-    stageTxHash: string;
-    user?: string;
-    handle?: string;
-    callerSignature: string;
-}): Promise<{ eligible: boolean; cleartexts: string; decryptionProof: string }> {
-    const relayerUrl = getMedVaultRelayerUrl();
-    const response = await fetch(`${relayerUrl}/relay/completion-proof`, {
+async function fetchCompletionProofOnce(
+    baseUrl: string,
+    params: {
+        kind: CompletionProofKind;
+        stageTxHash: string;
+        user?: string;
+        handle?: string;
+        callerSignature: string;
+    }
+): Promise<{
+    eligible: boolean;
+    cleartexts: string;
+    decryptionProof: string;
+    completeTxHash?: string;
+    completeError?: string;
+}> {
+    const relayerUrl = baseUrl.replace(/\/$/, "");
+    const response = await fetch(`${relayerUrl || ""}/relay/completion-proof`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
@@ -422,7 +597,43 @@ export async function fetchCompletionProof(params: {
         eligible: Boolean(data.eligible),
         cleartexts: data.cleartexts as string,
         decryptionProof: data.decryptionProof as string,
+        completeTxHash: typeof data.completeTxHash === 'string' ? data.completeTxHash : undefined,
+        completeError: typeof data.completeError === 'string' ? data.completeError : undefined,
     };
+}
+
+export async function fetchCompletionProof(params: {
+    kind: CompletionProofKind;
+    stageTxHash: string;
+    user?: string;
+    handle?: string;
+    callerSignature: string;
+    manualPreferred?: string | null;
+}): Promise<{
+    eligible: boolean;
+    cleartexts: string;
+    decryptionProof: string;
+    completeTxHash?: string;
+    completeError?: string;
+    relayerUrl: string;
+}> {
+    const urls = getRelayersInFailoverOrder(params.manualPreferred);
+    let lastError = 'Failed to fetch completion proof';
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i]!;
+        try {
+            const result = await fetchCompletionProofOnce(url, params);
+            return { ...result, relayerUrl: url };
+        } catch (err: unknown) {
+            lastError = (err as Error)?.message || lastError;
+            if (i < urls.length - 1) {
+                console.warn(`[relayer] completion-proof via ${url || 'dev-proxy'} failed — trying next…`, lastError);
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw new Error(lastError);
 }
 
 /** @deprecated Use finalizeViaRelayerWithProof */

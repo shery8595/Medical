@@ -69,11 +69,13 @@ flowchart LR
 
 ## 2b. Limitations & Trust Model
 
+**Canonical trust model:** [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) (in-app: `/docs/trust-architecture`).
+
 | Layer | Guarantees | Does not guarantee |
 |-------|------------|-------------------|
 | **FHE** | On-chain homomorphic matching (`EligibilityEngine._computeEligibility`) | Off-chain PHI in IPFS, AI service, or indexer; wallet linkage on direct registration; L1 ETH visibility |
 | **Noir** | **Identity and policy attestation** (nullifier, profile commitment, staged handle, criteria echo) | fhEVM execution correctness; seal ≠ proof of eligibility |
-| **Relayer** | Gasless relay + gatekeeper; interim staged-ciphertext re-decrypt before finalize (P0.2 defense-in-depth) | Payout integrity via `FHE.select` gating (P2 shipped); see [formal-verification/certora-halmos-results.md](./formal-verification/certora-halmos-results.md) |
+| **Relayer** | Gasless relay; default patient-decrypt (browser); optional P0.2 relayer-assisted (not default; learns eligibility bit) | Payout integrity via `FHE.select` gating (P2 shipped); relayer cannot steal vault funds, cannot forge eligibility, can only censor or delay — see [formal-verification/certora-halmos-results.md](./formal-verification/certora-halmos-results.md) |
 | **Compliance** | Privacy-by-design on-chain matching | **Not HIPAA-compliant today** — see [PRODUCTION_READINESS_COMPLIANCE.md](./PRODUCTION_READINESS_COMPLIANCE.md) |
 
 ---
@@ -199,8 +201,8 @@ MedVault has **no token**. Revenue from clinical-trial infrastructure:
 
 - Direct `registerPatient` links wallet ↔ commitment in one tx (use relayer path for unlinkability). Production registration requires **`profileSaltCommitment`** (random salt; deterministic salts rejected).
 - Native ETH `msg.value` visible at transaction layer for deposits/funding.
-- Noir attestation binds to FHE stage handle hash; dishonest `decrypted_eligible` witness possible in encrypted-criteria mode — on-chain `FHE.checkSignatures` binding deferred (Zama SDK tooling gap). P2 `FHE.select` payout gating (shipped) prevents forged witnesses from authorizing incentive payouts.
-- **Forward-only revocation:** fhEVM `FHE.allow` is irreversible; sponsors who already decrypted a hybrid document may retain the AES key off-chain. Epoch gating blocks new reads; **`rotateDocument`** rotates keys and emits `DocumentLegacyHandleRevoked` for off-chain unpin (`updateDocumentKey` deprecated).
+- Noir attests identity and binding; FHE is sole eligibility authority in encrypted mode. `FHE.select` payout gating (P2) makes payout integrity independent of the attestation layer.
+- **Epoch-based key rotation:** fhEVM `FHE.allow` is irreversible; sponsors who already decrypted retain the AES key off-chain. Epoch gating blocks new reads; **`revokeAccess`** rotates keys and emits `DocumentLegacyHandleRevoked` for off-chain unpin.
 - **Withdraw/stake sufficiency:** comparison is homomorphic (`FHE.select`); no pre-settlement boolean leak — final ETH transfer amount remains public at settlement.
 
 See [SECURITY.md](../SECURITY.md) and [internal-docs/threat-model.md](../internal-docs/threat-model.md).

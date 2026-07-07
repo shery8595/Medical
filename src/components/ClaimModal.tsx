@@ -15,22 +15,38 @@ import {
     Info,
     Loader2,
     TrendingUp,
-    Sparkles,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAaveYield } from "../hooks/useAaveYield";
 import { useStaking } from "../hooks/useStaking";
 import { useWeb3 } from "../lib/Web3Context";
-import { getStakingManager, getSponsorIncentiveVault } from "../lib/contracts";
+import { getStakingManager, getSponsorIncentiveVault, getConfidentialETH } from "../lib/contracts";
+import { resolveParticipantRewardAddress } from "../lib/contracts/sponsorAdapters";
 import { cn } from "../lib/utils";
 import { reencryptUint64WithEphemeral } from "../lib/fhe";
-import { getConfidentialETH } from "../lib/contracts";
-import { resolveAnonymousNullifier, getStoredIdentity, getEphemeralSigner, generateEphemeralAddress } from "../lib/semaphore";
-import { claimRewardsWithCompletion, type ClaimWizardStep } from "../lib/claimFlow";
+import { fetchConfidentialBalanceHandle } from "../lib/confidentialBalance";
+import { resolveAnonymousNullifier, getStoredIdentity, getEphemeralSigner } from "../lib/semaphore";
+import {
+    claimRewardsWithCompletion,
+    readPendingWithdrawHandle,
+    type ClaimWizardStep,
+} from "../lib/claimFlow";
 import { getParticipantReceiptStatus } from "../lib/confirmReceiptFlow";
+import { markRewardClaimed } from "../lib/rewardClaimCache";
 import { ClaimWizard } from "./claim/ClaimWizard";
+import { ethers } from "ethers";
 
 const formatMicroEth = (units: number) => (units / 1_000_000).toFixed(6);
+const GWEI = 1_000_000_000n;
+
+function stakeableWei(receivedWei: bigint): bigint {
+    if (receivedWei <= 0n) return 0n;
+    return receivedWei - (receivedWei % GWEI);
+}
+
+function formatReceivedEth(receivedWei: bigint): string {
+    return ethers.formatEther(receivedWei);
+}
 
 interface ClaimModalProps {
     isOpen: boolean;
@@ -42,7 +58,7 @@ interface ClaimModalProps {
 export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalProps) {
     const { apy, loading: apyLoading, source: apySource } = useAaveYield();
     const { loading: stakeLoading } = useStaking();
-    const { signer, account } = useWeb3();
+    const { signer, account, readOnlyProvider } = useWeb3();
     const [wizardStep, setWizardStep] = useState<ClaimWizardStep>("preview");
     const [status, setStatus] = useState<string | null>(null);
     const [claiming, setClaiming] = useState(false);
@@ -53,37 +69,63 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
     const [confirmTxHash, setConfirmTxHash] = useState<string | null>(null);
     const [completeTxHash, setCompleteTxHash] = useState<string | null>(null);
     const [hasStagedEntitlement, setHasStagedEntitlement] = useState(false);
+    const [hasPendingWithdraw, setHasPendingWithdraw] = useState(false);
 
     const loadEphemeralRewardPreview = useCallback(async () => {
-        if (!signer) return;
         const identity = getStoredIdentity();
         if (!identity) {
             setPreviewEth(null);
             setHasStagedEntitlement(false);
             return;
         }
-        const provider = signer.provider;
+        const provider = readOnlyProvider ?? signer?.provider;
         if (!provider) return;
 
         setPreviewLoading(true);
         try {
-            const ephemeralAddress = await generateEphemeralAddress(identity);
-            const cETH = getConfidentialETH(signer);
-            const contractAddress = await cETH.getAddress();
-            const vault = getSponsorIncentiveVault(signer);
+            const resolvedNullifier = nullifier
+                ? BigInt(nullifier)
+                : await resolveAnonymousNullifier(provider, BigInt(trialId));
+            if (!resolvedNullifier) return;
 
-            const receiptStatus = await getParticipantReceiptStatus(signer, trialId, ephemeralAddress, 0);
-            setHasStagedEntitlement(receiptStatus.entitlementStaged && !receiptStatus.confirmedPayout);
+            const participantAddress = await resolveParticipantRewardAddress(
+                provider,
+                trialId,
+                resolvedNullifier,
+                identity,
+            );
+            const pendingHandle = await readPendingWithdrawHandle(provider, participantAddress);
+            setHasPendingWithdraw(Boolean(pendingHandle));
 
-            if (receiptStatus.entitlementStaged && !receiptStatus.confirmedPayout && receiptStatus.stagedShareWei > 0n) {
-                setPreviewEth((Number(receiptStatus.stagedShareWei) / 1e18).toFixed(6));
+            const ephemeralSigner = getEphemeralSigner(identity, provider);
+            const cETH = getConfidentialETH(ephemeralSigner);
+
+            let pendingConfirm = false;
+            let previewWei = 0n;
+            const scanCount = 4;
+            for (let i = 0; i < scanCount; i++) {
+                const receiptStatus = await getParticipantReceiptStatus(provider, trialId, participantAddress, i);
+                if (receiptStatus.entitlementStaged && !receiptStatus.confirmedPayout) {
+                    pendingConfirm = true;
+                    previewWei += receiptStatus.stagedShareWei;
+                }
+            }
+            setHasStagedEntitlement(pendingConfirm);
+
+            if (pendingConfirm && previewWei > 0n) {
+                setPreviewEth((Number(previewWei) / 1e18).toFixed(6));
                 return;
             }
 
-            const handle = await cETH.getBalance(ephemeralAddress);
-            const handleStr = handle.toString();
+            const contractAddress = await cETH.getAddress();
+            const vault = getSponsorIncentiveVault(signer);
+
+            const handleStr = await fetchConfidentialBalanceHandle(
+                participantAddress,
+                readOnlyProvider ?? provider,
+            );
             if (!handleStr || BigInt(handleStr) === 0n) {
-                const stagedWei = await vault.getStagedShareWei(BigInt(trialId), ephemeralAddress, 0);
+                const stagedWei = await vault.getStagedShareWei(BigInt(trialId), participantAddress, 0);
                 if (BigInt(stagedWei) > 0n) {
                     setPreviewEth((Number(stagedWei) / 1e18).toFixed(6));
                     setHasStagedEntitlement(true);
@@ -93,7 +135,6 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
                 return;
             }
 
-            const ephemeralSigner = getEphemeralSigner(identity, provider);
             const decrypted = await reencryptUint64WithEphemeral(
                 ephemeralSigner,
                 contractAddress,
@@ -103,10 +144,11 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
         } catch {
             setPreviewEth(null);
             setHasStagedEntitlement(false);
+            setHasPendingWithdraw(false);
         } finally {
             setPreviewLoading(false);
         }
-    }, [signer, trialId]);
+    }, [readOnlyProvider, signer, trialId, nullifier]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -118,13 +160,14 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
             setConfirmTxHash(null);
             setCompleteTxHash(null);
             setHasStagedEntitlement(false);
+            setHasPendingWithdraw(false);
             return;
         }
         void loadEphemeralRewardPreview();
         if (account) setWizardStep("destination");
     }, [isOpen, loadEphemeralRewardPreview, account]);
 
-    const claimEphemeralRewardToWallet = async () => {
+    const claimEphemeralRewardToWallet = async (options?: { emitReceiptProgress?: boolean }) => {
         if (!signer || !account) throw new Error("Wallet not connected.");
 
         const identity = getStoredIdentity();
@@ -132,20 +175,23 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
             throw new Error("Local Semaphore identity not found. Cannot claim rewards.");
         }
 
-        const provider = signer.provider;
+        const provider = readOnlyProvider ?? signer.provider;
         if (!provider) throw new Error("Wallet provider not available");
 
+        const ephemeralSigner = getEphemeralSigner(identity, provider);
         const resolvedNullifier = nullifier ? BigInt(nullifier) : await resolveAnonymousNullifier(provider, BigInt(trialId));
         if (!resolvedNullifier) {
             throw new Error("Nullifier could not be resolved");
         }
+        const ephemeralAddress = await resolveParticipantRewardAddress(
+            signer,
+            trialId,
+            resolvedNullifier,
+            identity,
+        );
 
-        const ephemeralSigner = getEphemeralSigner(identity, provider);
-        const ephemeralAddress = await generateEphemeralAddress(identity);
-
-        const cETH = getConfidentialETH(signer);
-        const handle = await cETH.getBalance(ephemeralAddress);
-        const handleStr = handle.toString();
+        const cETH = getConfidentialETH(ephemeralSigner);
+        const handleStr = await fetchConfidentialBalanceHandle(ephemeralAddress, provider);
         let units = 0;
 
         if (handleStr && BigInt(handleStr) !== 0n) {
@@ -157,7 +203,7 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
             units = Number(decrypted);
         }
 
-        if (units <= 0 && !hasStagedEntitlement) {
+        if (units <= 0 && !hasStagedEntitlement && !hasPendingWithdraw) {
             throw new Error("No staged entitlement or cETH balance to claim.");
         }
 
@@ -175,82 +221,153 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
                 if (p.claimTxHash) setClaimTxHash(p.claimTxHash);
                 if (p.completeTxHash) setCompleteTxHash(p.completeTxHash);
             },
-            identity
+            identity,
+            { emitReceiptProgress: options?.emitReceiptProgress }
         );
 
         setClaimTxHash(result.claimTxHash);
         if (result.completeTxHash) setCompleteTxHash(result.completeTxHash);
 
+        if (!result.credited || result.receivedWei <= 0n) {
+            throw new Error("Payout did not complete — ETH was not received in your wallet.");
+        }
+
         return {
-            units,
-            claimedWei: BigInt(units) * 1_000_000_000_000n,
+            receivedWei: result.receivedWei,
+            credited: result.credited,
         };
+    };
+
+    const markTrialRewardClaimed = async () => {
+        const identity = getStoredIdentity();
+        if (!identity || !signer) return;
+        const provider = readOnlyProvider ?? signer.provider;
+        if (!provider) return;
+        const resolvedNullifier = nullifier
+            ? BigInt(nullifier)
+            : await resolveAnonymousNullifier(provider, BigInt(trialId));
+        if (!resolvedNullifier) return;
+        const participantAddress = await resolveParticipantRewardAddress(
+            signer,
+            trialId,
+            resolvedNullifier,
+            identity,
+        );
+        markRewardClaimed(trialId, participantAddress);
     };
 
     const handleClaimDirect = async () => {
         try {
             setClaiming(true);
             setStatus("Starting secure payout wizard…");
-            await claimEphemeralRewardToWallet();
+            const { receivedWei } = await claimEphemeralRewardToWallet();
+            await markTrialRewardClaimed();
             setWizardStep("receipt");
-            setStatus("Claim successful! Funds moved to your main wallet.");
+            setStatus(
+                hasPendingWithdraw
+                    ? `Payout resumed — ${formatReceivedEth(receivedWei)} ETH delivered to your main wallet.`
+                    : `Claim successful! ${formatReceivedEth(receivedWei)} ETH moved to your main wallet.`,
+            );
             setTimeout(onClose, 2500);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Direct claim failed:", err);
             setWizardStep("error");
-            setStatus(`Error: ${err.reason || err.message || "Failed to claim"}`);
+            const msg =
+                err instanceof Error
+                    ? err.message
+                    : typeof (err as { reason?: string })?.reason === "string"
+                      ? (err as { reason: string }).reason
+                      : "Failed to claim";
+            setStatus(`Error: ${msg}`);
         } finally {
             setClaiming(false);
         }
     };
 
     const handleStakeOnAave = async () => {
-        if (!signer) return;
+        if (!signer || !account) return;
         try {
             setStaking(true);
             setStatus("Claiming encrypted reward into your main wallet...");
-            const { claimedWei } = await claimEphemeralRewardToWallet();
+            const { receivedWei } = await claimEphemeralRewardToWallet({ emitReceiptProgress: false });
 
-            setStatus("Staking claimed funds into Aave V3...");
+            const stakeWei = stakeableWei(receivedWei);
+            if (stakeWei <= 0n) {
+                throw new Error(
+                    "Payout arrived but the amount is too small to stake on Aave (minimum 1 gwei). Use Main Wallet instead.",
+                );
+            }
+
+            const dustWei = receivedWei - stakeWei;
+            setWizardStep("claiming");
+            setStatus(`Staking ${formatReceivedEth(stakeWei)} ETH into Aave V3…`);
             const stakingManager = getStakingManager(signer);
-            const tx = await stakingManager.stake({ value: claimedWei });
+            const tx = await stakingManager.stake({ value: stakeWei });
             await tx.wait();
 
+            await markTrialRewardClaimed();
             setWizardStep("receipt");
-            setStatus("Staking successful! Your claimed reward is now earning through Aave.");
-            setTimeout(onClose, 2500);
-        } catch (err: any) {
+            setStatus(
+                dustWei > 0n
+                    ? `Staked ${formatReceivedEth(stakeWei)} ETH on Aave. ${formatReceivedEth(dustWei)} ETH remains in your wallet (stake requires whole gwei). Reveal stake on Medical Vault.`
+                    : `Staked ${formatReceivedEth(stakeWei)} ETH on Aave. Tap Reveal Stake on Medical Vault to view your balance.`,
+            );
+            setTimeout(onClose, 3500);
+        } catch (err: unknown) {
             setWizardStep("error");
-            setStatus(`Error: ${err.message || "Failed to stake"}`);
+            const msg =
+                err instanceof Error
+                    ? err.message
+                    : typeof (err as { reason?: string })?.reason === "string"
+                      ? (err as { reason: string }).reason
+                      : "Failed to stake";
+            setStatus(`Error: ${msg}`);
         } finally {
             setStaking(false);
         }
     };
 
     const isLoading = claiming || staking || stakeLoading;
+    const wizardExpanded =
+        wizardStep !== "preview" &&
+        wizardStep !== "destination" &&
+        wizardStep !== "error";
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-[32px]">
-                <div className="relative p-8">
-                    <div className="absolute top-0 right-0 p-8">
-                        <Sparkles className="h-12 w-12 text-accent/10 animate-pulse" />
-                    </div>
-
-                    <DialogHeader className="relative z-10">
-                        <Badge variant="secondary" className="w-fit mb-4 bg-accent/10 text-accent border-accent/20 font-mono text-[10px] tracking-widest uppercase py-1">
+            <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-2xl">
+                <div className="relative p-5 sm:p-6">
+                    <DialogHeader className="relative z-10 pr-8">
+                        <Badge variant="secondary" className="w-fit mb-2 bg-accent/10 text-accent border-accent/20 font-mono text-[9px] tracking-widest uppercase py-0.5">
                             Secure Payout
                         </Badge>
-                        <DialogTitle className="text-3xl font-display font-black tracking-tight text-slate-900 dark:text-white">
+                        <DialogTitle className="text-lg font-display font-bold tracking-tight text-slate-900 dark:text-white">
                             Claim Compensation
                         </DialogTitle>
-                        <DialogDescription className="text-slate-500 dark:text-slate-400 font-medium mt-2">
-                            Confirm staged entitlements, then move confidential cETH to your main wallet via claimParticipantRewards and relayer completeWithdrawTo.
+                        <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-snug">
+                            Confirm staged rewards, then receive ETH in your main wallet.
                         </DialogDescription>
                     </DialogHeader>
 
+                    <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-baseline justify-between gap-3">
+                        <div>
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Available</p>
+                            <div className="flex items-baseline gap-1.5">
+                                <span className="text-2xl font-black tabular-nums text-slate-900 dark:text-white">
+                                    {previewLoading ? "…" : previewEth ?? "—"}
+                                </span>
+                                <span className="text-sm font-bold text-slate-400 uppercase">ETH</span>
+                            </div>
+                        </div>
+                        {account && (
+                            <p className="text-[9px] text-right text-slate-400 font-mono leading-tight max-w-[120px] truncate" title={account}>
+                                → {account.slice(0, 6)}…{account.slice(-4)}
+                            </p>
+                        )}
+                    </div>
+
                     <ClaimWizard
-                        className="mt-6"
+                        className="mt-3"
                         step={wizardStep}
                         destination={account ?? ""}
                         previewEth={previewEth}
@@ -259,67 +376,55 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
                         claimTxHash={claimTxHash}
                         completeTxHash={completeTxHash}
                         statusMessage={status}
+                        expanded={wizardExpanded}
                     />
 
-                    <div className="mt-6 p-6 rounded-[24px] bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center text-center">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Available Payout</p>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-5xl font-black text-slate-900 dark:text-white">
-                                {previewLoading ? "…" : previewEth ?? "Private"}
-                            </span>
-                            <span className="text-xl font-bold text-slate-400 uppercase">ETH</span>
-                        </div>
-                    </div>
-
-                    <div className="mt-6 space-y-4">
-                        <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                            <TrendingUp className="h-5 w-5 shrink-0" />
-                            <div className="flex-1">
-                                <p className="text-xs font-bold leading-tight">Stake on Aave V3</p>
-                                <p className="text-[10px] font-medium opacity-80">Claim to your main wallet, then stake the same amount into the Aave WETH market.</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-lg font-black leading-none">{apyLoading ? "..." : `${apy}%`}</p>
-                                <p className="text-[9px] font-bold uppercase tracking-tighter opacity-60">Est. APR</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-emerald-700">
+                            <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold leading-tight truncate">Aave {apyLoading ? "…" : `${apy}%`}</p>
+                                <p className="text-[9px] opacity-75 truncate">Stake after claim</p>
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                            <ShieldCheck className="h-5 w-5 shrink-0" />
-                            <div className="flex-1">
-                                <p className="text-xs font-bold leading-tight">Privacy Guard Enabled</p>
-                                <p className="text-[10px] font-medium opacity-80">Your intent is hidden using Zama FHE.</p>
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10 text-indigo-700">
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold leading-tight">FHE protected</p>
+                                <p className="text-[9px] opacity-75 truncate">Private payout</p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="mt-8 grid grid-cols-2 gap-4">
+                    <div className="mt-4 grid grid-cols-2 gap-2.5">
                         <Button
                             variant="outline"
-                            className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 border-2 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 font-bold"
+                            className="h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 font-semibold text-[11px]"
                             onClick={handleClaimDirect}
                             disabled={isLoading}
                         >
-                            {claiming ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wallet className="h-5 w-5" />}
-                            <span className="text-xs uppercase tracking-wider">Main Wallet</span>
+                            {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                            <span className="uppercase tracking-wide">
+                                {hasPendingWithdraw ? "Resume Payout" : "Main Wallet"}
+                            </span>
                         </Button>
                         <Button
-                            className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-accent hover:bg-accent/90 text-white font-bold shadow-lg shadow-accent/25 overflow-hidden group"
+                            className="h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 bg-accent hover:bg-accent/90 text-white font-semibold text-[11px] shadow-md shadow-accent/20"
                             onClick={handleStakeOnAave}
                             disabled={isLoading}
                         >
-                            {staking ? <Loader2 className="h-5 w-5 animate-spin" /> : <Coins className="h-5 w-5 group-hover:scale-110 transition-transform" />}
-                            <span className="text-xs uppercase tracking-wider">Stake & Earn</span>
+                            {staking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coins className="h-4 w-4" />}
+                            <span className="uppercase tracking-wide">Stake & Earn</span>
                         </Button>
                     </div>
 
                     {status && (
                         <motion.div
-                            initial={{ opacity: 0, y: 10 }}
+                            initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
                             className={cn(
-                                "mt-6 p-4 rounded-xl text-center text-xs font-bold flex items-center justify-center gap-2",
-                                status.includes("Error") ? "bg-rose-50 text-rose-500 border border-rose-100" : "bg-accent/5 text-accent border border-accent/10"
+                                "mt-3 px-3 py-2 rounded-lg text-center text-[11px] font-medium flex items-center justify-center gap-1.5 break-words",
+                                status.includes("Error") ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-accent/5 text-accent border border-accent/10"
                             )}
                         >
                             {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -327,14 +432,16 @@ export function ClaimModal({ isOpen, onClose, trialId, nullifier }: ClaimModalPr
                         </motion.div>
                     )}
 
-                    <div className="mt-6 flex items-start gap-2 text-slate-400">
-                        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <p className="text-[10px] leading-relaxed italic">
-                            {hasStagedEntitlement
-                                ? "Staged rewards require confirmReceipt before claim. Your ephemeral key submits confirm txs; the main wallet runs FHE public decrypt."
-                                : "Main Wallet runs confirmReceipt → claimParticipantRewards → completeWithdrawTo via the relayer KMS proof."}
+                    {!wizardExpanded && (
+                        <p className="mt-3 text-[9px] leading-relaxed text-slate-400 flex items-start gap-1.5">
+                            <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                            {hasPendingWithdraw
+                                ? "Withdraw already staged — Claim will resume relayer completion (not a new claim)."
+                                : hasStagedEntitlement
+                                  ? "Staged rewards need confirmReceipt before claim."
+                                  : "Payout runs confirm → claim → relayer withdraw."}
                         </p>
-                    </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>

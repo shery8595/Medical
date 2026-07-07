@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { CriteriaBuilder } from "../components/dashboard/CriteriaBuilder";
 import { AutomationHeartbeat } from "../components/dashboard/AutomationHeartbeat";
 import { BlindRankingPanel } from "../components/dashboard/BlindRankingPanel";
@@ -34,8 +34,10 @@ import {
     ShieldAlert
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { friendlyMilestoneDistributeError } from "../lib/contractErrors";
 import {
     distributePartialMilestone,
+    enrollUnregisteredAcceptedParticipants,
     fundTrialPool,
     getAnonymousParticipantMilestoneState,
     getTrialPoolAndMilestones,
@@ -92,6 +94,8 @@ export function SponsorTrialDetailsPage() {
     const [anonymousMilestoneState, setAnonymousMilestoneState] = useState<
         Record<string, { participant: string; registered: boolean; progress: number; staged: boolean[]; confirmed: boolean[]; paid: boolean[] }>
     >({});
+    const [anonymousStateLoading, setAnonymousStateLoading] = useState(false);
+    const [protocolRefreshing, setProtocolRefreshing] = useState(false);
     const [newMilestones, setNewMilestones] = useState([
         { name: "Screening", weight: 2500, deadline: Math.floor(Date.now() / 1000) + 86400 * 7 },
         { name: "Week 4", weight: 2500, deadline: Math.floor(Date.now() / 1000) + 86400 * 30 },
@@ -99,64 +103,102 @@ export function SponsorTrialDetailsPage() {
         { name: "Final Check", weight: 2500, deadline: Math.floor(Date.now() / 1000) + 86400 * 90 },
     ]);
 
-    useEffect(() => {
-        const fetchProtocolData = async () => {
-            if (!signer || !id) return;
-            try {
-                const protocolData = await getTrialPoolAndMilestones(signer, id, trial?.endTime);
-                setPoolInfo({
-                    totalFunded: protocolData.totalFunded ?? "0",
-                    distributed: protocolData.distributed,
-                    reclaim: protocolData.reclaim,
-                });
-                if (protocolData.milestones.length > 0) {
-                    setMilestones(protocolData.milestones);
-                }
-                setMilestonesLoading(false);
-            } catch (err) {
-                console.error("Error fetching protocol data:", err);
-                setMilestonesLoading(false);
+    const refreshProtocolData = useCallback(async () => {
+        if (!signer || !id) return;
+        setProtocolRefreshing(true);
+        try {
+            const protocolData = await getTrialPoolAndMilestones(signer, id, trial?.endTime);
+            setPoolInfo({
+                totalFunded: protocolData.totalFunded ?? "0",
+                distributed: protocolData.distributed,
+                reclaim: protocolData.reclaim,
+            });
+            if (protocolData.milestones.length > 0) {
+                setMilestones(protocolData.milestones);
             }
-        };
-        fetchProtocolData();
+            setMilestonesLoading(false);
+        } catch (err) {
+            console.error("Error fetching protocol data:", err);
+            setMilestonesLoading(false);
+        } finally {
+            setProtocolRefreshing(false);
+        }
     }, [signer, id, trial?.endTime]);
 
-    useEffect(() => {
-        let cancelled = false;
-        const loadAnonymousMilestoneState = async () => {
-            if (!signer || !id || milestones.length === 0 || anonymousMatches.length === 0) {
-                setAnonymousMilestoneState({});
-                return;
-            }
+    const anonymousMatchKey = anonymousMatches
+        .filter((match) => match.nullifier)
+        .map((match) => match.nullifier)
+        .join("|");
+    const anonymousNullifiers = useMemo(
+        () => anonymousMatches.filter((match) => match.nullifier).map((match) => match.nullifier!),
+        [anonymousMatchKey],
+    );
 
+    const refreshAnonymousMilestoneState = useCallback(async () => {
+        if (!signer || !id || milestones.length === 0 || anonymousNullifiers.length === 0) {
+            setAnonymousMilestoneState({});
+            setAnonymousStateLoading(false);
+            return;
+        }
+
+        setAnonymousStateLoading(true);
+        try {
             const entries = await Promise.all(
-                anonymousMatches
-                    .filter((match) => match.nullifier)
-                    .map(async (match) => {
-                        try {
-                            const state = await getAnonymousParticipantMilestoneState(
-                                signer,
-                                id,
-                                match.nullifier!,
-                                milestones.length
-                            );
-                            return state ? [match.nullifier!, state] as const : null;
-                        } catch {
-                            return null;
-                        }
-                    })
+                anonymousNullifiers.map(async (nullifier) => {
+                    try {
+                        const state = await getAnonymousParticipantMilestoneState(
+                            signer,
+                            id,
+                            nullifier,
+                            milestones.length
+                        );
+                        return state ? [nullifier, state] as const : null;
+                    } catch {
+                        return null;
+                    }
+                })
             );
+            setAnonymousMilestoneState(
+                Object.fromEntries(
+                    entries.filter(Boolean) as Array<
+                        readonly [
+                            string,
+                            {
+                                participant: string;
+                                registered: boolean;
+                                progress: number;
+                                staged: boolean[];
+                                confirmed: boolean[];
+                                paid: boolean[];
+                            },
+                        ]
+                    >
+                )
+            );
+        } finally {
+            setAnonymousStateLoading(false);
+        }
+    }, [signer, id, milestones.length, anonymousNullifiers]);
 
-            if (!cancelled) {
-                setAnonymousMilestoneState(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, { participant: string; registered: boolean; progress: number; staged: boolean[]; confirmed: boolean[]; paid: boolean[] }]>));
-            }
-        };
+    useEffect(() => {
+        void refreshProtocolData();
+    }, [refreshProtocolData]);
 
-        void loadAnonymousMilestoneState();
-        return () => {
-            cancelled = true;
-        };
-    }, [signer, id, milestones.length, anonymousMatches.map((match) => match.nullifier).join("|")]);
+    useEffect(() => {
+        void refreshAnonymousMilestoneState();
+    }, [refreshAnonymousMilestoneState]);
+
+    const paymentTabActive = opsTab === "milestones" || opsTab === "rewards";
+    useEffect(() => {
+        if (!paymentTabActive) return;
+        void refreshProtocolData();
+        void refreshAnonymousMilestoneState();
+        const interval = window.setInterval(() => {
+            void refreshProtocolData();
+            void refreshAnonymousMilestoneState();
+        }, 20_000);
+        return () => window.clearInterval(interval);
+    }, [paymentTabActive, refreshProtocolData, refreshAnonymousMilestoneState]);
 
     const handleUpdateStatus = async (patientAddress: string, newStatus: number) => {
         if (!signer || !id) return;
@@ -286,24 +328,84 @@ export function SponsorTrialDetailsPage() {
 
     const handleDistributePartial = async (index: number) => {
         if (!signer || !id) return;
+
+        const acceptedNullifiers = anonymousMatches
+            .filter((match) => match.applicationStatus === "Accepted" && match.nullifier)
+            .map((match) => match.nullifier!);
+
+        if (acceptedNullifiers.length > 0) {
+            const registrationStates = await Promise.all(
+                acceptedNullifiers.map(async (nullifier) => {
+                    try {
+                        return await getAnonymousParticipantMilestoneState(
+                            signer,
+                            id,
+                            nullifier,
+                            milestones.length,
+                        );
+                    } catch {
+                        return null;
+                    }
+                }),
+            );
+            const hasUnregistered = registrationStates.some((state) => state && !state.registered);
+
+            if (hasUnregistered) {
+                setMilestoneStatus(`Completing enrollment for Phase ${index + 1}…`);
+                const gapResult = await enrollUnregisteredAcceptedParticipants(signer, id, acceptedNullifiers);
+                if (gapResult.enrolled > 0) {
+                    setMilestoneStatus(
+                        `Enrolled ${gapResult.enrolled} participant${gapResult.enrolled === 1 ? "" : "s"} (pool was not funded at accept time)…`,
+                    );
+                }
+            }
+
+            const entries = await Promise.all(
+                acceptedNullifiers.map(async (nullifier) => {
+                    try {
+                        const state = await getAnonymousParticipantMilestoneState(
+                            signer,
+                            id,
+                            nullifier,
+                            milestones.length,
+                        );
+                        return state ? [nullifier, state] as const : null;
+                    } catch {
+                        return null;
+                    }
+                }),
+            );
+            setAnonymousMilestoneState((prev) => ({
+                ...prev,
+                ...Object.fromEntries(entries.filter(Boolean) as Array<
+                    readonly [
+                        string,
+                        {
+                            participant: string;
+                            registered: boolean;
+                            progress: number;
+                            staged: boolean[];
+                            confirmed: boolean[];
+                            paid: boolean[];
+                        },
+                    ]
+                >),
+            }));
+        }
+
+        const phasePreview = getAnonymousPhaseAggregateState(index);
+        if (index > 0 && phasePreview.total > 0 && phasePreview.promotedCount === 0) {
+            setMilestoneStatus(
+                `Cannot stage Phase ${index + 1}: promote participants to this phase first (use Promote P${index + 1} on the match card below).`,
+            );
+            return;
+        }
+
         setReleasingPhaseIndex(index);
         setMilestoneStatus(`Initiating payout for Phase ${index + 1}...`);
         try {
             const result = await distributePartialMilestone(signer, id, index);
-            if (result.creditFailures.length > 0) {
-                const summary = result.creditFailures
-                    .map((f) => `${f.participant.slice(0, 10)}… (${f.reason})`)
-                    .join("; ");
-                setMilestoneStatus(
-                    `Phase ${index + 1} partially staged — ${result.creditFailures.length} participant(s) could not be credited (${summary}). Eligible patients may still confirmReceipt; check pool enrollment and eligibility.`
-                );
-            } else {
-                setMilestoneStatus(
-                    `Success! Phase ${index + 1} entitlements staged — patients must confirmReceipt to receive cETH.`
-                );
-            }
-            // Update local state
-            setMilestones(prev => prev.map((m, i) => i === index ? { ...m, distributed: true } : m));
+            let refreshedState: typeof anonymousMilestoneState = {};
             if (anonymousMatches.length > 0) {
                 const entries = await Promise.all(
                     anonymousMatches
@@ -322,22 +424,61 @@ export function SponsorTrialDetailsPage() {
                             }
                         })
                 );
-                setAnonymousMilestoneState(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, { participant: string; registered: boolean; progress: number; staged: boolean[]; confirmed: boolean[]; paid: boolean[] }]>));
+                refreshedState = Object.fromEntries(
+                    entries.filter(Boolean) as Array<
+                        readonly [
+                            string,
+                            {
+                                participant: string;
+                                registered: boolean;
+                                progress: number;
+                                staged: boolean[];
+                                confirmed: boolean[];
+                                paid: boolean[];
+                            },
+                        ]
+                    >,
+                );
+                setAnonymousMilestoneState(refreshedState);
             }
-        } catch (err: any) {
-            console.error(err);
-            const raw = `${err.reason || ""} ${err.message || ""} ${err.shortMessage || ""}`.toLowerCase();
-            if (
-                raw.includes("no eligible participants") ||
-                raw.includes("missing revert data") ||
-                (err.code === "CALL_EXCEPTION" && err.data == null)
-            ) {
+
+            const accepted = anonymousMatches.filter(
+                (match) => match.applicationStatus === "Accepted" && match.nullifier,
+            );
+            const stagedAfter = accepted.filter((match) => {
+                const state = refreshedState[match.nullifier!];
+                return Boolean(state?.staged?.[index]);
+            }).length;
+
+            if (stagedAfter === 0) {
+                const failureHint =
+                    result.creditFailures.length > 0
+                        ? ` Credit failures: ${result.creditFailures.map((f) => `${f.participant.slice(0, 10)}… (${f.reason})`).join("; ")}.`
+                        : " No participant received a staged entitlement on-chain.";
                 setMilestoneStatus(
-                    `Error: No unpaid participants are eligible for Phase ${index + 1}. They may need promotion first, or this phase may already be released.`
+                    `Phase ${index + 1} transaction confirmed, but 0/${phasePreview.total || accepted.length} participants were staged.${failureHint}`,
                 );
                 return;
             }
-            setMilestoneStatus(`Error: ${err.reason || err.message || "Payout failed"}`);
+
+            if (result.creditFailures.length > 0) {
+                const summary = result.creditFailures
+                    .map((f) => `${f.participant.slice(0, 10)}… (${f.reason})`)
+                    .join("; ");
+                setMilestoneStatus(
+                    `Phase ${index + 1} partially staged — ${stagedAfter} participant(s) staged; ${result.creditFailures.length} failed (${summary}).`,
+                );
+            } else {
+                setMilestoneStatus(
+                    `Success! Phase ${index + 1} entitlements staged for ${stagedAfter} participant(s) — they must confirmReceipt in My Applications.`,
+                );
+            }
+            setMilestones((prev) => prev.map((m, i) => (i === index ? { ...m, distributed: true } : m)));
+            await refreshProtocolData();
+            await refreshAnonymousMilestoneState();
+        } catch (err: any) {
+            console.error(err);
+            setMilestoneStatus(`Error: ${friendlyMilestoneDistributeError(err, index + 1)}`);
         } finally {
             setReleasingPhaseIndex(null);
         }
@@ -363,6 +504,7 @@ export function SponsorTrialDetailsPage() {
             if (refreshed) {
                 setAnonymousMilestoneState((prev) => ({ ...prev, [nullifier]: refreshed }));
             }
+            await refreshProtocolData();
         } catch (err: any) {
             console.error("Anonymous Promotion Error:", err);
             const raw = `${err.reason || ""} ${err.message || ""} ${err.shortMessage || ""}`.toLowerCase();
@@ -397,26 +539,8 @@ export function SponsorTrialDetailsPage() {
         try {
             await pruneUnconfirmedSlots(signer, id, index);
             setMilestoneStatus(`Success! Unconfirmed slots pruned for Phase ${index + 1}.`);
-            if (anonymousMatches.length > 0) {
-                const entries = await Promise.all(
-                    anonymousMatches
-                        .filter((match) => match.nullifier)
-                        .map(async (match) => {
-                            try {
-                                const state = await getAnonymousParticipantMilestoneState(
-                                    signer,
-                                    id,
-                                    match.nullifier!,
-                                    milestones.length
-                                );
-                                return state ? [match.nullifier!, state] as const : null;
-                            } catch {
-                                return null;
-                            }
-                        })
-                );
-                setAnonymousMilestoneState(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, { participant: string; registered: boolean; progress: number; staged: boolean[]; confirmed: boolean[]; paid: boolean[] }]>));
-            }
+            await refreshAnonymousMilestoneState();
+            await refreshProtocolData();
         } catch (err: any) {
             console.error(err);
             setMilestoneStatus(`Error: ${err.reason || err.message || "Prune failed"}`);
@@ -439,6 +563,7 @@ export function SponsorTrialDetailsPage() {
             .map((match) => anonymousMilestoneState[match.nullifier!])
             .filter(Boolean);
         const allKnown = accepted.length > 0 && states.length === accepted.length;
+        const registeredCount = states.filter((state) => state.registered).length;
         const promotedCount = states.filter((state) => state.progress >= milestoneIndex + 1).length;
         const stagedCount = states.filter((state) => state.staged?.[milestoneIndex]).length;
         const releasedCount = states.filter((state) => state.confirmed?.[milestoneIndex] ?? state.paid?.[milestoneIndex]).length;
@@ -446,13 +571,249 @@ export function SponsorTrialDetailsPage() {
         return {
             total: accepted.length,
             allKnown,
+            registeredCount,
             promotedCount,
             stagedCount,
             releasedCount,
+            allRegistered: allKnown && registeredCount === accepted.length,
             allPromoted: allKnown && promotedCount === accepted.length,
             allStaged: allKnown && stagedCount === accepted.length,
             allReleased: allKnown && releasedCount === accepted.length,
         };
+    };
+
+    type PhaseRowTone = "idle" | "ready" | "promoted" | "staged" | "done" | "blocked" | "staging";
+
+    const resolvePhaseRowUi = (
+        idx: number,
+        milestone: { name: string; distributed?: boolean },
+        phase: ReturnType<typeof getAnonymousPhaseAggregateState>,
+        isReleasing: boolean,
+    ): {
+        statusLabel: string;
+        buttonLabel: string;
+        buttonDisabled: boolean;
+        tone: PhaseRowTone;
+        hint: string | null;
+    } => {
+        const onChainDone = Boolean(milestone.distributed) || (idx === 0 && poolInfo.distributed);
+
+        if (isReleasing) {
+            return {
+                statusLabel: "Staging in progress",
+                buttonLabel: "Staging…",
+                buttonDisabled: true,
+                tone: "staging",
+                hint: null,
+            };
+        }
+
+        if (phase.total === 0) {
+            if (onChainDone) {
+                return {
+                    statusLabel: "Already distributed",
+                    buttonLabel: "Done",
+                    buttonDisabled: true,
+                    tone: "done",
+                    hint:
+                        idx === 0
+                            ? "Initial screening entitlements were already released on-chain."
+                            : `${milestone.name} was already distributed on-chain.`,
+                };
+            }
+            return {
+                statusLabel: "No enrolled participants",
+                buttonLabel: "Stage entitlements",
+                buttonDisabled: true,
+                tone: "idle",
+                hint: "Accept participants before releasing milestone payouts.",
+            };
+        }
+
+        if (phase.allReleased) {
+            return {
+                statusLabel: "All confirmed",
+                buttonLabel: "Complete",
+                buttonDisabled: true,
+                tone: "done",
+                hint: `All ${phase.total} participant(s) confirmed receipt for ${milestone.name}.`,
+            };
+        }
+
+        if (phase.releasedCount > 0) {
+            return {
+                statusLabel: `${phase.releasedCount}/${phase.total} confirmed`,
+                buttonLabel: phase.stagedCount > phase.releasedCount ? "Awaiting confirm" : "Partially confirmed",
+                buttonDisabled: true,
+                tone: "staged",
+                hint: "Some participants still need to confirm receipt in My Applications.",
+            };
+        }
+
+        if (phase.allStaged || (onChainDone && phase.stagedCount === phase.total)) {
+            return {
+                statusLabel: "Staged — awaiting confirm",
+                buttonLabel: "Staged",
+                buttonDisabled: true,
+                tone: "staged",
+                hint: "Participants must confirm receipt before funds are finalized.",
+            };
+        }
+
+        if (phase.stagedCount > 0) {
+            return {
+                statusLabel: `${phase.stagedCount}/${phase.total} staged`,
+                buttonLabel: "Partially staged",
+                buttonDisabled: true,
+                tone: "staged",
+                hint: null,
+            };
+        }
+
+        if (onChainDone && phase.stagedCount === 0) {
+            return {
+                statusLabel: "Already distributed",
+                buttonLabel: "Done",
+                buttonDisabled: true,
+                tone: "done",
+                hint:
+                    idx === 0
+                        ? "Initial screening payout was already released (automation or prior distribution)."
+                        : `${milestone.name} entitlements were already released on-chain.`,
+            };
+        }
+
+        const trialEnded =
+            poolInfo.reclaim.trialEnded ||
+            Boolean(trial?.endTime && parseInt(trial.endTime, 10) <= Math.floor(Date.now() / 1000));
+
+        if (idx === 0 && !trialEnded) {
+            return {
+                statusLabel: "Awaiting trial end",
+                buttonLabel: "Stage after end",
+                buttonDisabled: true,
+                tone: "blocked",
+                hint: "Screening (Phase 1) entitlements can only be staged after the trial end date.",
+            };
+        }
+
+        if (phase.allKnown && phase.registeredCount < phase.total) {
+            return {
+                statusLabel: `${phase.registeredCount}/${phase.total} in reward pool`,
+                buttonLabel: "Enroll participants",
+                buttonDisabled: true,
+                tone: "blocked",
+                hint: "Accepted patients must be enrolled in the incentive pool before staging payouts (re-accept or use enroll on match cards).",
+            };
+        }
+
+        if (idx > 0 && phase.promotedCount === 0) {
+            return {
+                statusLabel: "Awaiting promotion",
+                buttonLabel: "Promote first",
+                buttonDisabled: true,
+                tone: "blocked",
+                hint: `Promote participants to ${milestone.name} before staging entitlements.`,
+            };
+        }
+
+        if (phase.allPromoted) {
+            return {
+                statusLabel: `All ${phase.total} promoted`,
+                buttonLabel: "Stage entitlements",
+                buttonDisabled: false,
+                tone: "ready",
+                hint: null,
+            };
+        }
+
+        if (phase.promotedCount > 0) {
+            return {
+                statusLabel: `${phase.promotedCount}/${phase.total} promoted`,
+                buttonLabel: "Stage entitlements",
+                buttonDisabled: false,
+                tone: "promoted",
+                hint: "You can stage now; remaining participants can be promoted later.",
+            };
+        }
+
+        if (idx === 0 && phase.registeredCount === phase.total) {
+            return {
+                statusLabel: "Ready for screening payout",
+                buttonLabel: "Stage entitlements",
+                buttonDisabled: false,
+                tone: "ready",
+                hint: null,
+            };
+        }
+
+        return {
+            statusLabel: "Ready",
+            buttonLabel: "Stage entitlements",
+            buttonDisabled: false,
+            tone: "idle",
+            hint: null,
+        };
+    };
+
+    const getParticipantPhaseUi = (
+        mIdx: number,
+        nullifier: string | undefined,
+    ): { label: string; sublabel: string; disabled: boolean; tone: "locked" | "action" | "promoted" | "staged" | "released" } => {
+        const phase = getAnonymousPhaseState(nullifier, mIdx);
+        const prevPromoted = mIdx === 0 || getAnonymousPhaseState(nullifier, mIdx - 1).promoted;
+
+        if (!prevPromoted) {
+            return { label: `P${mIdx + 1} locked`, sublabel: "Complete prior phase", disabled: true, tone: "locked" };
+        }
+        if (phase.released) {
+            return { label: `P${mIdx + 1} released`, sublabel: "Funds confirmed", disabled: true, tone: "released" };
+        }
+        if (phase.staged) {
+            return { label: `P${mIdx + 1} staged`, sublabel: "Awaiting confirm", disabled: true, tone: "staged" };
+        }
+        if (phase.promoted) {
+            return { label: `P${mIdx + 1} promoted`, sublabel: "Ready for release", disabled: true, tone: "promoted" };
+        }
+        return { label: `Promote P${mIdx + 1}`, sublabel: "Not started", disabled: false, tone: "action" };
+    };
+
+    const phaseToneClasses: Record<PhaseRowTone, { badge: string; icon: string; button: string }> = {
+        idle: {
+            badge: "bg-slate-100 text-slate-600",
+            icon: "bg-slate-100 text-slate-500",
+            button: "bg-slate-100 text-slate-800 border-slate-200",
+        },
+        ready: {
+            badge: "bg-sky-100 text-sky-700",
+            icon: "bg-sky-100 text-sky-700",
+            button: "bg-sky-600 text-white border-sky-600 hover:bg-sky-700",
+        },
+        promoted: {
+            badge: "bg-teal-100 text-teal-700",
+            icon: "bg-teal-100 text-teal-700",
+            button: "bg-teal-600 text-white border-teal-600",
+        },
+        staged: {
+            badge: "bg-amber-100 text-amber-800",
+            icon: "bg-amber-100 text-amber-700",
+            button: "border-amber-200 bg-amber-50 text-amber-800",
+        },
+        done: {
+            badge: "bg-emerald-100 text-emerald-700",
+            icon: "bg-emerald-100 text-emerald-600",
+            button: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        },
+        blocked: {
+            badge: "bg-orange-100 text-orange-800",
+            icon: "bg-orange-100 text-orange-700",
+            button: "border-orange-200 bg-orange-50 text-orange-800",
+        },
+        staging: {
+            badge: "bg-violet-100 text-violet-700",
+            icon: "bg-violet-100 text-violet-700",
+            button: "border-violet-200 bg-violet-50 text-violet-800",
+        },
     };
 
     const fadeIn = {
@@ -656,8 +1017,8 @@ export function SponsorTrialDetailsPage() {
                                         <p className="text-xl font-bold text-slate-900 dark:text-white">{poolInfo.totalFunded} ETH</p>
                                     </div>
                                 </div>
-                                <Badge variant="outline" className={poolInfo.distributed ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}>
-                                    {poolInfo.distributed ? "Entitlements staged" : "Accumulating"}
+                                <Badge variant="outline" className={poolInfo.distributed ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600"}>
+                                    {poolInfo.distributed ? "Screening distributed" : "Accumulating"}
                                 </Badge>
                             </div>
                             <CardContent className="p-6 space-y-6">
@@ -709,74 +1070,83 @@ export function SponsorTrialDetailsPage() {
                                     </div>
                                 ) : milestones.length > 0 ? (
                                     <div className="space-y-4">
-                                        <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Active Phased Payouts</h4>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Active Phased Payouts</h4>
+                                            {(protocolRefreshing || anonymousStateLoading) && (
+                                                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-500">
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                    Syncing on-chain status…
+                                                </span>
+                                            )}
+                                        </div>
+                                        {poolInfo.distributed && (
+                                            <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-[10px] text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                                <Check className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                <span>
+                                                    Initial screening entitlements have already been distributed on-chain.
+                                                    Later phases still require promotion and staging.
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="grid gap-3">
                                             {milestones.map((m, idx) => {
                                                 const phase = getAnonymousPhaseAggregateState(idx);
-                                                const screeningAutoStaged = idx === 0 && poolInfo.distributed;
-                                                const phaseStaged = m.distributed || phase.allStaged || screeningAutoStaged;
-                                                const phaseConfirmed = phase.allReleased;
-                                                const needsPromotion =
-                                                    idx > 0 &&
-                                                    phase.total > 0 &&
-                                                    !phase.allPromoted &&
-                                                    !phaseStaged;
                                                 const isReleasing = releasingPhaseIndex === idx;
-                                                const buttonLabel = phaseConfirmed
-                                                    ? "Confirmed"
-                                                    : phaseStaged
-                                                        ? "Staged"
-                                                        : isReleasing
-                                                            ? "Staging…"
-                                                            : needsPromotion
-                                                                ? "Promote First"
-                                                                : "Stage Entitlements";
+                                                const rowUi = resolvePhaseRowUi(idx, m, phase, isReleasing);
+                                                const tones = phaseToneClasses[rowUi.tone];
+                                                const showPrune =
+                                                    rowUi.tone === "staged" &&
+                                                    phase.stagedCount > 0 &&
+                                                    !phase.allReleased;
 
                                                 return (
-                                                    <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm">
-                                                        <div className="flex items-center gap-3 min-w-0">
+                                                    <div key={idx} className="flex items-start justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm">
+                                                        <div className="flex items-start gap-3 min-w-0">
                                                             <div className={cn(
                                                                 "h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0",
-                                                                phaseConfirmed
-                                                                    ? "bg-emerald-100 text-emerald-600"
-                                                                    : phaseStaged
-                                                                        ? "bg-amber-100 text-amber-700"
-                                                                        : phase.allPromoted
-                                                                            ? "bg-teal-100 text-teal-700"
-                                                                            : "bg-slate-100 text-slate-500"
+                                                                tones.icon,
                                                             )}>
-                                                                {idx + 1}
+                                                                {rowUi.tone === "done" ? <Check className="h-4 w-4" /> : idx + 1}
                                                             </div>
-                                                            <div className="min-w-0">
-                                                                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</p>
+                                                            <div className="min-w-0 space-y-1">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</p>
+                                                                    <Badge variant="outline" className={cn("text-[9px] font-bold uppercase border-0", tones.badge)}>
+                                                                        {rowUi.statusLabel}
+                                                                    </Badge>
+                                                                </div>
                                                                 <p className="text-[10px] text-slate-500 uppercase font-mono">{m.weightBps / 100}% Reward Weight</p>
                                                                 {phase.total > 0 && (
                                                                     <p className="text-[10px] text-slate-500">
-                                                                        {phase.stagedCount}/{phase.total} staged · {phase.releasedCount}/{phase.total} confirmed · {phase.promotedCount}/{phase.total} promoted
+                                                                        {phase.registeredCount}/{phase.total} enrolled · {phase.promotedCount}/{phase.total} promoted · {phase.stagedCount}/{phase.total} staged · {phase.releasedCount}/{phase.total} confirmed
                                                                     </p>
+                                                                )}
+                                                                {rowUi.hint && (
+                                                                    <p className="text-[10px] text-slate-500 leading-relaxed">{rowUi.hint}</p>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="flex flex-col items-end gap-1">
+                                                        <div className="flex flex-col items-end gap-1 shrink-0">
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
-                                                            disabled={phaseStaged || phaseConfirmed || needsPromotion || isReleasing}
+                                                            disabled={rowUi.buttonDisabled}
                                                             onClick={() => void handleDistributePartial(idx)}
                                                             className={cn(
                                                                 "h-8 min-w-[7.5rem] text-[10px] font-bold uppercase disabled:opacity-100",
-                                                                phaseConfirmed
-                                                                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                                                    : phaseStaged
-                                                                        ? "border-amber-200 bg-amber-50 text-amber-800"
-                                                                        : needsPromotion
-                                                                            ? "border-amber-200 bg-amber-50 text-amber-800"
-                                                                            : "bg-slate-100 text-slate-800",
+                                                                rowUi.buttonDisabled ? tones.button : "bg-sky-600 text-white border-sky-600 hover:bg-sky-700",
                                                             )}
                                                         >
-                                                            {buttonLabel}
+                                                            {isReleasing ? (
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                    {rowUi.buttonLabel}
+                                                                </span>
+                                                            ) : (
+                                                                rowUi.buttonLabel
+                                                            )}
                                                         </Button>
-                                                        {phaseStaged && !phaseConfirmed && (
+                                                        {showPrune && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
@@ -1001,36 +1371,50 @@ export function SponsorTrialDetailsPage() {
 
                                             {match.applicationStatus === "Accepted" && match.nullifier ? (
                                                 <div className="space-y-2">
-                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
-                                                        Promote participant
-                                                    </p>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                                            Participant milestone progress
+                                                        </p>
+                                                        {anonymousStateLoading && (
+                                                            <span className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                                Syncing
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         {milestones.map((m, mIdx) => {
-                                                            const phase = getAnonymousPhaseState(match.nullifier, mIdx);
+                                                            const ui = getParticipantPhaseUi(mIdx, match.nullifier);
+                                                            const toneClass =
+                                                                ui.tone === "released"
+                                                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                                                    : ui.tone === "staged"
+                                                                        ? "bg-amber-500 text-white border-amber-500"
+                                                                        : ui.tone === "promoted"
+                                                                            ? "bg-teal-600 text-white border-teal-600"
+                                                                            : ui.tone === "locked"
+                                                                                ? "bg-slate-100 text-slate-400 border-slate-200"
+                                                                                : "bg-white/80";
                                                             return (
                                                                 <Button
                                                                     key={`${match.id}-${mIdx}`}
                                                                     size="sm"
-                                                                    variant={phase.promoted || phase.released ? "default" : "outline"}
+                                                                    variant={ui.tone === "action" ? "outline" : "default"}
                                                                     onClick={() => handlePromoteAnonymous(match.nullifier!, mIdx, m.name)}
-                                                                    disabled={phase.promoted}
+                                                                    disabled={ui.disabled || anonymousStateLoading}
                                                                     className={cn(
-                                                                        "h-10 text-[9px] font-bold flex flex-col gap-0.5 disabled:opacity-100",
-                                                                        phase.released
-                                                                            ? "bg-emerald-600 text-white border-emerald-600"
-                                                                            : phase.promoted
-                                                                                ? "bg-teal-600 text-white border-teal-600"
-                                                                                : "bg-white/80"
+                                                                        "h-11 text-[9px] font-bold flex flex-col gap-0.5 disabled:opacity-100",
+                                                                        toneClass,
                                                                     )}
                                                                 >
-                                                                    <span>
-                                                                        {phase.released
-                                                                            ? `P${mIdx + 1} Released`
-                                                                            : phase.promoted
-                                                                                ? `P${mIdx + 1} Promoted`
-                                                                                : `Promote P${mIdx + 1}`}
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        {ui.tone === "released" || ui.tone === "promoted" ? (
+                                                                            <Check className="h-3 w-3" />
+                                                                        ) : null}
+                                                                        {ui.label}
                                                                     </span>
-                                                                    <span className="opacity-70 truncate max-w-full">{m.name}</span>
+                                                                    <span className="opacity-80 truncate max-w-full font-normal">{m.name}</span>
+                                                                    <span className="opacity-60 text-[8px] font-normal">{ui.sublabel}</span>
                                                                 </Button>
                                                             );
                                                         })}

@@ -11,6 +11,7 @@ type Props = {
   trialId: string;
   status: string;
   isAnonymous: boolean;
+  refreshKey?: number;
 };
 
 function detectMime(bytes: Uint8Array): string {
@@ -22,17 +23,18 @@ function detectMime(bytes: Uint8Array): string {
   return "application/octet-stream";
 }
 
-export function SponsorDocumentPanel({ nullifier, trialId, status, isAnonymous }: Props) {
+export function SponsorDocumentPanel({ nullifier, trialId, status, isAnonymous, refreshKey = 0 }: Props) {
   const { signer, provider } = useWeb3();
   const accepted = status === "Accepted";
   const { hasDocument, loading: checkingDoc } = useMatchHasDocument(
     provider ?? undefined,
     nullifier,
     trialId,
-    isAnonymous
+    isAnonymous,
+    refreshKey
   );
   const enabled = Boolean(isAnonymous && accepted && hasDocument && signer);
-  const { decrypt, loading, error, revoked, plaintext, filename } = useSponsorDocumentDecrypt(
+  const { decrypt, loading, error, revoked, plaintext, filename, step } = useSponsorDocumentDecrypt(
     signer ?? undefined,
     nullifier,
     trialId,
@@ -49,6 +51,15 @@ export function SponsorDocumentPanel({ nullifier, trialId, status, isAnonymous }
     return URL.createObjectURL(blob);
   }, [plaintext]);
 
+  const loadingLabel =
+    step === "pulling-access"
+      ? "Confirming sponsor access..."
+      : step === "decrypting-key"
+        ? "Decrypting document key..."
+        : step === "fetching-document"
+          ? "Fetching document..."
+          : "Preparing document...";
+
   if (!isAnonymous) return null;
   if (checkingDoc) {
     return (
@@ -61,7 +72,8 @@ export function SponsorDocumentPanel({ nullifier, trialId, status, isAnonymous }
   if (!hasDocument) {
     return (
       <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 px-3 py-2">
-        No encrypted medical document on file for this application.
+        No encrypted medical document on file for this application. The patient may need to re-attach
+        their file on the trial card and submit again — uploads are bound on-chain during apply.
       </p>
     );
   }
@@ -92,7 +104,7 @@ export function SponsorDocumentPanel({ nullifier, trialId, status, isAnonymous }
           onClick={() => void decrypt()}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-          {accessRevoked ? "Access revoked" : "View patient document"}
+          {loading ? loadingLabel : accessRevoked ? "Access revoked" : "View patient document"}
         </Button>
       ) : (
         <div className="space-y-2">

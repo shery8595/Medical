@@ -23,8 +23,8 @@ import {
   Droplet,
 } from "lucide-react";
 import { useWeb3 } from "../../lib/Web3Context";
-import { getAnonymousPatientRegistry } from "../../lib/contracts";
-import { decryptPatientProfileWithEphemeral, EncryptedPatientData, DecryptedPatientData } from "../../lib/fhe";
+import { decryptPatientProfileWithEphemeral, type DecryptedPatientData } from "../../lib/fhe";
+import { fetchEncryptedPatientProfileHandles } from "../../lib/patientProfileDecrypt";
 import { txExplorerUrl } from "../../lib/network";
 
 interface VaultCardProps {
@@ -125,20 +125,10 @@ export const VaultCard: React.FC<VaultCardProps> = ({ report }) => {
       );
       const ephemeralWallet = new ethers.Wallet(ephemeralPrivateKey, provider);
 
-      const registry = getAnonymousPatientRegistry(signer);
-      const aprAddress = await registry.getAddress();
-      const encryptedPatient = await registry.getPatientProfile(commitment);
-
-      const encryptedData: EncryptedPatientData = {
-        age: encryptedPatient.age,
-        gender: encryptedPatient.gender,
-        weight: encryptedPatient.weight,
-        height: encryptedPatient.height,
-        hasDiabetes: encryptedPatient.hasDiabetes,
-        hbLevel: encryptedPatient.hbLevel,
-        isSmoker: encryptedPatient.isSmoker,
-        hasHypertension: encryptedPatient.hasHypertension,
-      };
+      const { aprAddress, handles: encryptedData } = await fetchEncryptedPatientProfileHandles(
+        provider,
+        commitment
+      );
 
       const decrypted = await decryptPatientProfileWithEphemeral(
         ephemeralWallet,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ComponentType } from "react";
+import { useState, useEffect, useRef, useCallback, type ComponentType } from "react";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { SectionTopBar } from "../components/layout/SectionTopBar";
@@ -30,18 +30,28 @@ import { useEncryptedData } from "../lib/EncryptedDataContext";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
 import {
-    getContractAddressForChain
+    getContractAddressForChain,
+    getEligibilityEngine,
+    getSponsorIncentiveVault,
 } from "../lib/contracts";
+import { ethers } from "ethers";
 import { reencryptUint8, reencryptUint8WithEphemeral } from "../lib/fhe";
 import { Trial } from "../types";
-import { resolveAnonymousNullifier, getStoredIdentity, getEphemeralSigner, generateEphemeralAddress } from "../lib/semaphore";
+import {
+    resolveAnonymousNullifier,
+    getStoredIdentity,
+    getEphemeralSigner,
+    generateEphemeralAddress,
+} from "../lib/semaphore";
 import {
     getEncryptedScoreHandle,
     getMilestonesAndProgress,
     registerAnonymousParticipantByNullifier,
+    resolveParticipantRewardAddress,
 } from "../lib/contracts/sponsorAdapters";
-import { getConfidentialETH } from "../lib/contracts";
-import { getParticipantReceiptStatus } from "../lib/confirmReceiptFlow";
+import { getPatientRewardReadiness, type PatientRewardReadiness } from "../lib/confirmReceiptFlow";
+import { isRewardClaimedLocally } from "../lib/rewardClaimCache";
+import { friendlyContractError } from "../lib/contractErrors";
 
 /* ─── Status Configuration ─── */
 const statusConfig = {
@@ -82,7 +92,7 @@ function StatsCard({ value, label, icon: Icon, color }: { value: number; label: 
 
 /* ─── Application Row ─── */
 function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
-    const { signer, account } = useWeb3();
+    const { signer, account, readOnlyProvider } = useWeb3();
     const { setRevealedScore, getRevealedScore } = useEncryptedData();
     const [decryptedScore, setDecryptedScore] = useState<number | null>(null);
     const [isDecrypting, setIsDecrypting] = useState(false);
@@ -95,9 +105,12 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
     const [currentProgress, setCurrentProgress] = useState<number>(-1); // -1 means none
     const [milestonesLoading, setMilestonesLoading] = useState(false);
     const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
-    const [hasClaimableRewards, setHasClaimableRewards] = useState(false);
+    const [rewardReadiness, setRewardReadiness] = useState<PatientRewardReadiness | null>(null);
+    const [rewardReadinessLoading, setRewardReadinessLoading] = useState(false);
+    const [rewardReadinessError, setRewardReadinessError] = useState<string | null>(null);
     const [decryptError, setDecryptError] = useState<string | null>(null);
     const autoEnrollAttemptedRef = useRef(false);
+    const rewardRefreshInFlightRef = useRef(false);
 
     const status = trial.applicationStatus || "Pending";
     const engineAddress = getContractAddressForChain("EligibilityEngine");
@@ -105,7 +118,27 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
     const StatusIcon = config.icon;
 
     const hasEnded = trial.endTime && parseInt(trial.endTime) <= Math.floor(Date.now() / 1000);
-    const canCheckPayout = poolFunded && status === "Accepted" && isRegistered && hasClaimableRewards;
+    const hasIdentity = Boolean(getStoredIdentity());
+    const canClaimRewards =
+        poolFunded &&
+        status === "Accepted" &&
+        hasIdentity &&
+        rewardReadiness !== null &&
+        (rewardReadiness.pendingConfirmMilestones.length > 0 ||
+            rewardReadiness.hasCethBalance ||
+            rewardReadiness.hasPendingWithdraw);
+
+    const rewardsClaimedSuccessfully =
+        poolFunded &&
+        status === "Accepted" &&
+        hasIdentity &&
+        rewardReadiness !== null &&
+        !rewardReadinessLoading &&
+        rewardReadiness.registered &&
+        !canClaimRewards &&
+        (rewardReadiness.confirmedMilestones.length > 0 ||
+            rewardReadiness.paidMilestones.length > 0 ||
+            isRewardClaimedLocally(trial.id, rewardReadiness.participantAddress));
 
     useEffect(() => {
         setPoolFunded(Boolean(trial.rewardPoolFunded));
@@ -180,6 +213,12 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
             if (!signer.provider) {
                 throw new Error("Wallet provider unavailable. Please reconnect and retry.");
             }
+            if (hasEnded || trial.isExpired) {
+                setIncentiveStatus(
+                    "Enrollment closed: this trial has ended. Accepted patients must join the reward pool before the trial end date.",
+                );
+                return;
+            }
             const nullifier = await resolveAnonymousNullifier(signer.provider, BigInt(trial.id));
             if (!nullifier) {
                 throw new Error("Missing anonymous application nullifier for this trial. Re-open the browser profile used during apply and retry.");
@@ -190,12 +229,57 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                     "Semaphore identity not found in this browser. Use the same profile you used when you applied anonymously."
                 );
             }
+
+            const vault = getSponsorIncentiveVault(signer);
+            const eligibilityEngine = getEligibilityEngine(signer);
+            const engineForPermit = eligibilityEngine.connect(getEphemeralSigner(identity, signer.provider));
+            const permitHolder = await engineForPermit.getDecryptPermitHolder(nullifier, BigInt(trial.id));
+            if (!permitHolder || permitHolder === ethers.ZeroAddress) {
+                throw new Error("No reward permit holder found for this anonymous application.");
+            }
+
+            const [funded, statusRaw, alreadyRegistered] = await Promise.all([
+                vault.isPoolFunded(BigInt(trial.id)),
+                eligibilityEngine.getAnonymousApplicationStatus(nullifier, BigInt(trial.id)),
+                vault.isParticipantRegistered(BigInt(trial.id), permitHolder),
+            ]);
+            const statusNum = Number(statusRaw);
+            if (!funded) {
+                setIncentiveStatus("Registration blocked: incentive pool is not funded yet.");
+                return;
+            }
+            if (alreadyRegistered) {
+                setIsRegistered(true);
+                setIncentiveStatus("You're already registered for this pool.");
+                return;
+            }
+            if (statusNum !== 2) {
+                const statusLabel =
+                    statusNum === 1 ? "Pending" : statusNum === 3 ? "Rejected" : "None";
+                setIncentiveStatus(
+                    `Registration blocked: application status is ${statusLabel}. Sponsor must accept you first.`,
+                );
+                return;
+            }
+
             await registerAnonymousParticipantByNullifier(signer, trial.id, nullifier, identity);
             setIsRegistered(true);
-            setIncentiveStatus("Registered!");
-        } catch (err: any) {
+            setIncentiveStatus("Successfully registered in reward pool.");
+            await refreshRewardReadiness();
+        } catch (err: unknown) {
             console.error("Registration failed:", err);
-            setIncentiveStatus(`Failed: ${err.reason || err.message}`);
+            const errObj = err as { reason?: string; message?: string; shortMessage?: string; code?: string; data?: unknown };
+            const raw = `${errObj.reason || ""} ${errObj.message || ""} ${errObj.shortMessage || ""}`.toLowerCase();
+            if (
+                raw.includes("already registered") ||
+                raw.includes("nullifier already used") ||
+                (errObj.code === "CALL_EXCEPTION" && errObj.data == null && raw.includes("missing revert data"))
+            ) {
+                setIsRegistered(true);
+                setIncentiveStatus("You're already registered for this pool.");
+                return;
+            }
+            setIncentiveStatus(`Failed: ${friendlyContractError(err)}`);
         } finally {
             setIsRegistering(false);
         }
@@ -205,23 +289,113 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
         if (!signer || !account || !trial.id) return;
         if (status !== "Accepted") return;
         if (!poolFunded || isRegistered || isRegistering) return;
+        if (hasEnded || trial.isExpired) {
+            setIncentiveStatus(
+                "Enrollment closed: this trial has ended. Pool registration must complete before the trial end date.",
+            );
+            return;
+        }
+        if (!hasIdentity) return;
         if (autoEnrollAttemptedRef.current) return;
 
         autoEnrollAttemptedRef.current = true;
-        setIncentiveStatus("Accepted! Auto-enrolling...");
         void handleRegisterForRewards();
-    }, [signer, account, trial.id, status, poolFunded, isRegistered, isRegistering]);
+    }, [signer, account, trial.id, trial.isExpired, status, poolFunded, isRegistered, isRegistering, hasEnded, hasIdentity]);
+
+    const refreshRewardReadiness = useCallback(async () => {
+        if (!trial.id || status !== "Accepted") {
+            setRewardReadiness(null);
+            setRewardReadinessError(null);
+            return;
+        }
+        const identity = getStoredIdentity();
+        if (!identity) {
+            setRewardReadiness(null);
+            setRewardReadinessError(null);
+            return;
+        }
+        const provider = readOnlyProvider ?? signer?.provider;
+        if (!provider) return;
+        if (rewardRefreshInFlightRef.current) return;
+
+        rewardRefreshInFlightRef.current = true;
+        setRewardReadinessLoading(true);
+        try {
+            const nullifier =
+                trial.nullifier != null
+                    ? BigInt(trial.nullifier)
+                    : await resolveAnonymousNullifier(provider, BigInt(trial.id));
+            if (!nullifier) {
+                setRewardReadiness(null);
+                setRewardReadinessError("Could not resolve your anonymous application session.");
+                return;
+            }
+            const participantAddress = await resolveParticipantRewardAddress(
+                provider,
+                trial.id,
+                nullifier,
+                identity,
+            );
+            const ephemeralSigner = getEphemeralSigner(identity, provider);
+            const milestoneScanCount = Math.max(milestones.length, 2);
+            const readiness = await getPatientRewardReadiness(
+                provider,
+                trial.id,
+                participantAddress,
+                milestoneScanCount,
+                { ephemeralSigner },
+            );
+            setRewardReadiness(readiness);
+            setIsRegistered(readiness.registered);
+            setRewardReadinessError(null);
+        } catch (err) {
+            console.warn("Failed to load reward readiness:", err);
+            setRewardReadinessError("Reward status temporarily unavailable — retrying…");
+        } finally {
+            setRewardReadinessLoading(false);
+            rewardRefreshInFlightRef.current = false;
+        }
+    }, [signer, readOnlyProvider, trial.id, trial.nullifier, status, milestones.length]);
+
+    useEffect(() => {
+        void refreshRewardReadiness();
+    }, [refreshRewardReadiness]);
+
+    useEffect(() => {
+        if (status !== "Accepted" || !poolFunded) return;
+        const intervalMs =
+            rewardReadiness?.pendingConfirmMilestones.length ||
+            rewardReadiness?.hasCethBalance ||
+            rewardReadinessError
+                ? 45_000
+                : 12_000;
+        const timer = window.setInterval(() => {
+            void refreshRewardReadiness();
+        }, intervalMs);
+        return () => window.clearInterval(timer);
+    }, [status, poolFunded, refreshRewardReadiness, rewardReadiness, rewardReadinessError]);
 
     // Check milestones and progress
     useEffect(() => {
         const fetchProgress = async () => {
-            if (!signer || !trial.id) return;
+            const provider = signer?.provider ?? readOnlyProvider;
+            if (!provider || !trial.id) return;
             setMilestonesLoading(true);
             try {
-                const { rawMilestones, progress } = await getMilestonesAndProgress(signer, trial.id, account || undefined);
+                const identity = getStoredIdentity();
+                const progressAddress =
+                    identity && (trial.nullifier || status === "Accepted")
+                        ? await generateEphemeralAddress(identity)
+                        : account || undefined;
+                const progressSigner = signer ?? provider;
+                const { rawMilestones, progress } = await getMilestonesAndProgress(
+                    progressSigner,
+                    trial.id,
+                    progressAddress,
+                );
                 setMilestones(rawMilestones || []);
 
-                if (account && progress) {
+                if (progressAddress && progress) {
                     // Progress is [lastCompletedIndex, isActive]
                     // We only care about lastCompletedIndex if it's > -1
                     // Wait, TrialMilestoneManager.sol:getParticipantProgress returns (uint256, bool)
@@ -238,37 +412,13 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
             }
         };
         fetchProgress();
-    }, [signer, trial.id, account, isRegistered]);
+    }, [signer, readOnlyProvider, trial.id, trial.nullifier, account, status, isRegistered]);
 
     useEffect(() => {
-        const checkClaimable = async () => {
-            if (!signer || !isRegistered || status !== "Accepted") {
-                setHasClaimableRewards(false);
-                return;
-            }
-            const identity = getStoredIdentity();
-            if (!identity) {
-                setHasClaimableRewards(Boolean(trial.incentivePool?.distributed));
-                return;
-            }
-            try {
-                const ephemeralAddress = await generateEphemeralAddress(identity);
-                const receipt = await getParticipantReceiptStatus(signer, trial.id, ephemeralAddress, 0);
-                const cETH = getConfidentialETH(signer);
-                const handle = await cETH.getBalance(ephemeralAddress);
-                const hasCeth = Boolean(handle) && BigInt(handle.toString()) !== 0n;
-                setHasClaimableRewards(
-                    Boolean(trial.incentivePool?.distributed) ||
-                        receipt.entitlementStaged ||
-                        receipt.confirmedPayout ||
-                        hasCeth
-                );
-            } catch {
-                setHasClaimableRewards(Boolean(trial.incentivePool?.distributed));
-            }
-        };
-        void checkClaimable();
-    }, [signer, trial.id, trial.incentivePool?.distributed, isRegistered, status]);
+        if (milestones.length > 0) {
+            void refreshRewardReadiness();
+        }
+    }, [milestones.length, refreshRewardReadiness]);
 
     // Decode sponsor message (hex → text)
     const decodedMessage = (() => {
@@ -425,26 +575,70 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                     {/* ── Right: Actions ── */}
                     <div className="lg:w-56 p-6 flex flex-col gap-3 justify-center border-t lg:border-t-0 lg:border-l border-slate-100 bg-white">
                         {/* Incentive action */}
-                        {poolFunded && status === "Accepted" && !trial.incentivePool?.distributed && !isRegistered && (
-                            <Button
-                                size="sm"
-                                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 shadow-lg shadow-amber-500/20"
-                                onClick={handleRegisterForRewards}
-                                disabled={isRegistering}
-                            >
-                                {isRegistering ? <Loader2 className="h-3 w-3 animate-spin" /> : <Coins className="h-3 w-3" />}
-                                {isRegistering ? "Registering..." : "Join Reward Pool"}
-                            </Button>
+                        {rewardReadinessLoading && poolFunded && status === "Accepted" && hasIdentity && !rewardReadiness ? (
+                            <p className="text-[10px] text-center text-slate-500 flex items-center justify-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Checking reward status…
+                            </p>
+                        ) : null}
+
+                        {rewardReadinessLoading && rewardReadiness && canClaimRewards ? (
+                            <p className="text-[9px] text-center text-slate-400">Updating…</p>
+                        ) : null}
+
+                        {poolFunded && status === "Accepted" && !hasIdentity && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-900">
+                                Rewards use your anonymous apply session. Open this page in the <strong>same browser</strong> you used to apply (Semaphore identity required).
+                            </div>
                         )}
 
-                        {canCheckPayout && (
+                        {poolFunded && status === "Accepted" && hasIdentity && !canClaimRewards && (rewardReadiness === null || rewardReadinessError) && !rewardReadinessLoading ? (
+                            <div className="space-y-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full rounded-xl text-[10px] uppercase tracking-wider h-9"
+                                    onClick={() => void refreshRewardReadiness()}
+                                >
+                                    Refresh reward status
+                                </Button>
+                                {rewardReadinessError ? (
+                                    <p className="text-[9px] text-center text-amber-700 leading-snug px-1">
+                                        {rewardReadinessError}
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : null}
+
+                        {canClaimRewards && (
                             <Button
                                 size="sm"
                                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 shadow-lg shadow-emerald-500/20"
                                 onClick={() => setIsClaimModalOpen(true)}
+                                disabled={rewardReadinessLoading && !rewardReadiness}
                             >
-                                <Gift className="h-3 w-3" />
-                                Claim Rewards
+                                {rewardReadinessLoading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                    <Gift className="h-3 w-3" />
+                                )}
+                                {rewardReadiness?.hasPendingWithdraw &&
+                                !rewardReadiness.pendingConfirmMilestones.length
+                                    ? "Resume Payout"
+                                    : rewardReadiness?.pendingConfirmMilestones.length
+                                      ? "Confirm & Claim Rewards"
+                                      : "Claim Rewards"}
+                            </Button>
+                        )}
+
+                        {rewardsClaimedSuccessfully && (
+                            <Button
+                                size="sm"
+                                disabled
+                                className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold rounded-xl text-[10px] uppercase tracking-wider h-9 gap-1.5 cursor-default opacity-100"
+                            >
+                                <CheckCircle className="h-3 w-3" />
+                                Claimed Successfully
                             </Button>
                         )}
 
@@ -471,8 +665,11 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
                             </Button>
                         </Link>
 
-                        {incentiveStatus && (
-                            <p className={cn("text-[9px] font-bold text-center", incentiveStatus.includes("Failed") ? "text-rose-500" : "text-emerald-500")}>
+                        {incentiveStatus && (incentiveStatus.includes("Failed") || incentiveStatus.includes("Enrollment closed") || incentiveStatus.includes("Registration blocked")) && (
+                            <p className={cn(
+                                "text-[9px] font-bold text-center leading-snug px-1",
+                                incentiveStatus.includes("Failed") ? "text-rose-500" : "text-amber-700",
+                            )}>
                                 {incentiveStatus}
                             </p>
                         )}
@@ -565,7 +762,10 @@ function ApplicationRow({ trial, index }: { trial: Trial; index: number }) {
 
             <ClaimModal
                 isOpen={isClaimModalOpen}
-                onClose={() => setIsClaimModalOpen(false)}
+                onClose={() => {
+                    setIsClaimModalOpen(false);
+                    void refreshRewardReadiness();
+                }}
                 trialId={trial.id}
                 nullifier={trial.nullifier}
             />

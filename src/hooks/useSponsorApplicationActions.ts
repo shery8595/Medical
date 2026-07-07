@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { ethers } from "ethers";
-import { getEligibilityEngine, getSponsorIncentiveVault } from "../lib/contracts";
+import { getEligibilityEngine } from "../lib/contracts";
+import { enrollAcceptedParticipantWithPreAuth } from "../lib/contracts/sponsorAdapters";
+import { friendlyContractError } from "../lib/contractErrors";
 import { useWeb3 } from "../lib/Web3Context";
 
 interface UseSponsorApplicationActionsResult {
@@ -45,11 +47,8 @@ export function useSponsorApplicationActions(): UseSponsorApplicationActionsResu
         );
         await tx.wait();
 
-        if (status === 2) {
-          const vault = getSponsorIncentiveVault(signer);
-          const regTx = await vault.registerParticipant(BigInt(trialId), patientAddress);
-          await regTx.wait();
-        }
+        // Wallet-address accepts: enrollment is handled via the anonymous nullifier flow
+        // (updateAnonymousApplicationStatus). On-chain registerParticipant is deprecated.
 
         return true;
       } catch (err: any) {
@@ -65,8 +64,8 @@ export function useSponsorApplicationActions(): UseSponsorApplicationActionsResu
 
   /**
    * Updates anonymous application status on EligibilityEngine.
-   * On Accepted (status 2), does **not** vault-register — MED-3 requires the permit holder
-   * to call `registerAnonymousParticipant` (patient UI: Applied Trials / `registerAnonymousParticipantByNullifier`).
+   * On Accepted (status 2), attempts vault enrollment via the patient's pre-signed
+   * register authorization from apply time (MED-3 EIP-712 consent).
    */
   const updateAnonymousApplicationStatus = useCallback(
     async (trialId: string, nullifier: string, status: number) => {
@@ -80,10 +79,17 @@ export function useSponsorApplicationActions(): UseSponsorApplicationActionsResu
         const tx = await engine.updateAnonymousApplicationStatus(BigInt(trialId), BigInt(nullifier), status);
         await tx.wait();
 
+        if (status === 2) {
+          const enroll = await enrollAcceptedParticipantWithPreAuth(signer, trialId, nullifier);
+          if (!enroll.enrolled && enroll.reason && !enroll.reason.includes("not funded")) {
+            console.warn("Auto-enroll on accept skipped:", enroll.reason);
+          }
+        }
+
         return true;
       } catch (err: any) {
         console.error("Failed to update anonymous status:", err);
-        setError(err?.message ?? "Failed to update anonymous application status");
+        setError(friendlyContractError(err));
         return false;
       } finally {
         setUpdatingId(null);

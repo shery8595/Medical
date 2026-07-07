@@ -2,11 +2,21 @@
 
 > **Disclaimer:** This document is a production-readiness **gap checklist**, not legal advice or regulatory certification. MedVault is **not HIPAA-compliant today** and is **not GDPR-certified**.
 
+## Compliance & Adoption Roadmap
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **Phase 0 — Reference architecture** | FHE matching, Sepolia deployment, complete patient-to-reward demo workflow | **Shipped** |
+| **Phase 1 — Pilot readiness** | Sponsor KYC, external security audit, BAA execution with storage providers | Roadmap ([LIGHTPAPER.md](./LIGHTPAPER.md) v0.2) |
+| **Phase 2 — Production clinical deployment** | IRB package, EHR integration, identity proofing, data residency | Roadmap |
+
+Canonical model: [TRUST_ARCHITECTURE.md](./TRUST_ARCHITECTURE.md) · [REGULATORY_POSTURE.md](./REGULATORY_POSTURE.md)
+
 **Scope:** Reference architecture for encrypted **clinical-trial matching** on Sepolia — not a HIPAA-covered entity, not IRB-approved enrollment, not FDA-validated SaMD.
 
-**Status:** Demo / pre-pilot ([v0.2 roadmap](./LIGHTPAPER.md#7-roadmap): mainnet pilot, sponsor KYC, external audit).
+**Status:** Phase 0 shipped; Phase 1–2 on roadmap.
 
-**Detail:** [REGULATORY_POSTURE.md](./REGULATORY_POSTURE.md) · [HYBRID_STORAGE.md](./HYBRID_STORAGE.md) · [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) · [ai-service/README.md](../ai-service/README.md)
+**Detail:** [HYBRID_STORAGE.md](./HYBRID_STORAGE.md) · [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) · [ai-service/README.md](../ai-service/README.md)
 
 ---
 
@@ -19,7 +29,7 @@
 | §164.312(b) Audit controls | **Implemented** | `DataAccessLog.sol` logs `keccak256` patient hashes only | Add validated export SOP for sponsors |
 | §164.312(e) Transmission security | **Partial** | Vitals as FHE ciphertext over RPC; docs as AES ciphertext to IPFS (`ipfs.ts`) | TLS + BAA coverage for all PHI-touching vendors |
 | §164.308 Administrative safeguards | **Missing** | No formal risk analysis, training, or incident-response runbook in repo | Publish HIPAA risk analysis + breach SOP |
-| §164.314 BAAs & breach notification | **Missing** | No executed BAAs; no §164.404 procedure | Execute vendor BAAs (Section II); sponsor retention clauses per [HYBRID_STORAGE.md § Known limitation](./HYBRID_STORAGE.md#known-limitation-forward-only-revocation) |
+| §164.314 BAAs & breach notification | **Missing** | No executed BAAs; no §164.404 procedure | Execute vendor BAAs (Section II); sponsor retention clauses per [HYBRID_STORAGE.md § Epoch-based key rotation](./HYBRID_STORAGE.md#epoch-based-key-rotation) |
 
 ---
 
@@ -33,7 +43,7 @@ MedVault operator would sign BAAs as **Business Associate** when deploying for c
 | **OpenAI** (ai-service) | Redacted protocol text only | Regex then NER redaction before LLM (`redaction.ts`); `AI_NO_RETENTION` default (`config.ts`) | **Missing** | Zero-data-retention API tier + DPA |
 | **Privy** | Auth identity; optional wallet↔patient link | Semaphore anonymous apply decouples wallet (`semaphore.ts`) | **Missing** | Privacy policy; minimize linkage in prod |
 | **Vercel** | Static SPA only | PHI stays client-side / encrypted off-host | **Missing** | Confirm no server-side body logging |
-| **Railway** | Relayer staging logs; P0.2 eligibility re-decrypt | Trust bounds in [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) | **Missing** | BAA; logging policy; VPC for indexer Mongo |
+| **Railway** | Relayer staging logs; optional P0.2 relayer-assisted re-decrypt (not default; learns eligibility bit) | Trust bounds in [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md); default patient-decrypt (browser) in production UI | **Missing** | BAA; logging policy; VPC for indexer Mongo |
 | **Zama fhEVM relayer** | Ciphertext handles only | Proxied via Vercel; FHE SDK in `fhe.ts` | **N/A** | List as subprocessor in ROPA |
 
 ---

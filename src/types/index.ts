@@ -112,6 +112,8 @@ export interface Match {
   attestationResultHash?: string | null;
   attestationFheStageHash?: string | null;
   attestationCriteriaSchemaHash?: string | null;
+  /** Indexed from PatientDocumentStore.DocumentRecorded */
+  hasHybridDocument?: boolean;
 }
 
 export interface AnalyticsData {

@@ -224,6 +224,7 @@ dataSources:
         - AnonymousPatient
         - AnonymousSubmission
         - AuthorizedRelayer
+        - Patient
         - RelayerAuthEvent
         - RelayerRegistration
       abis:
@@ -243,6 +244,27 @@ dataSources:
         - event: PatientRegisteredViaRelayer(indexed address,indexed uint256)
           handler: handlePatientRegisteredViaRelayer
       file: ./src/mappings/medvault-registry.ts
+
+  - kind: ethereum
+    name: PatientDocumentStore
+    network: sepolia
+    source:
+      address: "0xA6095acAdc5e3B8b621812Ba3CD44Bca7C6B8f85"
+      abi: PatientDocumentStore
+      startBlock: 11183929
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.8
+      language: wasm/assemblyscript
+      entities:
+        - AnonymousSubmission
+      abis:
+        - name: PatientDocumentStore
+          file: ./abis/PatientDocumentStore.json
+      eventHandlers:
+        - event: DocumentRecorded(indexed uint256,indexed uint256,indexed bytes32,bytes32)
+          handler: handleDocumentRecorded
+      file: ./src/mappings/patient-document-store.ts
 
   - kind: ethereum
     name: StakingManager

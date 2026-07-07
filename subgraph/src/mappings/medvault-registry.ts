@@ -4,15 +4,18 @@ import {
   AnonymousApplyStaged,
   AuthorizedRelayerUpdated,
   PatientRegisteredViaRelayer,
+  MedVaultRegistry,
 } from "../../generated/MedVaultRegistry/MedVaultRegistry";
 import {
   AnonymousPatient,
   AnonymousSubmission,
   AuthorizedRelayer,
+  Patient,
   RelayerAuthEvent,
   RelayerRegistration,
   Trial,
 } from "../../generated/schema";
+import { decodeAddressAt, upsertWalletPatient } from "../helpers/patient";
 
 export function handlePatientRegistered(event: PatientRegistered): void {
   let commitment = event.params.commitment;
@@ -25,6 +28,15 @@ export function handlePatientRegistered(event: PatientRegistered): void {
     anonPatient.registeredAt = event.block.timestamp;
     anonPatient.save();
   }
+
+  // Direct wallet registration: tx sender is the patient. Relayer-paid txs are indexed in
+  // handlePatientRegisteredViaRelayer (tx sender is the relayer EOA).
+  let registry = MedVaultRegistry.bind(event.address);
+  let relayerCheck = registry.try_authorizedRelayers(event.transaction.from);
+  if (!relayerCheck.reverted && relayerCheck.value) {
+    return;
+  }
+  upsertWalletPatient(event.transaction.from, event);
 }
 
 export function handleAuthorizedRelayerUpdated(event: AuthorizedRelayerUpdated): void {
@@ -63,6 +75,9 @@ export function handlePatientRegisteredViaRelayer(event: PatientRegisteredViaRel
   anonPatient.registeredViaRelayer = event.params.relayer;
   anonPatient.save();
 
+  let patientWallet = decodeAddressAt(event.transaction.input, 0);
+  upsertWalletPatient(patientWallet, event);
+
   const reg = new RelayerRegistration(
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString()
   );
@@ -92,6 +107,7 @@ export function handleAnonymousApplyStaged(event: AnonymousApplyStaged): void {
     application.nullifier = event.params.nullifierHash;
     application.submittedAt = event.block.timestamp;
     application.noirCertified = false;
+    application.hasHybridDocument = false;
   }
 
   application.status = "Staged";
@@ -122,6 +138,7 @@ export function handleAnonymousApplication(event: AnonymousApplication): void {
     application.status = "Pending";
     application.statusUpdatedAt = event.block.timestamp;
     application.noirCertified = false;
+    application.hasHybridDocument = false;
     application.save();
     return;
   }

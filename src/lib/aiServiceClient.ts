@@ -34,6 +34,48 @@ export function isAiServiceConfigured(): boolean {
   return Boolean(aiServiceBaseUrl());
 }
 
+const AI_SERVICE_START_HINT =
+  "Start the AI service in a second terminal: npm run ai:start (listens on port 3200; Vite proxies /ai-service in dev).";
+
+async function parseAiServiceError(res: Response, action: string): Promise<string> {
+  const text = await res.text();
+  try {
+    const body = JSON.parse(text) as { error?: string };
+    if (body.error?.trim()) return body.error;
+  } catch {
+    /* proxy/HTML error body */
+  }
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    return `AI service unreachable (${res.status}). ${AI_SERVICE_START_HINT}`;
+  }
+  if (res.status === 500 && (!text || text.includes("ECONNREFUSED") || text.includes("Proxy error"))) {
+    return `AI service unavailable. ${AI_SERVICE_START_HINT}`;
+  }
+  return `${action} failed (HTTP ${res.status})`;
+}
+
+/** Ping /health — use before protocol PDF upload in sponsor UI. */
+export async function checkAiServiceHealth(): Promise<{
+  ok: boolean;
+  llmConfigured?: boolean;
+  error?: string;
+}> {
+  const base = aiServiceBaseUrl();
+  if (!base) {
+    return { ok: false, error: "VITE_AI_SERVICE_URL is not configured" };
+  }
+  try {
+    const res = await fetch(`${base}/health`, { method: "GET" });
+    if (!res.ok) {
+      return { ok: false, error: await parseAiServiceError(res, "AI health check") };
+    }
+    const body = (await res.json()) as { ok?: boolean; llmConfigured?: boolean };
+    return { ok: body.ok === true, llmConfigured: body.llmConfigured };
+  } catch {
+    return { ok: false, error: `AI service unreachable. ${AI_SERVICE_START_HINT}` };
+  }
+}
+
 export async function extractCriteriaFromProtocolPdf(
   file: File,
   blocklist?: string[]
@@ -49,16 +91,21 @@ export async function extractCriteriaFromProtocolPdf(
     form.append("blocklist", JSON.stringify(blocklist));
   }
 
-  const res = await fetch(`${base}/ai/extract-criteria`, {
-    method: "POST",
-    body: form,
-  });
-
-  const body = (await res.json()) as ExtractCriteriaResult & { error?: string };
-  if (!res.ok) {
-    throw new Error(body.error ?? `AI extract failed (${res.status})`);
+  let res: Response;
+  try {
+    res = await fetch(`${base}/ai/extract-criteria`, {
+      method: "POST",
+      body: form,
+    });
+  } catch {
+    throw new Error(`AI service unreachable. ${AI_SERVICE_START_HINT}`);
   }
-  return body;
+
+  if (!res.ok) {
+    throw new Error(await parseAiServiceError(res, "Protocol extraction"));
+  }
+
+  return (await res.json()) as ExtractCriteriaResult;
 }
 
 export async function fetchAiAuditSummary(
@@ -85,15 +132,20 @@ export async function fetchAiAuditSummary(
     })),
   };
 
-  const res = await fetch(`${base}/ai/audit-logs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  const body = (await res.json()) as AuditLogsSummary & { error?: string };
-  if (!res.ok) {
-    throw new Error(body.error ?? `AI audit summary failed (${res.status})`);
+  let res: Response;
+  try {
+    res = await fetch(`${base}/ai/audit-logs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`AI service unreachable. ${AI_SERVICE_START_HINT}`);
   }
-  return body;
+
+  if (!res.ok) {
+    throw new Error(await parseAiServiceError(res, "AI audit summary"));
+  }
+
+  return (await res.json()) as AuditLogsSummary;
 }

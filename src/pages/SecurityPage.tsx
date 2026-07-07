@@ -45,8 +45,8 @@ export function SecurityPage() {
           {[
             {
               icon: EyeOff,
-              title: "Zero-Knowledge Visibility",
-              desc: "Neither MedVault nor trial sponsors can ever see your raw medical data. Only the computational result is selectively revealed."
+              title: "FHE-encrypted visibility",
+              desc: "Patient vitals and sponsor criteria stay FHE-encrypted during on-chain matching. Sponsors may access specific data only after explicit patient consent."
             },
             {
               icon: FileCheck,
@@ -55,8 +55,8 @@ export function SecurityPage() {
             },
             {
               icon: AlertCircle,
-              title: "Threshold Decryption",
-              desc: "Decryption requires a threshold of validator nodes to collaborate using Zama's KMS, ensuring no single entity ever holds the full decryption key."
+              title: "Zama KMS Decryption",
+              desc: "Patient viewing keys authorize Zama's threshold KMS to decrypt specific ciphertext handles. MedVault does not operate the KMS — it is Zama fhEVM infrastructure."
             }
           ].map((item, i) => (
             <motion.div 
