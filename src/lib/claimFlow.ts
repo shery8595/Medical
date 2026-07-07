@@ -17,6 +17,7 @@ import { buildWithdrawToAuthorization, computeEncryptedAmountCommitment } from "
 import { confirmAllPendingReceipts } from "./confirmReceiptFlow";
 import { fetchConfidentialBalanceHandle, readPendingWithdrawHandle } from "./confidentialBalance";
 import { friendlyContractError } from "./contractErrors";
+import { isTransientRpcReadError, withRpcRetry } from "./rpcRetry";
 
 export { readPendingWithdrawHandle };
 
@@ -60,16 +61,67 @@ function parseWithdrawToHandle(receipt: ethers.TransactionReceipt, cEthAddress: 
 async function waitForDestinationCredit(
   provider: ethers.Provider,
   destination: string,
-  beforeWei: bigint,
+  beforeWei: bigint | null,
   timeoutMs = 90_000
 ): Promise<boolean> {
+  if (beforeWei == null) return false;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const after = await provider.getBalance(destination);
-    if (after > beforeWei) return true;
+    try {
+      const after = await getBalanceWithRetry(provider, destination);
+      if (after > beforeWei) return true;
+    } catch (err) {
+      if (!isTransientRpcReadError(err)) throw err;
+      console.warn("[claimFlow] balance poll hit transient RPC error:", err);
+    }
     await new Promise((r) => setTimeout(r, 3_000));
   }
   return false;
+}
+
+function unitsToWei(units: number): bigint {
+  if (!Number.isFinite(units) || units <= 0) return 0n;
+  // ConfidentialETH stores balances in micro-ETH units.
+  return BigInt(Math.floor(units)) * 1_000_000_000_000n;
+}
+
+async function getBalanceWithRetry(provider: ethers.Provider, address: string): Promise<bigint> {
+  return withRpcRetry(() => provider.getBalance(address), { attempts: 5, baseDelayMs: 700 });
+}
+
+async function readPendingWithdrawHandleWithRetry(
+  provider: ethers.Provider,
+  user: string,
+): Promise<string | null> {
+  return withRpcRetry(() => readPendingWithdrawHandle(provider, user), { attempts: 5, baseDelayMs: 700 });
+}
+
+async function receivedWeiOrFallback(params: {
+  provider: ethers.Provider;
+  destination: string;
+  beforeWei: bigint | null;
+  fallbackWei: bigint;
+}): Promise<bigint> {
+  const { provider, destination, beforeWei, fallbackWei } = params;
+  if (beforeWei == null) return fallbackWei;
+  try {
+    const afterWei = await getBalanceWithRetry(provider, destination);
+    return afterWei > beforeWei ? afterWei - beforeWei : fallbackWei;
+  } catch (err) {
+    if (!isTransientRpcReadError(err)) throw err;
+    console.warn("[claimFlow] final balance read hit transient RPC error; using claim-unit fallback:", err);
+    return fallbackWei;
+  }
+}
+
+async function getInitialBalanceOrNull(provider: ethers.Provider, address: string): Promise<bigint | null> {
+  try {
+    return await getBalanceWithRetry(provider, address);
+  } catch (err) {
+    if (!isTransientRpcReadError(err)) throw err;
+    console.warn("[claimFlow] initial balance read hit transient RPC error; will use claim-unit fallback:", err);
+    return null;
+  }
 }
 
 async function completeWithdrawViaRelayer(params: {
@@ -116,7 +168,7 @@ async function completeWithdrawViaRelayer(params: {
 
       if (proof.completeTxHash) {
         completeTxHash = proof.completeTxHash;
-        const stillPending = await readPendingWithdrawHandle(provider, permitHolder);
+        const stillPending = await readPendingWithdrawHandleWithRetry(provider, permitHolder);
         if (!stillPending) break;
         onProgress?.({
           step: "relayer",
@@ -155,7 +207,7 @@ async function completeWithdrawViaRelayer(params: {
   }
 
   if (!completeTxHash) {
-    const stillPending = await readPendingWithdrawHandle(provider, permitHolder);
+    const stillPending = await readPendingWithdrawHandleWithRetry(provider, permitHolder);
     if (stillPending) {
       throw new Error(
         lastCompleteError
@@ -229,8 +281,8 @@ export async function claimRewardsWithCompletion(
 
   await ensurePoolEnrollment(signer, trialId, nullifier, permitHolder, identity, onProgress);
 
-  const pendingHandle = await readPendingWithdrawHandle(provider, permitHolder);
-  const beforeWei = await provider.getBalance(destination);
+  const pendingHandle = await readPendingWithdrawHandleWithRetry(provider, permitHolder);
+  const beforeWei = await getInitialBalanceOrNull(provider, destination);
 
   if (pendingHandle) {
     onProgress?.({
@@ -247,10 +299,13 @@ export async function claimRewardsWithCompletion(
     });
 
     const credited = await waitForDestinationCredit(provider, destination, beforeWei);
-    const afterWei = await provider.getBalance(destination);
-    const receivedWei = afterWei > beforeWei ? afterWei - beforeWei : 0n;
+    const fallbackWei = unitsToWei(claimUnits);
+    const receivedWei = await receivedWeiOrFallback({ provider, destination, beforeWei, fallbackWei });
     if (!credited || receivedWei <= 0n) {
-      const stillPending = await readPendingWithdrawHandle(provider, permitHolder);
+      const stillPending = await readPendingWithdrawHandleWithRetry(provider, permitHolder);
+      if (!stillPending && completeTxHash && receivedWei > 0n) {
+        return { claimTxHash: "", completeTxHash, credited: true, receivedWei };
+      }
       throw new Error(
         stillPending
           ? completeTxHash
@@ -422,10 +477,21 @@ export async function claimRewardsWithCompletion(
   }
 
   const credited = await waitForDestinationCredit(provider, destination, beforeWei);
-  const afterWei = await provider.getBalance(destination);
-  const receivedWei = afterWei > beforeWei ? afterWei - beforeWei : 0n;
+  const fallbackWei = unitsToWei(claimUnits);
+  const receivedWei = await receivedWeiOrFallback({ provider, destination, beforeWei, fallbackWei });
   if (!credited || receivedWei <= 0n) {
-    const stillPending = await readPendingWithdrawHandle(provider, permitHolder);
+    const stillPending = await readPendingWithdrawHandleWithRetry(provider, permitHolder);
+    if (!stillPending && completeTxHash && receivedWei > 0n) {
+      if (emitReceiptProgress) {
+        onProgress?.({
+          step: "receipt",
+          message: `ETH payout completed at ${destination.slice(0, 8)}… · claim ${claimTxHash.slice(0, 10)}…`,
+          claimTxHash,
+          completeTxHash,
+        });
+      }
+      return { claimTxHash, completeTxHash, credited: true, receivedWei };
+    }
     throw new Error(
       stillPending
         ? completeTxHash
