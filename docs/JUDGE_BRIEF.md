@@ -75,7 +75,7 @@ Detail: [PRODUCTION_READINESS_COMPLIANCE.md](./PRODUCTION_READINESS_COMPLIANCE.m
 
 ## 5. Verification
 
-- **491** default Hardhat tests (`npm test`)
+- **502** default Hardhat tests (`npm test`)
 - FHE audit map: [FHE_AUDIT_README.md](./FHE_AUDIT_README.md)
 - Relayer adversarial bounds: [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md) — REL-FF-02 / P5-SELECT prove payout does not depend on relayer honesty
 - Formal spec: [eligibility-engine.spec.md](./formal-verification/eligibility-engine.spec.md)

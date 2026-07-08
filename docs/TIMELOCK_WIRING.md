@@ -140,4 +140,4 @@ Frontend: `VITE_RELAYER_URLS=https://relayer-a...,https://relayer-b...` (comma-s
 | — | `test-support/timelock.ts` | `advanceTimelock`, `scheduleAndApply`, `authorizeCethContract` |
 | — | `test-support/deployments.ts` | Full timelock wiring in `deployMedVaultStack()` |
 
-Run: `npm test` (**491** passing = 403 unit + 85 integration + 3 crypto; **6** unit pending as of July 2026).
+Run: `npm test` (**502** passing; **6** unit pending as of July 2026).

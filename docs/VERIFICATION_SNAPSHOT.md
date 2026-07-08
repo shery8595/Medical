@@ -30,12 +30,12 @@ npm run sync-sdk-assets
 
 | Suite | Command | Passing | Skipped / notes |
 |-------|---------|---------|-----------------|
-| Default suite | `npm test` | **491** | 4 permanent `it.skip` + 2 conditional (SDD-01, LEG-01); fuzz/fork/Honk excluded |
-| Unit + smoke + staking | `npm run test:unit` | **403** | 6 pending (4 permanent `it.skip` + 2 conditional: SDD-01, INFO-2) |
+| Default suite | `npm test` | **502** | 4 permanent `it.skip` + 2 conditional (SDD-01, LEG-01); fuzz/fork/Honk excluded |
+| Unit + smoke + staking | `npm run test:unit` | **414** | 6 pending (4 permanent `it.skip` + 2 conditional: SDD-01, INFO-2) |
 | Integration | `npm run test:integration` | **85** | incl. AI-*, IDX-*, HYB-01, AAC-*, RDV-* |
 | Crypto nullifier | `npm run test:crypto` | **3** | — |
-| Vitest (frontend lib) | `npm run test:frontend` | **13** | 3 files |
-| SDK node:test | `npm run test -w @medvault/sdk` | **11** | MCP workflow |
+| Vitest (frontend lib) | `npm run test:frontend` | **15** | 4 files |
+| SDK node:test | `npm run test -w @medvault/sdk` | **12** | MCP workflow |
 | IERC7984 conformance | `CET-13`, `CET-14` | included | metadata + operator model |
 
 **Inventory:** 97 TypeScript test files, ~2,028 registered cases (incl. 832 ECM parametric), 77 Hardhat files in default suite, 0 Foundry tests, 19 `test-support/` helpers.
@@ -45,8 +45,7 @@ npm run sync-sdk-assets
 | Workflow | Jobs | Runs | Does **not** run |
 |----------|------|------|------------------|
 | `contracts-test.yml` | test, fork, coverage | `test:unit`, `test:integration`, `test:crypto`, `test:fuzz`, `test:fork`, `test:coverage:gate` | `npm test`, `test:honk` |
-| `frontend.yml` | build | `test:frontend` (Vitest) | Hardhat |
-| `docker-smoke.yml` | smoke | `docker:smoke` | — |
+| `mcp.yml` | mcp | `mcp:build`, template validation, offline smoke, SDK node tests | Hardhat |
 | `mcp.yml` | mcp | SDK `node:test`, MCP smoke | `@medvault/core` tests (unwired) |
 
 ## Coverage gate
@@ -68,7 +67,7 @@ npm run sync-sdk-assets
 | Off-chain parity | ABIs synced (frontend, medvault-core, subgraph); deploy uses `ConfidentialETH7984` under `ConfidentialETH` key |
 | Docker | Dockerfile + compose + smoke script present; manual smoke requires Docker daemon |
 | Docs | `internal-docs/` consistent with IERC7984 flows |
-| Test integrity | **491 passing** (403 unit + 85 integration + 3 crypto; verified 2026-07-04), 6 unit pending; CET-13/14 IERC7984 conformance; REL-EQV/REP/FF/STALE adversarial |
+| Test integrity | **502 passing** (`npm test`, verified 2026-07-08), 6 unit pending; CET-13/14 IERC7984 conformance; REL-EQV/REP/FF/STALE adversarial |
 
 **Findings:** No blocking issues. Low-severity pre-existing notes (withdraw-time balance drift without lock, minor observability gaps) — accepted as-is; not introduced by parity work.
 
@@ -96,6 +95,7 @@ npm run sync-sdk-assets
 | 15 | EIP-170 contract shrink + clean Sepolia redeploy | PASS | 2026-07-01 | `EligibilityComputeLib`, `VaultDistributionLib`, `VaultConfidentialLib`; Poseidon moved to `AnonymousPatientRegistryTestHarness`; EE/Vault test harnesses on Hardhat. Sepolia addresses + subgraph **v0.2.0**. Default suite **428** re-verified (341 + 84 + 3); integration assertions updated for vault custom errors. Run `scripts/finish-wiring.ts` after 2-day timelocks. |
 | 16 | Medium findings closeout + full suite re-run | PASS | 2026-07-02 | [MEDIUM_FINDINGS_CLOSEOUT.md](./MEDIUM_FINDINGS_CLOSEOUT.md): M-AUDIT-1 resolved (auditor zero-address guard + SRA-01–05); M-SILENT-1 Informational; M-REGCON-1 Low/SDK-blocked. Default suite **483** (395 + 85 + 3), 6 unit pending. `docsStats` + TEST_MATRIX + in-app docs synced. |
 | 17 | Dual relayer + trusted relayer risk reduction | PASS | 2026-07-04 | P3.1 dual Railway/Docker relayers; [RELAYER_TRUST_BOUNDARIES.md](./RELAYER_TRUST_BOUNDARIES.md); P3.3 attestation spec; `relayer-adversarial.test.ts` (REL-*); subgraph relayer events. Default suite **491** (403 + 85 + 3). |
+| 18 | Demo video + verification refresh | PASS | 2026-07-08 | New walkthrough: https://youtu.be/7VrcpRRugWc. Default suite **502** passing, 6 pending; Vitest **15**; Honk **1**; SDK node tests **12**. Frontend and Docker smoke workflows removed; contracts and MCP workflows remain. |
 
 ## Plan 08 fuzz model
 

@@ -391,10 +391,10 @@ export const DOCS_NAV_ITEMS: DocsNavItem[] = [
         href: "/docs/testing",
         tabId: "testing",
         section: "Suite",
-        keywords: ["hardhat", "tests", "ci", "verify", "491", "mocha", "timelock", "docker", "smoke", "relayer"],
+        keywords: ["hardhat", "tests", "ci", "verify", "502", "mocha", "timelock", "relayer"],
         pageTitle: "Contract test suite overview",
         pageDescription:
-            "491 Hardhat tests with Zama FHE mocks: suite breakdown, pillars, relayer adversarial REL-*, trust-gap payout gating, Phase 5 differential, timelock wiring, IERC7984 CET-13/14, and CI.",
+            "502 Hardhat tests with Zama FHE mocks: suite breakdown, pillars, relayer adversarial REL-*, trust-gap payout gating, Phase 5 differential, timelock wiring, IERC7984 CET-13/14, and CI.",
     },
     {
         title: "Test matrix",

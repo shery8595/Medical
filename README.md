@@ -2,7 +2,7 @@
 
 [![Zama](https://img.shields.io/badge/Powered%20By-Zama-teal?style=for-the-badge)](https://docs.zama.org)
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-491%20Cases-emerald?style=for-the-badge)](docs/TEST_MATRIX.md)
+[![Tests](https://img.shields.io/badge/Tests-502%20Cases-emerald?style=for-the-badge)](docs/TEST_MATRIX.md)
 [![Network](https://img.shields.io/badge/Network-Ethereum%20Sepolia-2D374B?style=for-the-badge)](https://sepolia.etherscan.io/)
 [![Chainlink](https://img.shields.io/badge/CRE-Chainlink-375BD2?style=for-the-badge)](https://docs.chain.link/cre)
 [![npm](https://img.shields.io/badge/npm-@medvault%2Fsdk-red?style=for-the-badge)](https://www.npmjs.com/package/@medvault/sdk)
@@ -13,6 +13,7 @@
 |----------|------|
 | **Live app** | [https://med-vault.xyz](https://med-vault.xyz) |
 | **Demo video** | [YouTube walkthrough](https://youtu.be/7VrcpRRugWc) |
+| **YouTube script** | [docs/YOUTUBE_DEMO_SCRIPT.md](docs/YOUTUBE_DEMO_SCRIPT.md) |
 | **Pitch deck outline** | [docs/PITCH_DECK.md](docs/PITCH_DECK.md) |
 | **Lightpaper** | [docs/LIGHTPAPER.md](docs/LIGHTPAPER.md) |
 | **FHE audit map** | [docs/FHE_AUDIT_README.md](docs/FHE_AUDIT_README.md) — primitive → contract → test; includes [who can decrypt what](docs/FHE_AUDIT_README.md#who-can-decrypt-what) |
@@ -173,7 +174,7 @@ await client
 
 ```bash
 npm run compile          # Hardhat + Zama FHE types
-npm run test:unit        # 403 passing (+ 6 pending) with @fhevm/hardhat-plugin mocks (see testSuiteData.ts)
+npm run test:unit        # 414 passing (+ 6 pending) with @fhevm/hardhat-plugin mocks (see testSuiteData.ts)
 ```
 
 Shared helpers: `test-support/fhe.ts` (`buildPatientProfileInputs`, `mockDecryptBool`).  
@@ -218,7 +219,7 @@ MedVault is the **reference fhEVM architecture for encrypted clinical-trial matc
 | **Confidential token standard** | `ConfidentialETH7984` subclasses OpenZeppelin **ERC-7984** (`@openzeppelin/confidential-contracts ^0.5.1`) while preserving native-ETH deposit, multi-phase withdraw, EIP-712 public exit, and KMS-gated `transferEncrypted`. See [docs/FHE_AUDIT_README.md — ERC-7984 conformance](docs/FHE_AUDIT_README.md). |
 | **One-command local setup** | `docker compose up --build` → frontend on `:3000` against Sepolia; optional `--profile relayer` and `--profile graph`. See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md). |
 | **Formal internal docs** | SRS, DFD, threat model, Zama integration guide, architecture in [internal-docs/](internal-docs/README.md). |
-| **Verification** | **491** default Hardhat tests, dual relayer adversarial bounds, [FHE audit map](docs/FHE_AUDIT_README.md) |
+| **Verification** | **502** default Hardhat tests, dual relayer adversarial bounds, [FHE audit map](docs/FHE_AUDIT_README.md) |
 
 ---
 
@@ -431,15 +432,15 @@ MedVault uses **Hardhat 2**, **Mocha/Chai**, and **`@fhevm/hardhat-plugin`** (Za
 
 > **Canonical counts** — sourced from [`src/lib/docsStats.ts`](src/lib/docsStats.ts) and [`src/pages/docs/testing/testSuiteData.ts`](src/pages/docs/testing/testSuiteData.ts) (methodology in [`docs/AUDIT.md`](docs/AUDIT.md)).
 
-Default CI run: **491 passing** (+ 6 pending, 1 optional Honk). Full registered matrix: **~2,028** cases across **97** test files (incl. **832** parametric fuzz expansions).
+Default local run: **502 passing** (+ 6 pending, 1 optional Honk). Full registered matrix: **~2,028** cases across **97** test files (incl. **832** parametric fuzz expansions).
 
 | Suite | Cases | Command |
 |-------|-------|---------|
-| Smoke + unit + staking | 403 | `npm run test:unit` |
+| Smoke + unit + staking | 414 | `npm run test:unit` |
 | Integration | 85 | `npm run test:integration` |
 | Crypto (Noir nullifier alignment) | 3 | `npm run test:crypto` |
 | Honk full pipeline (slow) | 1 | `npm run test:honk` |
-| **Default** | **491** | `npm test` |
+| **Default** | **502** | `npm test` |
 
 ```bash
 npm run compile
@@ -467,11 +468,9 @@ test-support/
 
 ### CI
 
-Four GitHub Actions workflows (see `docsStats.ts` → `ciWorkflows`):
+Two GitHub Actions workflows (see `docsStats.ts` → `ciWorkflows`):
 
 - **Contracts:** `.github/workflows/contracts-test.yml` — `compile` → `test:unit` → `test:integration` → `test:crypto` (Honk excluded).
-- **Frontend:** `.github/workflows/frontend.yml` — Vite build + unit tests.
-- **Docker smoke:** `.github/workflows/docker-smoke.yml` — Compose frontend health check.
 - **MCP/SDK:** `.github/workflows/mcp.yml` — core + SDK + MCP server build.
 
 ### In-app docs

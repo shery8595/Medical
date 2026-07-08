@@ -20,7 +20,7 @@ MedVault is privacy-centric clinical trial infrastructure on **Zama (Zama FHE)**
 
 **Stack** — Core: Zama FHE · Ethereum Sepolia. Extensions: Semaphore · Noir/UltraHonk · The Graph · Chainlink CRE · Hardhat
 
-**Verification** — **491** default Hardhat cases (**~2,028** registered incl. fuzz; see `src/lib/docsStats.ts`): FHE eligibility (encrypted patient + **encrypted sponsor criteria**), aggregates, batch matching, attestation binding, trust-gap payout gating, Phase 5 differential properties, Semaphore anonymity, **multi-relayer adversarial bounds (REL-*)**, relayer registration, incentives, end-to-end patient workflows.
+**Verification** — **502** default Hardhat cases (**~2,028** registered incl. fuzz; see `src/lib/docsStats.ts`): FHE eligibility (encrypted patient + **encrypted sponsor criteria**), aggregates, batch matching, attestation binding, trust-gap payout gating, Phase 5 differential properties, Semaphore anonymity, **multi-relayer adversarial bounds (REL-*)**, relayer registration, incentives, end-to-end patient workflows.
 
 ---
 
@@ -89,7 +89,7 @@ Sponsors publish trial criteria via **`createTrialWithEncryptedCriteria`** (reco
 | **Compliance** | Privacy-by-design matching | **Not HIPAA-compliant today** |
 
 ---
-| **5** | Testing, ops & production | Done | 491 tests · dual relayer · subgraph · live testnet |
+| **5** | Testing, ops & production | Done | 502 tests · dual relayer · subgraph · live testnet |
 | **Next** | Mainnet pilot | Planned | External audit · sponsor KYC |
 
 ---

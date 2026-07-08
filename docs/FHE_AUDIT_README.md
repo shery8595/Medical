@@ -2,7 +2,7 @@
 
 One-page map of every **Zama FHE** primitive in MedVault and where it lives. For judges verifying the submission without reading the full repo.
 
-**Live demo:** https://med-vault.xyz · **Network:** Ethereum Sepolia · **Tests:** 491 passing (`npm test`; see `src/lib/docsStats.ts`)
+**Live demo:** https://med-vault.xyz · **Network:** Ethereum Sepolia · **Tests:** 502 passing (`npm test`; see `src/lib/docsStats.ts`)
 
 ## What is encrypted vs public
 

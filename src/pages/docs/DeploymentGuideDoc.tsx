@@ -102,7 +102,7 @@ export function DeploymentGuideDoc() {
                 </Callout>
 
                 <Callout type="warning" title="Manual deployment — no CD">
-                    GitHub Actions runs four CI workflows (contracts, frontend, docker-smoke, MCP). There is{" "}
+                    GitHub Actions runs two CI workflows (contracts and MCP). There is{" "}
                     <strong>no continuous deployment</strong> workflow. Production is released manually: Hardhat scripts
                     for contracts, Vercel for the frontend (<code>npm run vercel:ship</code>), Railway for the relayer,
                     and Graph Studio for the subgraph.
@@ -128,16 +128,6 @@ export function DeploymentGuideDoc() {
                                     <td className="px-4 py-2 font-mono">contracts-test.yml</td>
                                     <td className="px-4 py-2">push/PR main, master</td>
                                     <td className="px-4 py-2">test (unit, integration, crypto, fuzz), fork (needs SEPOLIA_RPC_URL secret), coverage gate</td>
-                                </tr>
-                                <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    <td className="px-4 py-2 font-mono">frontend.yml</td>
-                                    <td className="px-4 py-2">push/PR main, master</td>
-                                    <td className="px-4 py-2">tsc --noEmit, build:prebuilt, Vitest</td>
-                                </tr>
-                                <tr className="border-b border-slate-100">
-                                    <td className="px-4 py-2 font-mono">docker-smoke.yml</td>
-                                    <td className="px-4 py-2">push/PR main, master</td>
-                                    <td className="px-4 py-2">docker:smoke (frontend Compose health)</td>
                                 </tr>
                                 <tr>
                                     <td className="px-4 py-2 font-mono">mcp.yml</td>

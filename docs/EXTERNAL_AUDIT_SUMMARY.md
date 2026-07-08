@@ -46,7 +46,7 @@ MedVault is an fhEVM clinical-trial matching reference architecture on Ethereum 
 ## How to reproduce security tests locally
 
 ```bash
-npm test                                    # default suite (491 cases)
+npm test                                    # default suite (502 cases)
 npm run test:integration                    # relayer + e2e paths
 npx hardhat test test/unit/sponsor-incentive-vault-payout.test.ts
 npx hardhat test test/integration/relayer-decrypt-verify.test.ts

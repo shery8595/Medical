@@ -94,7 +94,7 @@
 | P2 FHE.select payout gating | Shipped + Phase 5 differential evidence — [VERIFICATION_SNAPSHOT.md](./VERIFICATION_SNAPSHOT.md) rows 13–14, [certora-halmos-results.md](./formal-verification/certora-halmos-results.md) |
 | Threat model updated | [internal-docs/threat-model.md](../internal-docs/threat-model.md) |
 | Regulatory posture | [REGULATORY_POSTURE.md](./REGULATORY_POSTURE.md) |
-| Default test suite | 491+ cases — `npm test` |
+| Default test suite | 502 cases — `npm test` |
 | Formal spec (informal) | [formal-verification/eligibility-engine.spec.md](./formal-verification/eligibility-engine.spec.md) |
 | Formal / differential results (Phase 5) | [formal-verification/certora-halmos-results.md](./formal-verification/certora-halmos-results.md) |
 

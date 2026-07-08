@@ -188,7 +188,7 @@ MedVault is the **reference fhEVM architecture for encrypted clinical-trial matc
 
 | **Platform Services** *(secondary)* | MCP sponsor tools, AI PDF criteria extraction, Chainlink CRE trial finalization, Capacitor Android wrapper, confidential cETH staking |
 
-| **Verification** | 491 tests, dual relayer bounds, [FHE audit map](./FHE_AUDIT_README.md) |
+| **Verification** | 502 tests, dual relayer bounds, [FHE audit map](./FHE_AUDIT_README.md) |
 
 
 
@@ -220,7 +220,7 @@ See [JUDGE_BRIEF.md](./JUDGE_BRIEF.md) for the 2-page technical summary.
 
 | Multi-relayer (P3.1) | Dual Railway relayers + patient picker; default patient-decrypt (browser); P3.3 threshold spec (deferred — agreement, not confidentiality) |
 
-| Test depth | 491 default / ~2,028 registered · 17 production contracts |
+| Test depth | 502 default / ~2,028 registered · 17 production contracts |
 
 
 
@@ -284,7 +284,7 @@ See [JUDGE_BRIEF.md](./JUDGE_BRIEF.md) for the 2-page technical summary.
 
 |------|------|
 
-| Now | Sepolia deploy, 491 tests, dual relayer, live demo |
+| Now | Sepolia deploy, 502 tests, dual relayer, live demo |
 
 | Next | Mainnet pilot, external audit |
 

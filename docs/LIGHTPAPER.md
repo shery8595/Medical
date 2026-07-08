@@ -12,7 +12,7 @@ MedVault homomorphically matches **encrypted patient vitals** against **encrypte
 
 **The one thing to remember:** private clinical-trial matching — both sides encrypted.
 
-Deployed on Ethereum Sepolia · **491** default Hardhat tests · **17** production Solidity contracts.
+Deployed on Ethereum Sepolia · **502** default Hardhat tests · **17** production Solidity contracts.
 
 ---
 
@@ -113,7 +113,7 @@ flowchart TB
 | Metric | Value |
 |--------|------:|
 | Production Solidity contracts | 17 |
-| Default test suite passing | 491 |
+| Default test suite passing | 502 |
 | Registered test cases (incl. fuzz) | ~1,908 |
 | In-app documentation pages | 32 |
 | MCP tools | 31 |
@@ -170,7 +170,7 @@ These are **not required** for the FHE core story:
 
 | Phase | Focus |
 |-------|-------|
-| **v0.1 (current)** | FHE eligibility, encrypted criteria, incentives, Sepolia deploy, dual relayer, 491 tests |
+| **v0.1 (current)** | FHE eligibility, encrypted criteria, incentives, Sepolia deploy, dual relayer, 502 tests |
 | **v0.2** | Mainnet pilot with sponsor KYC, external security audit |
 | **v0.3** | FHIR integration, enterprise subgraph, protocol fee enforcement |
 | **v1.0** | Multi-site sponsor network, confidential aggregate analytics API |

@@ -1,5 +1,27 @@
 # Documentation consistency changelog (post–Phase 5)
 
+**Date:** 2026-07-07  
+**Trigger:** New YouTube walkthrough, workflow cleanup, and full default test-suite re-run.
+
+## 2026-07-07 — Demo link + verification refresh
+
+| Surface | Update |
+|---------|--------|
+| `README.md`, `VISION.md`, `docs/PITCH_DECK.md`, `docs/LIGHTPAPER.md` | Demo video points to `https://youtu.be/7VrcpRRugWc` |
+| `docs/YOUTUBE_DEMO_SCRIPT.md` | YouTube recording script and short description added |
+| `src/lib/docsStats.ts`, `src/pages/docs/testing/testSuiteData.ts` | Default suite now **502** passing; frontend **15**; SDK **12**; CI workflows now contracts + MCP |
+| `docs/TEST_MATRIX.md`, `docs/TESTING_GUIDE.md`, `docs/AUDIT.md`, `docs/VERIFICATION_SNAPSHOT.md` | Verification counts and workflow tables aligned |
+| `.github/workflows/` | `frontend.yml` and `docker-smoke.yml` removed; `contracts-test.yml` and `mcp.yml` remain |
+
+```bash
+npm test                   # 502 passing, 6 pending
+npm run test:frontend      # 15 passing
+npm run test:honk          # 1 passing
+npm run test -w @medvault/sdk  # 12 passing
+```
+
+---
+
 **Date:** 2026-07-04  
 **Trigger:** Pitch narrative reframe — lead with private clinical-trial matching; breadth as supporting evidence; no third-party project references.
 

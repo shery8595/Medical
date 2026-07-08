@@ -98,7 +98,7 @@ export function TestingCiDoc() {
                 <h2>Frontend & package tests</h2>
                 <ul>
                     <li>
-                        <code>frontend.yml</code> — Vitest: {TEST_MANIFEST.vitestFiles} files,{" "}
+                        Manual/frontend check — Vitest: {TEST_MANIFEST.vitestFiles} files,{" "}
                         {TEST_MANIFEST.vitestCases} cases (<code>src/lib/__tests__/</code>)
                     </li>
                     <li>

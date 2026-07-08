@@ -4,6 +4,15 @@ import { motion } from "framer-motion";
 
 const entries: { date: string; title: string; items: string[] }[] = [
     {
+        date: "2026-07-07",
+        title: "Demo walkthrough + verification refresh",
+        items: [
+            "Demo: YouTube walkthrough updated to `https://youtu.be/7VrcpRRugWc`; `docs/YOUTUBE_DEMO_SCRIPT.md` added for recording notes.",
+            "Tests: `npm test` verified at **502** passing with 6 pending; Vitest **15**, Honk **1**, SDK node tests **12**.",
+            "CI: frontend and Docker smoke workflows removed; contracts and MCP workflows remain.",
+        ],
+    },
+    {
         date: "2026-07",
         title: "Dual relayer + trusted relayer risk reduction (P3.1)",
         items: [

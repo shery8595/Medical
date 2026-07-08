@@ -73,8 +73,6 @@ GitHub Actions runs **four workflows** on push/PR to `main`/`master`. There is *
 | Workflow | Trigger | Jobs | Secrets / env | What it does |
 |----------|---------|------|---------------|--------------|
 | [contracts-test.yml](../.github/workflows/contracts-test.yml) | push/PR `main`, `master` | `test`, `fork`, `coverage` | `SEPOLIA_RPC_URL` (fork job) | Compile, `verify-production-deploy.mjs`, `verify-honk-verifier.mjs`, unit/integration/crypto/fuzz tests, Sepolia fork tests, coverage gate (≥85%) |
-| [frontend.yml](../.github/workflows/frontend.yml) | push/PR `main`, `master` | `build` | — | `tsc --noEmit`, `build:prebuilt`, Vitest frontend tests |
-| [docker-smoke.yml](../.github/workflows/docker-smoke.yml) | push/PR `main`, `master` | `smoke` | — | `npm run docker:smoke` (frontend Compose health) |
 | [mcp.yml](../.github/workflows/mcp.yml) | push/PR when MCP paths change | `mcp` | — | `mcp:build`, export/validate config, offline smoke, `@medvault/sdk` tests |
 
 Path filters on `mcp.yml`: `mcp-server/**`, `packages/medvault-core/**`, `packages/medvault-sdk/**`, `config/mcp/**`, `package.json`.

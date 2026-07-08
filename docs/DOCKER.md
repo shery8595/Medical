@@ -188,7 +188,7 @@ Automated health check (requires Docker daemon):
 npm run docker:smoke
 ```
 
-Builds the frontend service, waits for `:3000` to respond, then tears down. Implemented in [scripts/docker-compose-smoke.mjs](../scripts/docker-compose-smoke.mjs). CI runs this via [.github/workflows/docker-smoke.yml](../.github/workflows/docker-smoke.yml).
+Builds the frontend service, waits for `:3000` to respond, then tears down. Implemented in [scripts/docker-compose-smoke.mjs](../scripts/docker-compose-smoke.mjs). Run it manually when changing Docker or Compose configuration.
 
 ## Troubleshooting
 

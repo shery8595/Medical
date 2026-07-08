@@ -162,20 +162,20 @@ export const STAT_BACKING = {
             "832 parametric ECM matrix",
             "hardhat.config.ts fuzz.runs loop expansion",
         ],
-        note: "Approximate total; default CI suite runs 491 passing (excludes fuzz/fork/Honk). Recompute: scripts in docs/AUDIT.md.",
+        note: "Approximate total; default suite runs 502 passing (excludes fuzz/fork/Honk). Recompute: scripts in docs/AUDIT.md.",
     },
     testSuiteDefaultPassing: {
         label: "Default suite passing (npm test)",
-        value: 491,
+        value: 502,
         backing: [
             "scripts/hardhat-test-suite.mjs (default suite)",
             "src/pages/docs/testing/testSuiteData.ts (SUITE_STATS)",
         ],
-        note: "Verified 2026-07-04: 491 = 403 unit + 85 integration + 3 crypto; 6 pending in unit suite.",
+        note: "Verified 2026-07-08: npm test completed with 502 passing and 6 pending; fuzz/fork/Honk excluded.",
     },
     testSuiteUnitPassing: {
         label: "Unit + smoke + staking passing (npm run test:unit)",
-        value: 403,
+        value: 414,
         backing: ["scripts/hardhat-test-suite.mjs (unit suite)"],
     },
     testSuiteIntegrationPassing: {
@@ -196,14 +196,12 @@ export const STAT_BACKING = {
     },
     ciWorkflows: {
         label: "CI workflows",
-        value: 4,
+        value: 2,
         backing: [
             ".github/workflows/contracts-test.yml",
-            ".github/workflows/docker-smoke.yml",
-            ".github/workflows/frontend.yml",
             ".github/workflows/mcp.yml",
         ],
-        note: "No CD workflow.",
+        note: "Frontend and Docker smoke workflows were removed; no CD workflow.",
     },
     dockerfiles: {
         label: "Dockerfiles",

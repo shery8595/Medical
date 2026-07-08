@@ -13,7 +13,7 @@ Canonical statistics (contract counts, test matrix totals): [`src/lib/docsStats.
 | Trial payout contract | **SponsorIncentiveVault** | "the vault" alone | Disambiguate from `StakingManager` / Aave |
 | Milestone-0 payout | **zero-revelation reward** (or **zero-revelation screening reward**) | "screening reward" alone | FHE-gated; see [ZERO_REVELATION_REWARDS.md](./ZERO_REVELATION_REWARDS.md) |
 | Contract catalog count | **15** production entries in `PROTOCOL_CONTRACTS` | "14 contracts" | + alias + optional Honk = **17** Solidity artifacts |
-| Default test suite | **491 passing** (`npm test`) | 283 / 285 / ~330 / 369 / 401 / 428 / 483 | Source: `docsStats.testSuiteDefaultPassing` (verified 2026-07-04) |
+| Default test suite | **502 passing** (`npm test`) | 283 / 285 / ~330 / 369 / 401 / 428 / 483 / 491 | Source: `docsStats.testSuiteDefaultPassing` (verified 2026-07-08) |
 | Eligibility public inputs | **25** (plaintext) / **15** (encrypted) | 16 / 17 | `circuits/eligibility_plaintext`, `circuits/eligibility_encrypted` |
 | FHE core story (canonical) | Homomorphic match of encrypted patient vitals vs encrypted sponsor criteria on Sepolia | — | README header + [LIGHTPAPER.md](./LIGHTPAPER.md) |
 

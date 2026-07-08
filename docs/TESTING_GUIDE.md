@@ -2,9 +2,9 @@
 
 MedVault uses **Hardhat 2**, **Mocha/Chai** (120s timeout), and **@fhevm/hardhat-plugin** (Zama FHE local mocks) for Solidity tests. There are **0 Foundry/Solidity test contracts** — the five files in `contracts/test/` are helpers/mocks only.
 
-**Inventory (canonical — `src/lib/docsStats.ts`, verified 2026-07-04):** **88** Hardhat test files under `test/` (**77** in default `npm test`), **~2,028** registered cases (incl. **832** parametric ECM matrix), **19** `test-support/` helpers. The default suite has **491 passing** cases (**403** unit + **85** integration + **3** crypto; **6** unit pending: **4** permanent `it.skip`, **2** conditional when `RUN_LARGE_POOL_TEST` unset; **1** optional Honk), including timelock wiring, IERC7984 conformance (CET-13/14), hybrid document storage, trust-gap payout gating, **relayer adversarial (REL-*)**, sponsor-registry auditor (SRA-*), and Phase 5 differential eligibility tests.
+**Inventory (canonical — `src/lib/docsStats.ts`, verified 2026-07-08):** **88** Hardhat test files under `test/` (**77** in default `npm test`), **~2,028** registered cases (incl. **832** parametric ECM matrix), **19** `test-support/` helpers. The default suite has **502 passing** cases (**6** unit pending: **4** permanent `it.skip`, **2** conditional when `RUN_LARGE_POOL_TEST` unset; **1** optional Honk), including timelock wiring, IERC7984 conformance (CET-13/14), hybrid document storage, trust-gap payout gating, **relayer adversarial (REL-*)**, sponsor-registry auditor (SRA-*), and Phase 5 differential eligibility tests.
 
-Additional runners: **Vitest 3.x** (3 files, 13 cases in `src/lib/__tests__/`), **node:test** (SDK: 3 files / 11 cases; core: 1 file / 3 cases — **not CI-wired**).
+Additional runners: **Vitest 3.x** (4 files, 15 cases in `src/lib/__tests__/`), **node:test** (SDK: 3 files / 12 cases; core: 1 file / 3 cases — **not CI-wired**).
 
 In-app documentation: open the dapp **Docs → Tests & verification** tab (`/docs/testing`).
 
@@ -35,8 +35,8 @@ test-support/               # 19 shared helper modules (imported by tests, not e
   constants.ts
   fixtures/profiles.ts      # ELIGIBLE_PROFILE, PROFILE_FAIL_*
 
-src/lib/__tests__/          # Vitest (3 files, 13 cases)
-packages/medvault-sdk/tests/    # node:test (3 files, 11 cases)
+src/lib/__tests__/          # Vitest (4 files, 15 cases)
+packages/medvault-sdk/tests/    # node:test (3 files, 12 cases)
 packages/medvault-core/tests/   # node:test (1 file, 3 cases; no test script — gap)
 
 scripts/
@@ -63,8 +63,8 @@ docs/
 | Script | What runs |
 |--------|-----------|
 | `npm run compile` | Compile contracts (required first) |
-| `npm test` | Default: smoke + unit + staking + integration + nullifier crypto (**491** = 403 + 85 + 3) |
-| `npm run test:unit` | `test/smoke/**`, `test/unit/**`, `test/staking/**` (**403 passing**, 6 pending) |
+| `npm test` | Default: smoke + unit + staking + integration + nullifier crypto (**502 passing**, 6 pending) |
+| `npm run test:unit` | `test/smoke/**`, `test/unit/**`, `test/staking/**` (**414 passing**, 6 pending) |
 | `npm run test:integration` | `test/integration/**` (**85 passing**) |
 | `npm run test:crypto` | `test/crypto/noir-nullifier.test.ts` (3 cases) |
 | `npm run test:fuzz` | `test/fuzz/**` + `test/invariants/**` (Mocha loops; separate CI job) |
@@ -72,8 +72,8 @@ docs/
 | `npm run test:honk` | `test/crypto/honk-pipeline.test.ts` (~3–5 min; **not in CI**) |
 | `npm run test:coverage` | solidity-coverage report |
 | `npm run test:coverage:gate` | Coverage + ≥85% statement gate (see below) |
-| `npm run test:frontend` | Vitest 3.x (3 files, 13 cases) |
-| `npm run docker:smoke` | Docker Compose frontend health check (requires Docker) |
+| `npm run test:frontend` | Vitest 3.x (4 files, 15 cases) |
+| `npm run docker:smoke` | Manual Docker Compose frontend health check (requires Docker) |
 
 Implementation: `node scripts/hardhat-test-suite.mjs <suite>` resolves files with `glob` (works on Windows).
 
@@ -96,8 +96,7 @@ Four GitHub Actions workflows (no CD workflow):
 | Workflow | Runs | Does **not** run |
 |----------|------|------------------|
 | `contracts-test.yml` | `test:unit`, `test:integration`, `test:crypto`, `test:fuzz`, `test:fork`, `test:coverage:gate` | `npm test` aggregate, `test:honk` |
-| `frontend.yml` | `tsc`, `build:prebuilt`, `test:frontend` (Vitest) | Hardhat suites |
-| `docker-smoke.yml` | `docker:smoke` | — |
+| `mcp.yml` | `mcp:build`, MCP template export/validation, offline MCP smoke, SDK node tests | Hardhat suites |
 | `mcp.yml` | `mcp:build`, `mcp:smoke`, SDK `node:test` | `@medvault/core` tests (unwired) |
 
 Honk is excluded from CI (circuit build + runtime). Run locally after `npm run build:circuit`.

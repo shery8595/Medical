@@ -1,6 +1,6 @@
 /**
  * Shared facts for the in-app Testing documentation section.
- * Counts sourced from `src/lib/docsStats.ts` (Plan 00 manifest) and verified via `npm test` (June 2026).
+ * Counts sourced from `src/lib/docsStats.ts` and verified via `npm test` (July 2026).
  * Keep in sync with `docs/TEST_MATRIX.md` and `docs/TESTING_GUIDE.md`.
  */
 import { REPO_STATS } from "../../../lib/docsStats";
@@ -8,12 +8,12 @@ import { REPO_STATS } from "../../../lib/docsStats";
 export const TEST_MANIFEST = {
     testFilesTotal: REPO_STATS.testFiles,
     hardhatTestFiles: 77,
-    vitestFiles: 3,
-    vitestCases: 13,
+    vitestFiles: 4,
+    vitestCases: 15,
     nodeTestFiles: 4,
     nodeTestCases: 14,
     sdkNodeTestFiles: 3,
-    sdkNodeTestCases: 11,
+    sdkNodeTestCases: 12,
     coreNodeTestFiles: 1,
     coreNodeTestCases: 3,
     coreTestsCiWired: false,
@@ -52,7 +52,7 @@ export const SUITE_STATS = {
     skippedConditional: 2,
     skippedForkSuite: 4,
     unitPending: REPO_STATS.testSuiteUnitPending,
-    lastVerified: "2026-07-04 (dual relayer + relayer-adversarial REL-* suite)",
+    lastVerified: "2026-07-08 (full default suite run: 502 passing, 6 pending)",
 } as const;
 export const NPM_SCRIPTS = [
     { cmd: "npm run compile", desc: "Compile Solidity (required before tests)" },
@@ -68,8 +68,8 @@ export const NPM_SCRIPTS = [
     { cmd: "npm run test:honk", desc: "Slow UltraHonk pipeline (~3–5 min; not in CI; requires `npm run build:circuit`)" },
     { cmd: "npm run test:coverage", desc: "solidity-coverage report" },
     { cmd: "npm run test:coverage:gate", desc: "Coverage + ≥85% statement gate on 4 named contracts (COVERAGE_MIN_PCT override)" },
-    { cmd: "npm run test:frontend", desc: "Vitest 3.x (node env): 3 files, 13 cases" },
-    { cmd: "npm run docker:smoke", desc: "Docker Compose frontend health check (requires Docker daemon)" },
+    { cmd: "npm run test:frontend", desc: "Vitest 3.x (node env): 4 files, 15 cases" },
+    { cmd: "npm run docker:smoke", desc: "Manual Docker Compose frontend health check (requires Docker daemon)" },
 ] as const;
 export const COVERAGE_GATE = {
     minPct: 85,
@@ -90,18 +90,6 @@ export const CI_WORKFLOWS = [
         jobs: ["test (unit, integration, crypto, fuzz)", "fork (Sepolia)", "coverage (gate)"],
         runs: ["test:unit", "test:integration", "test:crypto", "test:fuzz", "test:fork", "test:coverage:gate"],
         excludes: ["npm test (default aggregate)", "test:honk"],
-    },
-    {
-        file: ".github/workflows/frontend.yml",
-        jobs: ["build (tsc, vite build, Vitest)"],
-        runs: ["test:frontend"],
-        excludes: [],
-    },
-    {
-        file: ".github/workflows/docker-smoke.yml",
-        jobs: ["smoke"],
-        runs: ["docker:smoke"],
-        excludes: [],
     },
     {
         file: ".github/workflows/mcp.yml",
@@ -129,8 +117,8 @@ export const REPO_LAYOUT = `medvault/
     staking/                # StakingManager + MockAave (8 cases)
     crypto/                 # Nullifier + Honk pipeline (3 + 1 optional)
   test-support/             # 19 shared helper modules (not executed as tests)
-  src/lib/__tests__/        # 3 Vitest files (13 cases)
-  packages/medvault-sdk/tests/   # 3 node:test files (11 cases)
+  src/lib/__tests__/        # 4 Vitest files (15 cases)
+  packages/medvault-sdk/tests/   # 3 node:test files (12 cases)
   packages/medvault-core/tests/  # 1 node:test file (3 cases; not CI-wired)
   scripts/
     hardhat-test-suite.mjs  # Suite runner (Windows-safe globs)

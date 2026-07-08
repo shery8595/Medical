@@ -4,16 +4,18 @@
 
 | Suite | Files | Passing (verified) | Command |
 |-------|-------|-------------------|---------|
-| Unit + smoke + staking | 62 | **403** (+ 6 pending) | `npm run test:unit` |
+| Unit + smoke + staking | 62 | **414** (+ 6 pending) | `npm run test:unit` |
 | Integration | 14 | **85** | `npm run test:integration` |
 | Crypto (nullifier) | 1 | **3** | `npm run test:crypto` |
 | Fuzz + invariants | 7 | loop-expanded | `npm run test:fuzz` |
 | Sepolia fork | 1 | 4 (conditional) | `npm run test:fork` (requires `SEPOLIA_RPC_URL`) |
 | Honk (optional) | 1 | 1 | `npm run test:honk` (not in CI) |
-| Vitest (frontend lib) | 3 | 13 | `npm run test:frontend` |
-| node:test (SDK) | 3 | 11 | `npm run test -w @medvault/sdk` |
+| Vitest (frontend lib) | 4 | 15 | `npm run test:frontend` |
+| node:test (SDK) | 3 | 12 | `npm run test -w @medvault/sdk` |
 | node:test (core) | 1 | 3 | not CI-wired |
-| **Default `npm test`** | **77** | **491** (403+85+3) | excludes fuzz/fork/Honk |
+| **Default `npm test`** | **77** | **502** | excludes fuzz/fork/Honk |
+
+Latest local verification: `npm test` on 2026-07-08 completed with **502 passing** and **6 pending**. `npm run test:frontend` completed with **15 passing**, `npm run test:honk` with **1 passing**, and SDK node tests with **12 passing**. Full fuzz is intentionally long-running and is tracked separately.
 
 Fuzz uses **Mocha `for` loops** (not Foundry `vm.assume`). `hardhat.config.ts` sets `fuzz.runs: 256`.
 
